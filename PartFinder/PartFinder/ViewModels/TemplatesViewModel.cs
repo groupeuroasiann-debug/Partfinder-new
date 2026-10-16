@@ -1,0 +1,932 @@
+using CommunityToolkit.Mvvm.Input;
+using PartFinder.Core;
+using PartFinder.Models;
+using PartFinder.Services;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+
+namespace PartFinder.ViewModels;
+
+public partial class TemplatesViewModel : ViewModelBase
+{
+    private readonly ITemplateSchemaService _templateSchema;
+    private readonly IShellNavCoordinator _shellNav;
+    private readonly ILocalSetupContext _setupContext;
+    private readonly IContextActionsService _contextActions;
+    private readonly ActivityLogger _activityLogger;
+    private readonly IFavouriteStore _favouriteStore;
+
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
+
+    private readonly ICurrentUserAccessService _access;
+
+    public TemplatesViewModel(
+        ITemplateSchemaService templateSchema,
+        IShellNavCoordinator shellNav,
+        ILocalSetupContext setupContext,
+        IContextActionsService contextActions,
+        ActivityLogger activityLogger,
+        IFavouriteStore favouriteStore,
+        ICurrentUserAccessService access)
+    {
+        _templateSchema = templateSchema;
+        _shellNav = shellNav;
+        _setupContext = setupContext;
+        _contextActions = contextActions;
+        _activityLogger = activityLogger;
+        _favouriteStore = favouriteStore;
+        _access = access;
+        _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        
+        ColumnLabels.Add(new ColumnLabelDraft());
+        Templates.CollectionChanged += OnTemplatesCollectionChanged;
+        _favouriteStore.FavouritesChanged += (_, _) => 
+        {
+            if (_dispatcherQueue != null && !_dispatcherQueue.HasThreadAccess)
+            {
+                _dispatcherQueue.TryEnqueue(() => OnPropertyChanged(nameof(FavouritesStoreVersion)));
+            }
+            else
+            {
+                OnPropertyChanged(nameof(FavouritesStoreVersion));
+            }
+        };
+    }
+
+    private void OnTemplatesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        NotifyTemplateUiState();
+    }
+
+    public bool ShowFavouritesSubPage { get; private set; }
+
+    public int FavouritesStoreVersion { get; private set; }
+
+    public bool IsFavouriteFor(string templateId) 
+    {
+        var result = _favouriteStore.IsFavourite(templateId);
+        return result;
+    }
+
+    public Task LoadFavouriteStoreAsync() => _favouriteStore.LoadAsync();
+
+    [RelayCommand]
+    private void ShowFavourites()
+    {
+        ShowFavouritesSubPage = true;
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private void HideFavourites()
+    {
+        ShowFavouritesSubPage = false;
+        NotifyTemplateUiState();
+    }
+
+    /// <summary>Raised after a template is deleted so the page can show View All Templates.</summary>
+    public event EventHandler? AllTemplatesViewRequested;
+
+    public bool IsAllTemplatesGalleryEmpty => Templates.Count == 0;
+
+    [RelayCommand]
+    private async Task DeleteTemplateAsync(string templateId)
+    {
+        if (string.IsNullOrWhiteSpace(templateId) || !_access.Capabilities.CanDeleteTemplate) return;
+        try
+        {
+            await _templateSchema.DeleteTemplateAsync(templateId).ConfigureAwait(true);
+            _activityLogger.LogTemplateChange("Template Deleted", $"Template {templateId} deleted");
+            ExitTemplateEditor();
+            await LoadAsync().ConfigureAwait(true);
+            await _shellNav.NotifyTemplatesChangedAsync().ConfigureAwait(true);
+            OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
+            AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
+        }
+        catch { /* ignore */ }
+    }
+
+    /// <summary>Leave canvas editor after delete or cancel; does not start Master Data flow.</summary>
+    public void ExitTemplateEditor()
+    {
+        FormError = string.Empty;
+        IsEditingExisting = false;
+        EditingTemplateId = null;
+        IsCreatingTemplate = false;
+        IsTemplateNameReadOnly = false;
+        NewTemplateName = string.Empty;
+        SelectedBaseTemplateId = null;
+        ColumnLabels.Clear();
+        ColumnLabels.Add(new ColumnLabelDraft());
+        CellConnections.Clear();
+        SelectedTemplate = Templates.FirstOrDefault();
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private async Task ToggleFavouriteAsync(string templateId)
+    {
+        await _favouriteStore.ToggleAsync(templateId).ConfigureAwait(true);
+        FavouritesStoreVersion++;
+        OnPropertyChanged(nameof(FavouritesStoreVersion));
+    }
+
+    // Public method for UI to call
+    public async Task ToggleFavouritePublicAsync(string templateId)
+    {
+        await _favouriteStore.ToggleAsync(templateId).ConfigureAwait(true);
+        FavouritesStoreVersion++;
+        OnPropertyChanged(nameof(FavouritesStoreVersion));
+    }
+
+    public ObservableCollection<PartTemplateDefinition> Templates { get; } = [];
+
+    public ObservableCollection<ColumnLabelDraft> ColumnLabels { get; } = [];
+
+    public ObservableCollection<CellConnection> CellConnections { get; } = [];
+
+    public ObservableCollection<ContextActionListRow> ContextActionRows { get; } = [];
+
+    private ContextActionListRow? _selectedContextAction;
+    public ContextActionListRow? SelectedContextAction
+    {
+        get => _selectedContextAction;
+        set => SetProperty(ref _selectedContextAction, value);
+    }
+
+    private PartTemplateDefinition? _selectedTemplate;
+    public PartTemplateDefinition? SelectedTemplate
+    {
+        get => _selectedTemplate;
+        set
+        {
+            if (!SetProperty(ref _selectedTemplate, value))
+            {
+                return;
+            }
+
+            SelectedContextAction = null;
+            NotifyTemplateUiState();
+            if (ShowFavouritesSubPage)
+            {
+                HideFavourites();
+            }
+            _ = ReloadContextActionsAsync();
+        }
+    }
+
+    private bool _isCreatingTemplate;
+    public bool IsCreatingTemplate
+    {
+        get => _isCreatingTemplate;
+        set
+        {
+            if (!SetProperty(ref _isCreatingTemplate, value))
+            {
+                return;
+            }
+
+            NotifyTemplateUiState();
+        }
+    }
+
+    private bool _isEditingExisting;
+    public bool IsEditingExisting
+    {
+        get => _isEditingExisting;
+        set
+        {
+            if (SetProperty(ref _isEditingExisting, value))
+            {
+                OnPropertyChanged(nameof(LinkTargetCandidates));
+                OnPropertyChanged(nameof(CanSaveTemplate));
+                OnPropertyChanged(nameof(EditorHeaderTitle));
+            }
+        }
+    }
+
+    private string? _editingTemplateId;
+    public string? EditingTemplateId
+    {
+        get => _editingTemplateId;
+        set
+        {
+            if (SetProperty(ref _editingTemplateId, value))
+            {
+                OnPropertyChanged(nameof(LinkTargetCandidates));
+            }
+        }
+    }
+
+    public IEnumerable<PartTemplateDefinition> LinkTargetCandidates =>
+        Templates.Where(
+            t => !IsEditingExisting
+                 || !string.Equals(t.Id, EditingTemplateId, StringComparison.Ordinal));
+
+    public IEnumerable<PartTemplateDefinition> InheritableTemplates => LinkTargetCandidates;
+
+    private string? _selectedBaseTemplateId;
+    public string? SelectedBaseTemplateId
+    {
+        get => _selectedBaseTemplateId;
+        set => SetProperty(ref _selectedBaseTemplateId, value);
+    }
+
+    public PartTemplateDefinition? SelectedBaseTemplate =>
+        string.IsNullOrWhiteSpace(SelectedBaseTemplateId)
+            ? null
+            : Templates.FirstOrDefault(t => string.Equals(t.Id, SelectedBaseTemplateId, StringComparison.Ordinal));
+
+    public IReadOnlyList<TemplateFieldTypeOption> FieldTypeOptions { get; } =
+    [
+        new(TemplateFieldType.Text, "Text"),
+        new(TemplateFieldType.Number, "Whole number"),
+        new(TemplateFieldType.Decimal, "Decimal"),
+        new(TemplateFieldType.Date, "Date"),
+        new(TemplateFieldType.Boolean, "Yes / No"),
+        new(TemplateFieldType.Dropdown, "Dropdown"),
+        new(TemplateFieldType.RecordLink, "Link to another template"),
+    ];
+
+    public bool CanEditSelectedTemplate => !IsCreatingTemplate && SelectedTemplate is not null && _access.Capabilities.CanEditTemplate;
+
+    public bool CanDeleteSelectedTemplate => !IsCreatingTemplate && SelectedTemplate is not null && _access.Capabilities.CanDeleteTemplate;
+
+    public bool CanAddTemplate => _access.Capabilities.CanAddTemplate;
+
+    /// <summary>Whether Save Template is allowed in the canvas editor.</summary>
+    public bool CanSaveTemplate =>
+        IsCreatingTemplate
+        && (IsEditingExisting
+            ? _access.Capabilities.CanEditTemplate
+            : _access.Capabilities.CanAddTemplate);
+
+    public string EditorHeaderTitle => IsEditingExisting ? "Edit template" : "New template";
+
+    private string _newTemplateName = string.Empty;
+    public string NewTemplateName
+    {
+        get => _newTemplateName;
+        set => SetProperty(ref _newTemplateName, value);
+    }
+
+    private bool _isTemplateNameReadOnly;
+    public bool IsTemplateNameReadOnly
+    {
+        get => _isTemplateNameReadOnly;
+        set => SetProperty(ref _isTemplateNameReadOnly, value);
+    }
+
+    private string _formError = string.Empty;
+    public string FormError
+    {
+        get => _formError;
+        set => SetProperty(ref _formError, value);
+    }
+
+    private bool _canAddAnotherTemplate;
+    public bool CanAddAnotherTemplate
+    {
+        get => _canAddAnotherTemplate;
+        set
+        {
+            if (!SetProperty(ref _canAddAnotherTemplate, value))
+            {
+                return;
+            }
+
+            NotifyTemplateUiState();
+        }
+    }
+
+    private bool _hasTenantDb;
+
+    public bool ShowDbMissingBanner => !_hasTenantDb;
+
+    public bool ShowTemplateList => !IsCreatingTemplate;
+
+    public bool ShowTemplateEditor => IsCreatingTemplate;
+
+    public bool ShowTemplatePreviewPanel => !IsCreatingTemplate && SelectedTemplate is not null;
+
+    public bool ShowSelectTemplatePromptPanel =>
+        !IsCreatingTemplate && SelectedTemplate is null && Templates.Count > 0;
+
+    public bool ShowContextActionsEditor =>
+        !IsCreatingTemplate && SelectedTemplate is not null && _hasTenantDb;
+
+    private void NotifyTemplateUiState()
+    {
+        OnPropertyChanged(nameof(ShowDbMissingBanner));
+        OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
+        OnPropertyChanged(nameof(ShowTemplateList));
+        OnPropertyChanged(nameof(ShowTemplateEditor));
+        OnPropertyChanged(nameof(ShowTemplatePreviewPanel));
+        OnPropertyChanged(nameof(ShowSelectTemplatePromptPanel));
+        OnPropertyChanged(nameof(ShowContextActionsEditor));
+        OnPropertyChanged(nameof(CanEditSelectedTemplate));
+        OnPropertyChanged(nameof(CanDeleteSelectedTemplate));
+        OnPropertyChanged(nameof(CanAddTemplate));
+        OnPropertyChanged(nameof(CanSaveTemplate));
+        OnPropertyChanged(nameof(LinkTargetCandidates));
+        OnPropertyChanged(nameof(EditorHeaderTitle));
+        OnPropertyChanged(nameof(ShowFavouritesSubPage));
+    }
+
+    public async Task ReloadContextActionsAsync(CancellationToken cancellationToken = default)
+    {
+        ContextActionRows.Clear();
+        SelectedContextAction = null;
+        if (SelectedTemplate is null || !_hasTenantDb)
+        {
+            return;
+        }
+
+        try
+        {
+            var actions = await _contextActions
+                .GetForSourceTemplateAsync(SelectedTemplate.Id, cancellationToken)
+                .ConfigureAwait(true);
+            foreach (var a in actions.OrderBy(x => x.MenuLabel, StringComparer.OrdinalIgnoreCase))
+            {
+                var targetName = Templates.FirstOrDefault(t => t.Id == a.TargetTemplateId)?.Name ?? a.TargetTemplateId;
+                ContextActionRows.Add(
+                    new ContextActionListRow
+                    {
+                        Action = a,
+                        TargetTemplateName = targetName,
+                    });
+            }
+        }
+        catch
+        {
+            // Leave list empty if DB unavailable.
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteContextActionAsync()
+    {
+        if (SelectedContextAction is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _contextActions.DeleteAsync(SelectedContextAction.Action.Id).ConfigureAwait(true);
+            ContextActionRows.Remove(SelectedContextAction);
+            SelectedContextAction = null;
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    public async Task SaveNewContextActionAsync(TemplateContextAction action, CancellationToken cancellationToken = default)
+    {
+        await _contextActions.SaveAsync(action, cancellationToken).ConfigureAwait(true);
+        await ReloadContextActionsAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task<bool> InsertColumnIntoSelectedTemplateAsync(int insertAt, string columnName, CancellationToken cancellationToken = default)
+    {
+        if (SelectedTemplate is null)
+        {
+            return false;
+        }
+
+        var trimmed = columnName.Trim();
+        if (trimmed.Length == 0)
+        {
+            FormError = "Column name cannot be empty.";
+            return false;
+        }
+
+        var fields = SelectedTemplate.Fields.OrderBy(f => f.DisplayOrder).ToList();
+        var safeIndex = Math.Clamp(insertAt, 0, fields.Count);
+        fields.Insert(
+            safeIndex,
+            new TemplateFieldDefinition
+            {
+                Key = MakeFieldKey(trimmed, safeIndex),
+                Label = trimmed,
+                Type = TemplateFieldType.Text,
+                IsRequired = false,
+                DisplayOrder = safeIndex,
+                ValidationPattern = null,
+                Options = null,
+                LinkedTemplateId = null,
+                LinkedDisplayFieldKey = null,
+            });
+
+        var remapped = fields
+            .Select((f, i) => new TemplateFieldDefinition
+            {
+                Key = string.IsNullOrWhiteSpace(f.Key) ? MakeFieldKey(f.Label, i) : f.Key,
+                Label = f.Label,
+                Type = f.Type,
+                IsRequired = f.IsRequired,
+                DisplayOrder = i,
+                ValidationPattern = f.ValidationPattern,
+                Options = f.Options,
+                LinkedTemplateId = f.LinkedTemplateId,
+                LinkedDisplayFieldKey = f.LinkedDisplayFieldKey,
+            })
+            .ToList();
+
+        return await SavePatchedTemplateAsync(remapped, cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task<bool> RemoveColumnFromSelectedTemplateAsync(int index, CancellationToken cancellationToken = default)
+    {
+        if (SelectedTemplate is null)
+        {
+            return false;
+        }
+
+        var fields = SelectedTemplate.Fields.OrderBy(f => f.DisplayOrder).ToList();
+        if (index < 0 || index >= fields.Count || fields.Count <= 1)
+        {
+            return false;
+        }
+
+        fields.RemoveAt(index);
+        var remapped = fields
+            .Select((f, i) => new TemplateFieldDefinition
+            {
+                Key = f.Key,
+                Label = f.Label,
+                Type = f.Type,
+                IsRequired = f.IsRequired,
+                DisplayOrder = i,
+                ValidationPattern = f.ValidationPattern,
+                Options = f.Options,
+                LinkedTemplateId = f.LinkedTemplateId,
+                LinkedDisplayFieldKey = f.LinkedDisplayFieldKey,
+            })
+            .ToList();
+
+        return await SavePatchedTemplateAsync(remapped, cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task LoadAsync(CancellationToken cancellationToken = default)
+    {
+        FormError = string.Empty;
+        if (!_access.Capabilities.CanViewTemplate)
+        {
+            FormError = "You do not have permission to view templates.";
+            Templates.Clear();
+            OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
+            return;
+        }
+        _setupContext.Refresh();
+        _hasTenantDb = _setupContext.TryGetTenantMongoUri(out _);
+
+        IReadOnlyList<PartTemplateDefinition> templates;
+        try
+        {
+            templates = await _templateSchema.GetTemplatesAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            FormError = ex.Message;
+            templates = Array.Empty<PartTemplateDefinition>();
+        }
+
+        // Filter templates based on user's allowed template IDs (employee restriction)
+        var filtered = _access.FilterTemplatesForParts(templates);
+
+        Templates.Clear();
+        foreach (var template in filtered)
+        {
+            Templates.Add(template);
+        }
+
+        var hasMaster = templates.Any(
+            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
+        CanAddAnotherTemplate = hasMaster && _access.Capabilities.CanAddTemplate;
+
+        SelectedTemplate = Templates.FirstOrDefault();
+
+        // Never auto-open the canvas on load; user chooses Create from gallery or favourites.
+        IsCreatingTemplate = false;
+        IsEditingExisting = false;
+        EditingTemplateId = null;
+
+        NotifyTemplateUiState();
+    }
+
+    private void BeginMasterDataFlow()
+    {
+        IsEditingExisting = false;
+        EditingTemplateId = null;
+        IsCreatingTemplate = true;
+        NewTemplateName = MongoTemplateSchemaService.MasterDataTemplateName;
+        IsTemplateNameReadOnly = true;
+        ColumnLabels.Clear();
+        ColumnLabels.Add(new ColumnLabelDraft());
+        CellConnections.Clear();
+        SelectedTemplate = null;
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private void AddColumn()
+    {
+        ColumnLabels.Add(new ColumnLabelDraft());
+    }
+
+    [RelayCommand]
+    private void InsertColumnAfter(ColumnLabelDraft? draft)
+    {
+        if (draft is null)
+        {
+            ColumnLabels.Add(new ColumnLabelDraft());
+            return;
+        }
+
+        var index = ColumnLabels.IndexOf(draft);
+        if (index < 0)
+        {
+            ColumnLabels.Add(new ColumnLabelDraft());
+            return;
+        }
+
+        ColumnLabels.Insert(index + 1, new ColumnLabelDraft());
+    }
+
+    [RelayCommand]
+    private void RemoveColumn(ColumnLabelDraft? draft)
+    {
+        if (draft is null || ColumnLabels.Count <= 1)
+        {
+            return;
+        }
+
+        ColumnLabels.Remove(draft);
+    }
+
+    /// <summary>Opens the canvas editor for a new template (Master Data first if none exists).</summary>
+    public void StartCreateFromGallery()
+    {
+        var hasMaster = Templates.Any(
+            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
+
+        if (!hasMaster && _hasTenantDb)
+        {
+            BeginMasterDataFlow();
+            return;
+        }
+
+        if (!CanAddAnotherTemplate)
+        {
+            return;
+        }
+
+        FormError = string.Empty;
+        IsEditingExisting = false;
+        EditingTemplateId = null;
+        IsCreatingTemplate = true;
+        IsTemplateNameReadOnly = false;
+        NewTemplateName = string.Empty;
+        ColumnLabels.Clear();
+        ColumnLabels.Add(new ColumnLabelDraft());
+        CellConnections.Clear();
+        SelectedTemplate = null;
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private void StartNewCustomTemplate() => StartCreateFromGallery();
+
+    [RelayCommand]
+    private void BeginEditSelectedTemplate()
+    {
+        if (SelectedTemplate is null)
+        {
+            return;
+        }
+
+        FormError = string.Empty;
+        IsEditingExisting = true;
+        EditingTemplateId = SelectedTemplate.Id;
+        IsCreatingTemplate = true;
+        IsTemplateNameReadOnly = MongoTemplateSchemaService.IsExplorerTemplateName(SelectedTemplate.Name);
+        NewTemplateName = SelectedTemplate.Name;
+        SelectedBaseTemplateId = SelectedTemplate.BaseTemplateId;
+
+        var templateNameForLog = SelectedTemplate.Name;
+
+        ColumnLabels.Clear();
+        foreach (var f in SelectedTemplate.Fields.OrderBy(x => x.DisplayOrder))
+        {
+            ColumnLabels.Add(
+                new ColumnLabelDraft
+                {
+                    Label = f.Label,
+                    FieldType = f.Type,
+                    LinkedTemplateId = f.LinkedTemplateId,
+                    StableKey = f.Key,
+                    DropdownOptionsText = f.Options is { Count: > 0 } ? string.Join(", ", f.Options) : string.Empty,
+                    IsRequired = f.IsRequired,
+                });
+        }
+
+        if (ColumnLabels.Count == 0)
+        {
+            ColumnLabels.Add(new ColumnLabelDraft());
+        }
+
+        SelectedTemplate = null;
+        NotifyTemplateUiState();
+
+        _activityLogger.LogTemplateChange("Template Edit Started", $"Editing \"{templateNameForLog}\"");
+    }
+
+    [RelayCommand]
+    private void CancelCreate()
+    {
+        ExitTemplateEditor();
+        AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void AddStandardCatalogColumns()
+    {
+        var existing = ColumnLabels.Select(c => c.Label).ToList();
+        var added = 0;
+        foreach (var entry in ColumnCatalog.GetMissingByLabel(existing))
+        {
+            ColumnLabels.Add(
+                new ColumnLabelDraft
+                {
+                    Label = entry.Label,
+                    StableKey = entry.Key,
+                    FieldType = TemplateFieldType.Text,
+                });
+            added++;
+        }
+
+        FormError = added == 0 ? "All standard columns are already on this template." : string.Empty;
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private void ApplyBaseTemplateColumns()
+    {
+        var baseTemplate = SelectedBaseTemplate;
+        if (baseTemplate is null)
+        {
+            FormError = "Choose a base template to extend.";
+            return;
+        }
+
+        var existing = new HashSet<string>(
+            ColumnLabels.Select(c => c.Label.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+        foreach (var field in baseTemplate.Fields.OrderBy(f => f.DisplayOrder))
+        {
+            if (!existing.Add(field.Label))
+            {
+                continue;
+            }
+
+            ColumnLabels.Add(
+                new ColumnLabelDraft
+                {
+                    Label = field.Label,
+                    StableKey = field.Key,
+                    FieldType = field.Type,
+                    LinkedTemplateId = field.LinkedTemplateId,
+                    IsRequired = field.IsRequired,
+                });
+            added++;
+        }
+
+        FormError = added == 0
+            ? $"\"{baseTemplate.Name}\" columns are already present."
+            : string.Empty;
+        NotifyTemplateUiState();
+    }
+
+    [RelayCommand]
+    private async Task SaveTemplateAsync()
+    {
+        FormError = string.Empty;
+        var name = NewTemplateName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            FormError = "Enter a template name.";
+            return;
+        }
+
+        var hasMasterAlready = Templates.Any(
+            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
+
+        if (!IsEditingExisting)
+        {
+            if (!hasMasterAlready && !MongoTemplateSchemaService.IsExplorerTemplateName(name))
+            {
+                FormError = "Your first template must be named Explorer.";
+                return;
+            }
+
+            if (hasMasterAlready && MongoTemplateSchemaService.IsExplorerTemplateName(name))
+            {
+                FormError = "A template named Explorer already exists.";
+                return;
+            }
+
+            if (Templates.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                FormError = "A template with this name already exists.";
+                return;
+            }
+        }
+        else
+        {
+            if (Templates.Any(
+                    t => !string.Equals(t.Id, EditingTemplateId, StringComparison.Ordinal)
+                         && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                FormError = "A template with this name already exists.";
+                return;
+            }
+        }
+
+        var nonEmptyCount = ColumnLabels.Count(c => c.Label.Trim().Length > 0);
+        if (nonEmptyCount == 0)
+        {
+            FormError = "Add at least one column name.";
+            return;
+        }
+
+        // Check for duplicate column names
+        var columnNames = ColumnLabels
+            .Where(c => !string.IsNullOrWhiteSpace(c.Label))
+            .Select((c, idx) => (Name: c.Label.Trim(), Index: idx + 1))
+            .ToList();
+
+        var duplicates = columnNames
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (duplicates.Count > 0)
+        {
+            var dup = duplicates.First();
+            var indices = string.Join(" and ", dup.Select(x => $"#{x.Index}"));
+            FormError = $"Column name \"{dup.Key}\" is used in columns {indices}. Each column must have a unique name.";
+            return;
+        }
+
+        string templateId;
+        var version = 1;
+        if (IsEditingExisting)
+        {
+            templateId = EditingTemplateId!;
+            var existing = Templates.FirstOrDefault(t => t.Id == templateId);
+            if (existing is not null)
+            {
+                version = existing.Version + 1;
+            }
+        }
+        else if (!hasMasterAlready)
+        {
+            templateId = MongoTemplateSchemaService.MasterDataTemplateId;
+        }
+        else
+        {
+            templateId = Guid.NewGuid().ToString("N");
+        }
+
+        var fields = new List<TemplateFieldDefinition>();
+        var ord = 0;
+        for (var i = 0; i < ColumnLabels.Count; i++)
+        {
+            var draft = ColumnLabels[i];
+            var label = draft.Label.Trim();
+            if (label.Length == 0)
+            {
+                continue;
+            }
+
+            var key = !string.IsNullOrWhiteSpace(draft.StableKey)
+                ? draft.StableKey!
+                : MakeFieldKey(label, ord);
+
+            if (draft.FieldType == TemplateFieldType.RecordLink)
+            {
+                if (string.IsNullOrWhiteSpace(draft.LinkedTemplateId))
+                {
+                    FormError = $"For \"{label}\", choose which template to link to.";
+                    return;
+                }
+
+                if (string.Equals(draft.LinkedTemplateId, templateId, StringComparison.Ordinal))
+                {
+                    FormError = "A column cannot link to the same template it belongs to.";
+                    return;
+                }
+            }
+
+            fields.Add(
+                new TemplateFieldDefinition
+                {
+                    Key = key,
+                    Label = label,
+                    Type = draft.FieldType,
+                    IsRequired = draft.IsRequired,
+                    DisplayOrder = ord++,
+                    ValidationPattern = null,
+                    Options = draft.FieldType == TemplateFieldType.Dropdown
+                        ? draft.DropdownOptions.ToList()
+                        : null,
+                    LinkedTemplateId = draft.FieldType == TemplateFieldType.RecordLink ? draft.LinkedTemplateId : null,
+                    LinkedDisplayFieldKey = null,
+                });
+        }
+
+        var def = new PartTemplateDefinition
+        {
+            Id = templateId,
+            Name = name,
+            Version = version,
+            IsPublished = true,
+            BaseTemplateId = string.IsNullOrWhiteSpace(SelectedBaseTemplateId) ? null : SelectedBaseTemplateId,
+            Fields = fields,
+        };
+
+        try
+        {
+            await _templateSchema.SaveTemplateAsync(def).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            FormError = ex.Message;
+            return;
+        }
+
+        SelectedBaseTemplateId = null;
+        _activityLogger.LogTemplateChange(
+            IsEditingExisting ? "Template Edited" : "Template Created",
+            $"Template \"{name}\" {(IsEditingExisting ? "updated" : "created")}");
+
+        var firstMasterSave = !IsEditingExisting && !hasMasterAlready;
+        IsEditingExisting = false;
+        EditingTemplateId = null;
+        await LoadAsync().ConfigureAwait(true);
+        await _shellNav.NotifyTemplatesChangedAsync(openMasterDataPage: firstMasterSave).ConfigureAwait(true);
+        OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
+        AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static string MakeFieldKey(string label, int index)
+    {
+        var lowered = label.ToLowerInvariant();
+        var chars = lowered.Where(static c => char.IsLetterOrDigit(c) || c == '_').ToArray();
+        var baseKey = new string(chars);
+        if (string.IsNullOrEmpty(baseKey))
+        {
+            baseKey = "column";
+        }
+
+        return $"{baseKey}_{index}";
+    }
+
+    private async Task<bool> SavePatchedTemplateAsync(IReadOnlyList<TemplateFieldDefinition> fields, CancellationToken cancellationToken)
+    {
+        if (SelectedTemplate is null)
+        {
+            return false;
+        }
+
+        FormError = string.Empty;
+        var def = new PartTemplateDefinition
+        {
+            Id = SelectedTemplate.Id,
+            Name = SelectedTemplate.Name,
+            Version = SelectedTemplate.Version + 1,
+            IsPublished = true,
+            Fields = fields.ToList(),
+        };
+
+        try
+        {
+            await _templateSchema.SaveTemplateAsync(def, cancellationToken).ConfigureAwait(true);
+            await LoadAsync(cancellationToken).ConfigureAwait(true);
+            SelectedTemplate = Templates.FirstOrDefault(t => t.Id == def.Id) ?? Templates.FirstOrDefault();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            FormError = ex.Message;
+            return false;
+        }
+    }
+}
+
+public sealed record TemplateFieldTypeOption(TemplateFieldType Value, string Label);

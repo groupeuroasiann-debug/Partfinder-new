@@ -1,0 +1,126 @@
+<UserControl
+    x:Class="PartFinder.Views.Components.AllTemplatesCarousel"
+    x:Name="AllTemplatesCarouselRoot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{StaticResource PageBackgroundBrush}"
+    Loaded="OnLoaded"
+    KeyDown="OnKeyDown">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="0" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="56" />
+        </Grid.RowDefinitions>
+
+        <!-- ── Empty state (no templates) ── -->
+        <StackPanel
+            x:Name="EmptyStatePanel"
+            Grid.Row="1"
+            Spacing="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="Collapsed">
+            <Border Width="120" Height="120" CornerRadius="60"
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                    BorderThickness="2"
+                    HorizontalAlignment="Center">
+                <Border.Shadow>
+                    <ThemeShadow />
+                </Border.Shadow>
+                <FontIcon Glyph="&#xE8A5;" FontSize="48" Foreground="{StaticResource AccentPrimaryBrush}" />
+            </Border>
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <TextBlock Text="No templates yet"
+                           FontSize="28"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="Create your first template to get started. Your first template should be named Explorer."
+                           FontSize="15"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           MaxWidth="420"
+                           TextWrapping="WrapWholeWords" />
+            </StackPanel>
+            <Button x:Name="EmptyCreateTemplateButton"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    MinWidth="200"
+                    HorizontalAlignment="Center"
+                    Padding="20,10"
+                    Click="OnEmptyCreateTemplateClick">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE710;" FontSize="14" />
+                    <TextBlock Text="Create New Template" FontSize="14" FontWeight="SemiBold" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- ── Carousel canvas (full height, clipped) ── -->
+        <Canvas
+            x:Name="CarouselCanvas"
+            Grid.Row="1"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <Canvas.Clip>
+                <RectangleGeometry x:Name="CarouselClip" />
+            </Canvas.Clip>
+        </Canvas>
+
+        <!-- ── Bottom bar: counter + prev/next ── -->
+        <Grid x:Name="BottomNavBar"
+              Grid.Row="2"
+              Margin="0,0,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock x:Name="IndexLabel"
+                       Grid.Column="0" Grid.ColumnSpan="5"
+                       FontSize="14"
+                       Foreground="{StaticResource TextTertiaryBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontWeight="Medium" />
+
+            <Button x:Name="PrevButton"
+                    Grid.Column="1"
+                    Width="36" Height="36" Padding="0"
+                    Margin="0,0,12,0"
+                    CornerRadius="18"
+                    Background="Transparent" BorderThickness="0"
+                    Click="OnPreviousClick"
+                    AutomationProperties.Name="Previous template">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+                </Button.Resources>
+                <FontIcon Glyph="&#xE76B;" FontSize="18" Foreground="White" />
+            </Button>
+
+            <Border Grid.Column="2" Width="50" />
+
+            <Button x:Name="NextButton"
+                    Grid.Column="3"
+                    Width="36" Height="36" Padding="0"
+                    Margin="12,0,0,0"
+                    CornerRadius="18"
+                    Background="Transparent" BorderThickness="0"
+                    Click="OnNextClick"
+                    AutomationProperties.Name="Next template">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+                </Button.Resources>
+                <FontIcon Glyph="&#xE76C;" FontSize="18" Foreground="White" />
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

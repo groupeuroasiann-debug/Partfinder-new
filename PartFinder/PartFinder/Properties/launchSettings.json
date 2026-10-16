@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "PartFinder (Package)": {
+      "commandName": "Project"
+    },
+    "PartFinder (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
