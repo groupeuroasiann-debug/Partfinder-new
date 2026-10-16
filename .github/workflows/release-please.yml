@@ -1,11 +1,10 @@
+# Optional: opens a release PR when you run it manually.
+# Disabled on push because this repo blocks "Actions create pull requests" unless
+# Settings → Actions → Allow GitHub Actions to create and approve pull requests is ON.
+# Use "Release (direct)" for automated tags + MSIX without a PR.
 name: Release Please
 
-# Opens a release PR on each push to main (requires repo/org permission for Actions to create PRs).
-# If this fails, use workflow "Release (direct)" instead.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:

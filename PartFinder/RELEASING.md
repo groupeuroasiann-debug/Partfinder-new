@@ -28,13 +28,17 @@ This will:
 3. Create tag `vX.Y.Z` and a **GitHub Release**
 4. Trigger **Build MSIX and attach to Release** (uploads `PartFinder_X.Y.Z_x64.msix`)
 
-## Release Please (optional, conventional commits)
+## Release Please (optional, manual only)
+
+This workflow **does not run on every push** (it failed when Actions could not open PRs).
+
+Run **Actions → Release Please** manually only after enabling PR permission (see top of this doc).
 
 1. Use conventional commits on `main`: `feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:`
 2. Release Please opens a PR *chore(main): release x.y.z*
 3. Merge the PR → tag + release → MSIX workflow runs
 
-Non-conventional commit messages are skipped in the changelog (warnings in the log are normal for older history).
+**“commit could not be parsed”** in logs is **not a failure** — Release Please only understands conventional commit titles. Old messages like `Merge pull request #2` or `Fix admin portal…` are skipped on purpose; a few dozen warnings are normal for this repo’s history.
 
 ## Version files
 
