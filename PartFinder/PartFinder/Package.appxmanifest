@@ -11,7 +11,7 @@
   <Identity
     Name="608d9293-2a84-4bec-9233-250a2745c187"
     Publisher="CN=DELL"
-    Version="1.0.0.0" />
+    Version="1.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="608d9293-2a84-4bec-9233-250a2745c187" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
