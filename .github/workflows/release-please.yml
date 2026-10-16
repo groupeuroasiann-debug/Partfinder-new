@@ -1,9 +1,12 @@
 name: Release Please
 
+# Opens a release PR on each push to main (requires repo/org permission for Actions to create PRs).
+# If this fails, use workflow "Release (direct)" instead.
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,6 +18,6 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
