@@ -591,13 +591,23 @@ function OrganizationsSection({
     )
   }, [rows, search])
 
+  const existingOrgWithCode = useMemo(() => {
+    if (modalMode !== 'create' || !generatedCode.trim()) {
+      return null
+    }
+    return rows.find((r) => r.code === generatedCode.trim()) ?? null
+  }, [modalMode, generatedCode, rows])
+
+  const isCodeValidFormat = /^\d{6}$/.test(generatedCode.trim())
+
   const canSave = useMemo(() => {
     if (modalMode === 'create') {
       return Boolean(
         orgName.trim() &&
           orgType &&
           orgPlan &&
-          generatedCode &&
+          isCodeValidFormat &&
+          !existingOrgWithCode &&
           firstAdminEmail.trim() &&
           firstAdminEmail.includes('@'),
       )
@@ -610,13 +620,22 @@ function OrganizationsSection({
     orgType,
     orgPlan,
     orgStatus,
-    generatedCode,
+    isCodeValidFormat,
+    existingOrgWithCode,
     firstAdminEmail,
   ])
 
   const generateCode = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
-    setGeneratedCode(code)
+    let code = ''
+    // Generate a 6-digit code that is not already used in current rows
+    for (let attempts = 0; attempts < 50; attempts++) {
+      const candidate = Math.floor(100000 + Math.random() * 900000).toString()
+      if (!rows.some((r) => r.code === candidate)) {
+        code = candidate
+        break
+      }
+    }
+    setGeneratedCode(code || Math.floor(100000 + Math.random() * 900000).toString())
   }
 
   const openCreateModal = () => {
@@ -1010,25 +1029,53 @@ function OrganizationsSection({
                   autoComplete="email"
                 />
 
-                <div className="generated-code-row">
-                  <label>Organization Code</label>
-                  <button type="button" className="btn-dark" onClick={generateCode}>
-                    Generate Code
+                <div className="generated-code-row" style={{ marginTop: 14 }}>
+                  <label htmlFor="modal-org-code">Organization Code (6 digits) *</label>
+                  <button
+                    type="button"
+                    className="btn-dark"
+                    style={{ fontSize: 13, padding: '4px 10px' }}
+                    onClick={generateCode}
+                  >
+                    🎲 Auto Generate
                   </button>
-        </div>
-
-                <div className="generated-code-box">
-                  {generatedCode ? (
-                    <>
-                      <span>Generated Code</span>
-                      <strong>{generatedCode}</strong>
-                    </>
-                  ) : (
-                    <span>
-                      Click &quot;Generate Code&quot; to create a unique 6-digit organization code
-                    </span>
-                  )}
                 </div>
+
+                <input
+                  id="modal-org-code"
+                  value={generatedCode}
+                  onChange={(event) => {
+                    const val = event.target.value.replace(/\D/g, '').slice(0, 6)
+                    setGeneratedCode(val)
+                  }}
+                  placeholder="Enter manual 6-digit code or click Auto Generate"
+                  maxLength={6}
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    letterSpacing: 2,
+                    fontWeight: 600,
+                    borderColor: existingOrgWithCode
+                      ? '#ef4444'
+                      : generatedCode && !isCodeValidFormat
+                        ? '#f59e0b'
+                        : undefined,
+                  }}
+                />
+
+                {existingOrgWithCode ? (
+                  <p style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>
+                    ⚠️ Code {generatedCode} is already assigned to &ldquo;{existingOrgWithCode.name}&rdquo;. Please enter a different code.
+                  </p>
+                ) : generatedCode && !isCodeValidFormat ? (
+                  <p style={{ color: '#f59e0b', fontSize: 13, marginTop: 4 }}>
+                    Code must be exactly 6 digits ({generatedCode.length}/6 entered).
+                  </p>
+                ) : (
+                  <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>
+                    You can type an existing 6-digit code manually, or click &ldquo;Auto Generate&rdquo;.
+                  </p>
+                )}
               </>
             ) : (
               <div className="generated-code-box">
