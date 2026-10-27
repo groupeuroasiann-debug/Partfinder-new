@@ -11,7 +11,7 @@ File: `PartFinder/Package.appxmanifest`
 | Publisher display | `Euroasiann Group` |
 | Package family (derived) | `EuroasiannGroup.partfinder_8gdvw9rseb738` |
 | Architecture | x64 |
-| Version (current submission) | `1.0.1.0` |
+| Version (current submission) | `3.0.2.0` |
 
 ## Store upload package (preferred)
 
@@ -45,7 +45,7 @@ Produces an unsigned `_Test` MSIX for local manifest checks, not for Store uploa
 ## Validate identity
 
 ```powershell
-powershell -File .\PartFinder\scripts\validate-msix-identity.ps1 -MsixPath "path\to\PartFinder_1.0.1.0_x64.msix"
+powershell -File .\PartFinder\scripts\validate-msix-identity.ps1 -MsixPath "path\to\PartFinder_3.0.2.0_x64.msix"
 ```
 
 ## Visual Studio (alternative)
@@ -59,7 +59,7 @@ powershell -File .\PartFinder\scripts\validate-msix-identity.ps1 -MsixPath "path
 
 1. [Partner Center](https://partner.microsoft.com/dashboard) → **PartFinder** (existing app).
 2. **Update** submission (not a new product).
-3. **Packages** → upload `PartFinder_1.0.1.0_x64.msixupload` (version must exceed the last published package).
+3. **Packages** → upload `PartFinder_3.0.2.0_x64.msixupload` (version must exceed the last published package).
 4. Complete certification sections and submit.
 
 Leave existing **1.0.0** packages on disk unchanged; bump `Package.appxmanifest` / `version.json` only when Partner Center requires a higher version.
