@@ -1,9 +1,7 @@
-# Visual Studio / VS Code / Cursor
+﻿# Visual Studio / VS Code
 .vs/
 .vscode/*
 !.vscode/extensions.json
-.cursor/
-.mcp.json
 
 # Secrets
 .env
