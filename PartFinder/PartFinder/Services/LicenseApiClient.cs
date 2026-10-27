@@ -38,7 +38,7 @@ public static class LicenseApiClient
             var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
             if (!File.Exists(path))
             {
-                return "https://partfinder-backend.vercel.app";
+                return "https://backend.partfinder.store";
             }
 
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
@@ -56,7 +56,7 @@ public static class LicenseApiClient
         {
         }
 
-        return "https://partfinder-backend.vercel.app";
+        return "https://backend.partfinder.store";
     }
 
     public static async Task<LicenseVerifyResponse?> VerifyAsync(string orgCode, CancellationToken ct = default)

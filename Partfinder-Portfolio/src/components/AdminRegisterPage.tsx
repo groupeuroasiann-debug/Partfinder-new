@@ -7,9 +7,18 @@ const GATE_SESSION_KEY = 'pf_admin_gate_unlocked'
 const DEFAULT_GATE_PASSWORD = 'J@yandra06'
 const ACCEPTED_GATE_PASSWORDS = ['J@yandra06', 'j@yandra@06', 'j@yandra06']
 
-const apiBase =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ??
-  (import.meta.env.DEV ? '' : 'https://partfinder-backend.vercel.app')
+function normalizeApiBase(rawUrl?: string): string {
+  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim() !== '') {
+    let trimmed = rawUrl.trim().replace(/\/$/, '')
+    if (!/^https?:\/\//i.test(trimmed)) {
+      trimmed = `https://${trimmed}`
+    }
+    return trimmed
+  }
+  return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
+}
+
+const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 function parseApiErrorMessage(body: unknown): string {
   if (!body || typeof body !== 'object') {
