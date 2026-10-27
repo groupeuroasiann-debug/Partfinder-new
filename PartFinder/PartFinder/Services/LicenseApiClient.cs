@@ -36,19 +36,20 @@ public static class LicenseApiClient
         try
         {
             var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (!File.Exists(path))
+            if (File.Exists(path))
             {
-                return "https://backend.partfinder.store";
-            }
-
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            if (doc.RootElement.TryGetProperty("LicenseApi", out var licenseApi) &&
-                licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
-            {
-                var s = baseUrlEl.GetString();
-                if (!string.IsNullOrWhiteSpace(s))
+                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                if (doc.RootElement.TryGetProperty("LicenseApi", out var licenseApi) &&
+                    licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
                 {
-                    return s.TrimEnd('/');
+                    var s = baseUrlEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(s) &&
+                        !s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase) &&
+                        !s.Contains("localhost", StringComparison.OrdinalIgnoreCase) &&
+                        !s.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return s.TrimEnd('/');
+                    }
                 }
             }
         }

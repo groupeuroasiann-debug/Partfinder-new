@@ -656,47 +656,55 @@ public sealed partial class MainWindow : Window
 
     private async void ShowShell()
     {
-        RestoreNonShellTitleBarChrome();
-        SetupRoot.Visibility = Visibility.Collapsed;
-
-        // Check if Windows Hello app lock is enabled
-        var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
-        security.Load();
-
-        if (security.AppLockEnabled)
+        try
         {
-            // Check availability
-            var available = await Windows.Security.Credentials.UI.UserConsentVerifier
-                .CheckAvailabilityAsync();
+            RestoreNonShellTitleBarChrome();
+            SetupRoot.Visibility = Visibility.Collapsed;
 
-            if (available == Windows.Security.Credentials.UI.UserConsentVerifierAvailability.Available)
+            // Check if Windows Hello app lock is enabled
+            var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
+            security.Load();
+
+            if (security.AppLockEnabled)
             {
-                var result = await Windows.Security.Credentials.UI.UserConsentVerifier
-                    .RequestVerificationAsync("Verify your identity to open PartFinder.");
+                // Check availability
+                var available = await Windows.Security.Credentials.UI.UserConsentVerifier
+                    .CheckAvailabilityAsync();
 
-                if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                if (available == Windows.Security.Credentials.UI.UserConsentVerifierAvailability.Available)
                 {
-                    AppLockRoot.Visibility = Visibility.Collapsed;
-                    ShellRoot.Visibility = Visibility.Visible;
-                    ApplyShellExtendedTitleBar();
-                    await ReinitializeShellAsync();
+                    var result = await Windows.Security.Credentials.UI.UserConsentVerifier
+                        .RequestVerificationAsync("Verify your identity to open PartFinder.");
+
+                    if (result == Windows.Security.Credentials.UI.UserConsentVerificationResult.Verified)
+                    {
+                        AppLockRoot.Visibility = Visibility.Collapsed;
+                        ShellRoot.Visibility = Visibility.Visible;
+                        ApplyShellExtendedTitleBar();
+                        await ReinitializeShellAsync();
+                        return;
+                    }
+
+                    // Not verified — show lock screen with retry
+                    AppLockRoot.Visibility = Visibility.Visible;
+                    ShellRoot.Visibility = Visibility.Collapsed;
+                    AppLockErrorText.Text = "Verification failed. Try again.";
+                    AppLockErrorBorder.Visibility = Visibility.Visible;
                     return;
                 }
-
-                // Not verified — show lock screen with retry
-                AppLockRoot.Visibility = Visibility.Visible;
-                ShellRoot.Visibility = Visibility.Collapsed;
-                AppLockErrorText.Text = "Verification failed. Try again.";
-                AppLockErrorBorder.Visibility = Visibility.Visible;
-                return;
             }
-        }
 
-        // App lock off or Windows Hello not available — open directly
-        AppLockRoot.Visibility = Visibility.Collapsed;
-        ShellRoot.Visibility = Visibility.Visible;
-        ApplyShellExtendedTitleBar();
-        await ReinitializeShellAsync();
+            // App lock off or Windows Hello not available — open directly
+            AppLockRoot.Visibility = Visibility.Collapsed;
+            ShellRoot.Visibility = Visibility.Visible;
+            ApplyShellExtendedTitleBar();
+            await ReinitializeShellAsync();
+        }
+        catch (Exception ex)
+        {
+            DebugLogClient.Post("error", "ShowShellException", ex.ToString());
+            ShowSubscriptionBlocked($"Could not load application workspace: {ex.Message}");
+        }
     }
 
     private async Task ReinitializeShellAsync()
@@ -769,9 +777,11 @@ public sealed partial class MainWindow : Window
 
     private async void OnNextClicked(object sender, RoutedEventArgs e)
     {
-        ValidationText.Text = string.Empty;
+        try
+        {
+            ValidationText.Text = string.Empty;
 
-        if (_step == 1)
+            if (_step == 1)
         {
             _resolvedSignedInEmail = null;
             if (string.IsNullOrWhiteSpace(OrgCodeBox.Text))
@@ -1071,6 +1081,13 @@ public sealed partial class MainWindow : Window
             UpdateStepUi();
         }
     }
+    catch (Exception ex)
+    {
+        NextButton.IsEnabled = true;
+        ValidationText.Text = $"Error: {ex.Message}";
+        DebugLogClient.Post("error", "OnNextClickedException", ex.ToString());
+    }
+}
 
     private async void OnLetsGoClicked(object sender, RoutedEventArgs e)
     {

@@ -260,13 +260,16 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         }
 
         var startPage = ResolveStartPage(hasMaster, _access.Capabilities);
-        var startItem = NavigationItems.First(i => i.Page == startPage);
-        _lastSelectedPage = startPage;
-
-        _suppressNavigation = true;
-        SelectedNavigationItem = startItem;
-        _suppressNavigation = false;
-        _navigationService.Navigate(startPage);
+        var startItem = NavigationItems.FirstOrDefault(i => i.Page == startPage)
+                     ?? NavigationItems.FirstOrDefault();
+        if (startItem is not null)
+        {
+            _lastSelectedPage = startItem.Page;
+            _suppressNavigation = true;
+            SelectedNavigationItem = startItem;
+            _suppressNavigation = false;
+            _navigationService.Navigate(startItem.Page);
+        }
     }
 
     private static AppPage ResolveStartPage(bool hasMasterData, UserAccessCapabilities c)

@@ -16,13 +16,45 @@ namespace PartFinder
         {
             InitializeComponent();
             Services = ConfigureServices();
+
+            this.UnhandledException += (sender, e) =>
+            {
+                e.Handled = true;
+                try
+                {
+                    DebugLogClient.Post("error", "XamlUnhandledException", e.Exception?.ToString() ?? e.Message);
+                    var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PartFinder", "Logs");
+                    Directory.CreateDirectory(logDir);
+                    File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.UtcNow:O}] [XAML_UNHANDLED] {e.Exception?.ToString() ?? e.Message}\n");
+                }
+                catch { }
+            };
+
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
-                DebugLogClient.Post(
-                    "error",
-                    "UnhandledException",
-                    e.ExceptionObject?.ToString());
+                try
+                {
+                    DebugLogClient.Post("error", "UnhandledException", e.ExceptionObject?.ToString());
+                    var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PartFinder", "Logs");
+                    Directory.CreateDirectory(logDir);
+                    File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.UtcNow:O}] [APPDOMAIN_UNHANDLED] {e.ExceptionObject?.ToString()}\n");
+                }
+                catch { }
             };
+
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                e.SetObserved();
+                try
+                {
+                    DebugLogClient.Post("error", "UnobservedTaskException", e.Exception?.ToString());
+                    var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PartFinder", "Logs");
+                    Directory.CreateDirectory(logDir);
+                    File.AppendAllText(Path.Combine(logDir, "crash.log"), $"[{DateTime.UtcNow:O}] [UNOBSERVED_TASK] {e.Exception?.ToString()}\n");
+                }
+                catch { }
+            };
+
             DebugLogClient.Post("info", "PartFinder WinUI started", null);
         }
 
