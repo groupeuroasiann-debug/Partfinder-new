@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { EnterpriseHome } from './pages/EnterpriseHome'
-import { AdminRegisterPage } from './components/AdminRegisterPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
