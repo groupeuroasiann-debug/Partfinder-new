@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { AdminRegisterPage } from './components/AdminRegisterPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
@@ -57,6 +58,8 @@ function App() {
     <Routes>
       <Route path="/" element={<PublicDashboardPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
+      <Route path="/admin/register" element={<AdminRegisterPage />} />
+      <Route path="/register" element={<AdminRegisterPage />} />
       <Route path="/admin/*" element={<AdminPortalPage />} />
       <Route path="/home" element={<Navigate to="/dashboard" replace />} />
       <Route path="/test" element={<R4a />} />
@@ -80,6 +83,10 @@ function PublicDashboardPage() {
           </Link>
           <Link to="/admin" className="btn-primary">
             Admin Login
+          </Link>
+          <Link to="/admin/register" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>Admin Registration</span>
+            <span aria-hidden="true">🔒</span>
           </Link>
         </div>
       </header>
@@ -184,6 +191,16 @@ function AdminPortalPage() {
             <button type="submit" className="btn-primary" disabled={loginPending}>
               {loginPending ? 'Signing in…' : 'Login'}
             </button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)', fontSize: 13 }}>
+              <Link to="/" style={{ color: '#94a3b8', textDecoration: 'none' }}>
+                ← Public Dashboard
+              </Link>
+              <Link to="/admin/register" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span>Register as Admin</span>
+                <span aria-hidden="true">🔒→</span>
+              </Link>
+            </div>
           </form>
         </section>
       </main>
