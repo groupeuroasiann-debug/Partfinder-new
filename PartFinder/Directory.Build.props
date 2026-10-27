@@ -1,0 +1,9 @@
+<Project>
+  <!-- MSIX packaging tasks (WinAppSdkCreateAppStoreContainer) require System.Security.Permissions next to the task assembly when using the .NET (Core) MSBuild host (SDK 8+). -->
+  <ItemGroup>
+    <PackageReference Include="System.Security.Permissions" Version="8.0.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+  <PropertyGroup>
+    <_PartFinderMsixTaskDeps>$(MSBuildThisFileDirectory).msix-task-deps\</_PartFinderMsixTaskDeps>
+  </PropertyGroup>
+</Project>

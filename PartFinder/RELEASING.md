@@ -61,4 +61,4 @@ powershell -ExecutionPolicy Bypass -File .\PartFinder\build-msix.ps1
 
 ## Microsoft Store
 
-Use Partner Center with publisher **Euroasiann Group** and Store signing; GitHub MSIX uses a CI dev cert (`CN=DELL`) for sideload/testing only.
+Use Partner Center with publisher **Euroasiann Group**. The package identity must stay `EuroasiannGroup.partfinder` / `CN=B96C9A11-7C90-42E9-8C6C-14AD9097B6CD`. The GitHub MSIX is signed with a certificate whose subject is that same publisher; a different subject (such as `CN=DELL`) is copied into the package and Partner Center rejects it. Prefer `PartFinder/build-msix-store.ps1` for the `.msixupload` you submit.

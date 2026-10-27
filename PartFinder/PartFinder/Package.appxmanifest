@@ -9,8 +9,8 @@
   IgnorableNamespaces="uap rescap systemai">
 
   <Identity
-    Name="608d9293-2a84-4bec-9233-250a2745c187"
-    Publisher="CN=DELL"
+    Name="EuroasiannGroup.partfinder"
+    Publisher="CN=B96C9A11-7C90-42E9-8C6C-14AD9097B6CD"
     Version="1.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="608d9293-2a84-4bec-9233-250a2745c187" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>

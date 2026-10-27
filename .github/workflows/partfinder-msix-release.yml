@@ -46,7 +46,17 @@ jobs:
         id: cert
         shell: pwsh
         run: |
-          $Publisher = "CN=DELL"
+          # Subject must equal Package.appxmanifest Publisher. A different subject
+          # (previously CN=DELL) is written into the package and Partner Center rejects it.
+          $Publisher = "CN=B96C9A11-7C90-42E9-8C6C-14AD9097B6CD"
+          [xml]$manifest = Get-Content ./PartFinder/PartFinder/Package.appxmanifest
+          $identity = $manifest.Package.Identity
+          if (-not $identity) { $identity = $manifest.DocumentElement.Identity }
+          $name = $identity.GetAttribute("Name")
+          $pub = $identity.GetAttribute("Publisher")
+          if ($name -ne "EuroasiannGroup.partfinder" -or $pub -ne $Publisher) {
+            throw "Package.appxmanifest identity is '$name' / '$pub'. Store requires EuroasiannGroup.partfinder / $Publisher."
+          }
           $cert = New-SelfSignedCertificate -Type Custom -Subject $Publisher `
             -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}CA=FALSE") `
             -KeyUsage DigitalSignature -FriendlyName "PartFinder MSIX CI" `

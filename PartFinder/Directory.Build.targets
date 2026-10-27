@@ -3,6 +3,38 @@
     <BuildProjectReferences>true</BuildProjectReferences>
   </PropertyGroup>
 
+  <!-- Copy MSIX MSBuild task binaries + System.Security.Permissions for Store .msixupload creation on dotnet SDK. -->
+  <Target Name="PartFinderStageMsixTaskDependencies"
+          BeforeTargets="PrepareForBuild;PrepareMsixPackage"
+          Condition="'$(WindowsPackageType)' == 'MSIX' or '$(GenerateAppxPackageOnBuild)' == 'true' or '$(AppxPackage)' == 'true'">
+    <PropertyGroup>
+      <_SourceMsixTools>$(PkgMicrosoft_Windows_SDK_BuildTools_MSIX)\tools\net6.0\</_SourceMsixTools>
+      <_PermissionsDll Condition="Exists('$(PkgSystem_Security_Permissions)\lib\net8.0\System.Security.Permissions.dll')">$(PkgSystem_Security_Permissions)\lib\net8.0\System.Security.Permissions.dll</_PermissionsDll>
+      <_PermissionsDll Condition="'$(_PermissionsDll)' == '' and Exists('$(PkgSystem_Security_Permissions)\lib\net462\System.Security.Permissions.dll')">$(PkgSystem_Security_Permissions)\lib\net462\System.Security.Permissions.dll</_PermissionsDll>
+    </PropertyGroup>
+    <MakeDir Directories="$(_PartFinderMsixTaskDeps)" />
+    <ItemGroup Condition="Exists('$(_SourceMsixTools)')">
+      <_MsixToolDlls Include="$(_SourceMsixTools)*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_MsixToolDlls)"
+          DestinationFolder="$(_PartFinderMsixTaskDeps)"
+          SkipUnchangedFiles="true"
+          Condition="'@(_MsixToolDlls)' != ''" />
+    <Copy SourceFiles="$(_PermissionsDll)"
+          DestinationFolder="$(_PartFinderMsixTaskDeps)"
+          SkipUnchangedFiles="true"
+          Condition="'$(_PermissionsDll)' != ''" />
+    <!-- MSBuild may load Microsoft.Windows.SDK.BuildTools.MSIX.dll from the package tools folder before our staged path is used; copy the dependency there too. -->
+    <Copy SourceFiles="$(_PermissionsDll)"
+          DestinationFiles="$(_SourceMsixTools)System.Security.Permissions.dll"
+          SkipUnchangedFiles="true"
+          Condition="'$(_PermissionsDll)' != '' and Exists('$(_SourceMsixTools)')" />
+    <PropertyGroup>
+      <MsixTaskAssemblyLocation>$(_PartFinderMsixTaskDeps)</MsixTaskAssemblyLocation>
+    </PropertyGroup>
+    <Message Importance="high" Text="PartFinder MSIX task deps staged in $(_PartFinderMsixTaskDeps)" />
+  </Target>
+
   <!--
     Workaround for WindowsAppSDK / MSIX BuildTools bug where GetLatestMSVCVersion throws
     DirectoryNotFoundException when Visual Studio is installed without the C++ (MSVC) workload.
