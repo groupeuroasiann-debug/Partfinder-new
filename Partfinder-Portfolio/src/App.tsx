@@ -5,10 +5,19 @@ import { AdminRegisterPage } from './components/AdminRegisterPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
+function normalizeApiBase(rawUrl?: string): string {
+  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim() !== '') {
+    let trimmed = rawUrl.trim().replace(/\/$/, '')
+    if (!/^https?:\/\//i.test(trimmed)) {
+      trimmed = `https://${trimmed}`
+    }
+    return trimmed
+  }
+  return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
+}
+
 /** In dev, prefer same-origin `/api` (Vite proxy) unless VITE_API_URL is set — avoids stale SW/caches to :3000. */
-const apiBase =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ??
-  (import.meta.env.DEV ? '' : 'https://partfinder-backend.vercel.app')
+const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 function parseApiErrorMessage(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -44,7 +53,12 @@ function authJsonHeaders(): HeadersInit {
 }
 
 function postLoginPath(pathname: string): string {
-  if (pathname === '/admin' || pathname === '/admin/') {
+  if (
+    pathname === '/admin' ||
+    pathname === '/admin/' ||
+    pathname === '/admin/login' ||
+    pathname === '/login'
+  ) {
     return '/admin/dashboard'
   }
   if (pathname.startsWith('/admin/')) {
@@ -58,6 +72,7 @@ function App() {
     <Routes>
       <Route path="/" element={<PublicDashboardPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
+      <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
       <Route path="/register" element={<AdminRegisterPage />} />
       <Route path="/admin/*" element={<AdminPortalPage />} />
@@ -109,20 +124,17 @@ function AdminPortalPage() {
     location.pathname === '/admin/dashboard' ||
     location.pathname === '/dashboard'
 
+  const isLoginRoute =
+    location.pathname === '/admin' ||
+    location.pathname === '/admin/' ||
+    location.pathname === '/admin/login' ||
+    location.pathname === '/login'
+
   const handleSessionExpired = useCallback(() => {
     window.localStorage.removeItem(ADMIN_TOKEN_KEY)
     setIsAuthenticated(false)
     navigate('/admin', { replace: true })
   }, [navigate])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return
-    }
-    if (location.pathname === '/admin' || location.pathname === '/admin/') {
-      navigate('/admin/dashboard', { replace: true })
-    }
-  }, [isAuthenticated, location.pathname, navigate])
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -160,12 +172,36 @@ function AdminPortalPage() {
     }
   }
 
-  if (!isAuthenticated && !isPublicDashboardRoute) {
+  if (isLoginRoute || (!isAuthenticated && !isPublicDashboardRoute)) {
     return (
       <main className="auth-page">
         <section className="auth-card">
           <h1>Admin Portal Login</h1>
           <p>Sign in with your email and password.</p>
+
+          {isAuthenticated ? (
+            <div
+              style={{
+                background: 'rgba(56, 189, 248, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: 8,
+                padding: '10px 14px',
+                marginBottom: 16,
+                fontSize: 13,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: '#e2e8f0' }}>You have an active session.</span>
+              <Link
+                to="/admin/dashboard"
+                style={{ color: '#38bdf8', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Go to Dashboard →
+              </Link>
+            </div>
+          ) : null}
 
           <form className="auth-form" onSubmit={handleLogin}>
             <label htmlFor="admin-email">Email ID</label>
