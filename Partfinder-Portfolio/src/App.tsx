@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { AdminRegisterPage } from './components/AdminRegisterPage'
+import { EnterpriseHome } from './pages/EnterpriseHome'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
@@ -70,7 +70,7 @@ function postLoginPath(pathname: string): string {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<PublicDashboardPage />} />
+      <Route path="/" element={<EnterpriseHome />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
       <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
@@ -87,6 +87,10 @@ function PublicDashboardPage() {
   return (
     <main className="page">
       <header className="hero">
+        <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 16 }} title="Go to home page">
+          <img className="brand-logo" src="/partfinder-logo.webp" alt="PartFinder" />
+          <span style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc' }}>PartFinder</span>
+        </Link>
         <p className="badge">PartFinder Dashboard</p>
         <h1>Everyone can view the live platform dashboard</h1>
         <p className="sub">
@@ -176,6 +180,9 @@ function AdminPortalPage() {
     return (
       <main className="auth-page">
         <section className="auth-card">
+          <Link to="/" title="Go to home page">
+            <img className="brand-logo" src="/partfinder-logo.webp" alt="PartFinder" />
+          </Link>
           <h1>Admin Portal Login</h1>
           <p>Sign in with your email and password.</p>
 
@@ -247,6 +254,10 @@ function AdminPortalPage() {
     return (
       <main className="page">
         <header className="hero">
+          <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 16 }} title="Go to home page">
+            <img className="brand-logo" src="/partfinder-logo.webp" alt="PartFinder" />
+            <span style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc' }}>PartFinder</span>
+          </Link>
           <p className="badge">Public Dashboard</p>
           <h1>PartFinder platform overview</h1>
           <p className="sub">This dashboard is visible to anyone without signing in.</p>
@@ -293,7 +304,10 @@ function AdminPortalPage() {
     <div className="admin-layout">
       <aside className="admin-sidebar">
         <div className="admin-sidebar-head">
-          <h2>PartFinder Admin</h2>
+          <Link to="/" className="admin-brand" title="Go to home page">
+            <img className="brand-logo" src="/partfinder-logo.webp" alt="PartFinder" />
+            <h2>PartFinder Admin</h2>
+          </Link>
           <span className="sidebar-gear">⚙</span>
         </div>
         <nav>
@@ -2204,11 +2218,14 @@ function NotFoundPage() {
   return (
     <main className="page">
       <section className="card">
+        <Link to="/" title="PartFinder Home">
+          <img className="brand-logo" src="/partfinder-logo.webp" alt="PartFinder" style={{ marginBottom: 16 }} />
+        </Link>
         <h2>Page not found</h2>
         <p>The route you requested does not exist.</p>
-        <a href="/" className="btn-secondary">
+        <Link to="/" className="btn-secondary">
           Back to Home
-        </a>
+        </Link>
       </section>
     </main>
   )
