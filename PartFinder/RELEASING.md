@@ -55,7 +55,7 @@ Each upload needs a **unique** four-part manifest version. After a duplicate-ver
 
 ```powershell
 powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -Set 3.0.3.0
-powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -BumpRevision   # 3.0.3.1, … 3.0.3.9, 3.0.4.0
+powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -BumpBuild   # 3.0.5.0 -> 3.0.6.0 (4th segment always 0)
 powershell -ExecutionPolicy Bypass -File .\PartFinder\build-msix-store.ps1
 ```
 

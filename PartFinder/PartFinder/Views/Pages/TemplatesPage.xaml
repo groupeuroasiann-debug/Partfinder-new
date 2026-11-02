@@ -292,10 +292,22 @@
                             <Button
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Content="Save Template" Padding="20,6"
-                                IsEnabled="{Binding CanAddTemplate}"
+                                IsEnabled="{Binding CanSaveTemplate}"
                                 Command="{Binding SaveTemplateCommand}" />
                         </StackPanel>
                     </Grid>
+                </Border>
+                <Border Visibility="{Binding FormError, Converter={StaticResource StringToVisibilityConverter}}"
+                        Background="#1AE05252"
+                        BorderBrush="#30E05252"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10,8"
+                        Margin="0,4,0,0">
+                    <TextBlock Text="{Binding FormError}"
+                               Foreground="#E05252"
+                               FontSize="12"
+                               TextWrapping="WrapWholeWords" />
                 </Border>
             </StackPanel>
 

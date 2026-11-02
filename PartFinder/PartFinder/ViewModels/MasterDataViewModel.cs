@@ -17,8 +17,12 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     private bool _suppressTemplateSelectionChange;
     private IReadOnlyList<PartTemplateDefinition> _cachedTemplates = Array.Empty<PartTemplateDefinition>();
     private IReadOnlyList<TemplateContextAction> _loadedContextActions = Array.Empty<TemplateContextAction>();
+    private CancellationTokenSource? _templateLoadCts;
+    private readonly Dictionary<string, string> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ICurrentUserAccessService _access;
+
+    public event EventHandler? ColumnFiltersChanged;
 
     public MasterDataViewModel(
         ITemplateSchemaService templateSchema,
@@ -68,14 +72,78 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     public bool CanCopyMasterData => _access.Capabilities.CanCopyMasterData;
     public bool CanDeleteMasterData => _access.Capabilities.CanDeleteMasterData;
 
-    public IReadOnlyList<MasterDataRowViewModel> GetVisibleRows()
+    public IReadOnlyList<MasterDataRowViewModel> GetVisibleRows() =>
+        Rows.Where(IsRowVisible).ToList();
+
+    public bool IsRowVisible(MasterDataRowViewModel row) =>
+        _columnFilters.Count == 0 || RowMatchesColumnFilters(row);
+
+    public bool TryGetColumnFilter(string fieldKey, out string filterText) =>
+        _columnFilters.TryGetValue(fieldKey, out filterText!);
+
+    public void SetColumnFilter(string fieldKey, string? filterValue)
     {
-        return Rows.ToList();
+        if (string.IsNullOrWhiteSpace(fieldKey))
+        {
+            return;
+        }
+
+        var normalized = filterValue?.Trim();
+        if (string.IsNullOrEmpty(normalized))
+        {
+            if (!_columnFilters.Remove(fieldKey))
+            {
+                return;
+            }
+        }
+        else if (_columnFilters.TryGetValue(fieldKey, out var existing)
+                 && string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        else
+        {
+            _columnFilters[fieldKey] = normalized;
+        }
+
+        ColumnFiltersChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    public void ClearColumnFilters()
+    {
+        if (_columnFilters.Count == 0)
+        {
+            return;
+        }
+
+        _columnFilters.Clear();
+        ColumnFiltersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool RowMatchesColumnFilters(MasterDataRowViewModel row)
+    {
+        foreach (var filter in _columnFilters)
+        {
+            var cell = row.Cells.FirstOrDefault(
+                c => string.Equals(c.FieldKey, filter.Key, StringComparison.OrdinalIgnoreCase));
+            var text = cell?.Text ?? string.Empty;
+            if (!text.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool CanAddRows =>
+        IsEditMode && Columns.Count > 0 && (CanEditMasterData || CanAddMasterData);
 
     partial void OnIsEditModeChanged(bool value)
     {
         OnPropertyChanged(nameof(EditModeButtonText));
+        OnPropertyChanged(nameof(CanAddRows));
+        AddRowCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedDataTemplateChanged(PartTemplateDefinition? value)
@@ -153,29 +221,48 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
     public async Task LoadForTemplateAsync(string templateId, CancellationToken cancellationToken = default)
     {
+        _templateLoadCts?.Cancel();
+        _templateLoadCts?.Dispose();
+        _templateLoadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var loadCt = _templateLoadCts.Token;
+        var loadForId = templateId;
+
         IsLoading = true;
         StatusMessage = null;
         ShowNoTemplateHint = false;
         Columns.Clear();
         Rows.Clear();
         _loadedContextActions = Array.Empty<TemplateContextAction>();
+        _columnFilters.Clear();
 
         try
         {
             try
             {
                 _cachedTemplates = await _templateSchema
-                    .GetTemplatesAsync(cancellationToken)
+                    .GetTemplatesAsync(loadCt)
                     .ConfigureAwait(true);
+            }
+            catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
+            {
+                return;
             }
             catch
             {
                 // Keep prior cache for link resolution if refresh fails.
             }
 
+            loadCt.ThrowIfCancellationRequested();
+
             var template = await _templateSchema
-                .GetTemplateAsync(templateId, cancellationToken)
+                .GetTemplateAsync(loadForId, loadCt)
                 .ConfigureAwait(true);
+
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
 
             if (template is null || template.Fields.Count == 0)
             {
@@ -189,12 +276,24 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             }
 
             _loadedContextActions = await _contextActions
-                .GetForSourceTemplateAsync(template.Id, cancellationToken)
+                .GetForSourceTemplateAsync(template.Id, loadCt)
                 .ConfigureAwait(true);
 
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
+
             var persisted = await _records
-                .GetRowsAsync(template.Id, cancellationToken)
+                .GetRowsAsync(template.Id, loadCt)
                 .ConfigureAwait(true);
+
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
 
             if (persisted.Count == 0)
             {
@@ -208,21 +307,39 @@ public sealed partial class MasterDataViewModel : ViewModelBase
                 }
             }
 
-            await ResolveRecordLinkLabelsAsync(cancellationToken).ConfigureAwait(true);
+            await ResolveRecordLinkLabelsAsync(loadCt).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
+        {
+            // Superseded by a newer template selection or page unload.
         }
         catch (InvalidOperationException)
         {
-            ShowNoDatabaseHint = true;
+            if (IsLoadStillCurrent(loadForId))
+            {
+                ShowNoDatabaseHint = true;
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = "Error: " + ex.Message;
+            if (IsLoadStillCurrent(loadForId))
+            {
+                StatusMessage = "Error: " + ex.Message;
+            }
         }
         finally
         {
-            IsLoading = false;
+            if (IsLoadStillCurrent(loadForId))
+            {
+                IsLoading = false;
+                OnPropertyChanged(nameof(CanAddRows));
+                AddRowCommand.NotifyCanExecuteChanged();
+            }
         }
     }
+
+    private bool IsLoadStillCurrent(string templateId) =>
+        string.Equals(SelectedDataTemplate?.Id, templateId, StringComparison.Ordinal);
 
     private async Task ResolveRecordLinkLabelsAsync(CancellationToken cancellationToken)
     {
@@ -289,15 +406,11 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanAddRows))]
     private void AddRow()
     {
-        if (!IsEditMode || Columns.Count == 0)
-        {
-            return;
-        }
-
         Rows.Add(CreateEmptyRow());
+        StatusMessage = $"Added row {Rows.Count}. Click Save when finished.";
     }
 
     public void InsertRowAt(int index)
@@ -441,7 +554,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         IsEditMode = !IsEditMode;
         StatusMessage = IsEditMode
-            ? "Edit mode enabled. Make changes, then click Save."
+            ? "Edit mode enabled. Add rows below the table, then click Save (✓)."
             : "View mode enabled.";
     }
 

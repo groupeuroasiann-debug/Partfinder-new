@@ -1,8 +1,10 @@
 # Bumps or sets the MSIX four-part Identity Version for Microsoft Store uploads.
-# Scheme: 3.0.3.0 -> 3.0.3.1 ... 3.0.3.9 -> 3.0.4.0 (revision 0-9, then increment build).
+# Microsoft Store requires the revision (4th segment) to always be 0.
+# Scheme: 3.0.5.0 -> 3.0.6.0 -> 3.0.7.0 (increment build segment only).
 param(
   [string]$Set,
-  [switch]$BumpRevision
+  [switch]$BumpRevision,
+  [switch]$BumpBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +23,17 @@ function Get-CurrentMsixVersion {
   return $id.GetAttribute("Version")
 }
 
-function Set-MsixVersion([string]$quad) {
+function Assert-StoreRevisionZero([string]$quad) {
   if ($quad -notmatch '^(\d+)\.(\d+)\.(\d+)\.(\d+)$') {
-    throw "MSIX version must be four parts (e.g. 3.0.3.0), got: $quad"
+    throw "MSIX version must be four parts (e.g. 3.0.6.0), got: $quad"
   }
+  if ([int]$Matches[4] -ne 0) {
+    throw "Microsoft Store requires revision (4th segment) to be 0. Use e.g. 3.0.6.0, not $quad."
+  }
+}
+
+function Set-MsixVersion([string]$quad) {
+  Assert-StoreRevisionZero $quad
   & (Join-Path $PSScriptRoot "set-version.ps1") -Version $quad
 }
 
@@ -34,8 +43,13 @@ if ($Set) {
   exit 0
 }
 
-if (-not $BumpRevision) {
-  throw "Specify -Set <M.m.b.r> or -BumpRevision"
+$doBump = $BumpBuild -or $BumpRevision
+if (-not $doBump) {
+  throw "Specify -Set <M.m.b.0>, -BumpBuild, or -BumpRevision (alias for -BumpBuild; revision segment must stay 0)."
+}
+
+if ($BumpRevision) {
+  Write-Warning "-BumpRevision is deprecated: Store only allows *.0 as the 4th version segment. Using -BumpBuild instead."
 }
 
 $current = Get-CurrentMsixVersion
@@ -48,13 +62,11 @@ $minor = [int]$Matches[2]
 $build = [int]$Matches[3]
 $rev = [int]$Matches[4]
 
-if ($rev -ge 9) {
-  $build++
-  $rev = 0
-} else {
-  $rev++
+if ($rev -ne 0) {
+  Write-Warning "Current version $current has non-zero revision; next Store bump will normalize to *.0."
 }
 
-$next = "$major.$minor.$build.$rev"
+$build++
+$next = "$major.$minor.$build.0"
 Set-MsixVersion $next
 Write-Host "Bumped MSIX version: $current -> $next"

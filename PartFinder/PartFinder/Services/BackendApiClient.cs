@@ -153,7 +153,25 @@ public sealed class BackendApiClient
         SaveWorksheetRelationRequest request,
         CancellationToken ct = default)
     {
-        var result = await SendJsonAsync<SaveWorksheetRelationRequest, Envelope<WorksheetRelationDto>>(HttpMethod.Patch, $"/relations/{relationId}", request, ct)
+        if (string.IsNullOrWhiteSpace(relationId))
+        {
+            return (false, "Relation id is missing. Save again or reload the page.", null);
+        }
+
+        var patchBody = new UpdateWorksheetRelationRequest
+        {
+            Name = request.Name,
+            TriggerColumn = request.TriggerColumn,
+            MenuLabel = request.MenuLabel,
+            MatchKeys = request.MatchKeys,
+            DisplayColumns = request.DisplayColumns,
+        };
+
+        var result = await SendJsonAsync<UpdateWorksheetRelationRequest, Envelope<WorksheetRelationDto>>(
+                HttpMethod.Patch,
+                $"/relations/{Uri.EscapeDataString(relationId.Trim())}",
+                patchBody,
+                ct)
             .ConfigureAwait(true);
         return result.Ok ? (true, null, result.Data?.Data) : (false, result.Error, null);
     }
@@ -397,9 +415,33 @@ public sealed class SaveWorksheetRelationRequest
     public List<string> DisplayColumns { get; set; } = [];
 }
 
+/// <summary>Patch body for <c>PATCH /relations/:id</c> (template ids are immutable).</summary>
+public sealed class UpdateWorksheetRelationRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string TriggerColumn { get; set; } = string.Empty;
+    public string MenuLabel { get; set; } = string.Empty;
+    public List<RelationMatchPairDto> MatchKeys { get; set; } = [];
+    public List<string> DisplayColumns { get; set; } = [];
+}
+
 public sealed class WorksheetRelationDto
 {
     public string Id { get; set; } = string.Empty;
+
+    /// <summary>Legacy API responses used Mongo <c>_id</c> instead of <c>id</c>.</summary>
+    [System.Text.Json.Serialization.JsonPropertyName("_id")]
+    public string? LegacyMongoId
+    {
+        get => string.IsNullOrWhiteSpace(Id) ? null : Id;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                Id = value;
+            }
+        }
+    }
     public string PrimaryTemplateId { get; set; } = string.Empty;
     public string LookupTemplateId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

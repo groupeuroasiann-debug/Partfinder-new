@@ -26,48 +26,45 @@
     </Page.Resources>
 
     <Grid x:Name="RootGrid" Padding="20" Background="Transparent" Transitions="{StaticResource LuxuryPanelTransitions}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="320" />
-        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="*" MinHeight="200" />
         </Grid.RowDefinitions>
 
-        <Border
-            Grid.Row="0"
-            Grid.Column="0"
-            HorizontalAlignment="Left"
-            Margin="0,0,0,8"
-            Padding="10,8"
-            Background="{StaticResource ElevatedCardBackgroundBrush}"
-            BorderBrush="{StaticResource GlassStrokeBrush}"
-            BorderThickness="1"
-            CornerRadius="16"
-            Visibility="{Binding ShowTemplatePicker, Converter={StaticResource BoolToVisibilityConverter}}">
-            <ComboBox
-                MinWidth="260"
-                HorizontalAlignment="Left"
-                FontSize="12"
-                DisplayMemberPath="Name"
-                ItemsSource="{Binding DataTemplates}"
-                PlaceholderText="Choose templateâ€¦"
-                SelectedItem="{Binding SelectedDataTemplate, Mode=TwoWay}" />
-        </Border>
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <Border
-            Grid.Row="0"
-            Grid.Column="1"
-            HorizontalAlignment="Right"
-            Margin="0,0,0,8"
-            Padding="0"
-            Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="0"
-            Visibility="{Binding IsEditMode, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
+            <Border
+                Grid.Column="0"
+                HorizontalAlignment="Left"
+                Padding="10,8"
+                Background="{StaticResource ElevatedCardBackgroundBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Visibility="{Binding ShowTemplatePicker, Converter={StaticResource BoolToVisibilityConverter}}">
+                <ComboBox
+                    MinWidth="260"
+                    HorizontalAlignment="Left"
+                    FontSize="12"
+                    DisplayMemberPath="Name"
+                    ItemsSource="{Binding DataTemplates}"
+                    PlaceholderText="Choose templateâ€¦"
+                    SelectedItem="{Binding SelectedDataTemplate, Mode=TwoWay}" />
+            </Border>
+
+            <StackPanel
+                Grid.Column="2"
+                Orientation="Horizontal"
+                Spacing="6"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Visibility="{Binding IsEditMode, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
                 <Button
                     Style="{StaticResource ToolbarSegmentButtonStyle}"
                     Foreground="{StaticResource AccentPrimaryBrush}"
@@ -92,19 +89,14 @@
                     <SymbolIcon Symbol="Download" />
                 </Button>
             </StackPanel>
-        </Border>
 
-        <Border
-            Grid.Row="0"
-            Grid.Column="1"
-            HorizontalAlignment="Right"
-            Margin="0,0,0,8"
-            Padding="0"
-            Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="0"
-            Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
-            <StackPanel Orientation="Horizontal" Spacing="6">
+            <StackPanel
+                Grid.Column="2"
+                Orientation="Horizontal"
+                Spacing="6"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Button
                     Style="{StaticResource ToolbarConfirmButtonStyle}"
                     Click="OnSaveGridClicked"
@@ -119,9 +111,9 @@
                     <SymbolIcon Symbol="Cancel" />
                 </Button>
             </StackPanel>
-        </Border>
+        </Grid>
 
-        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,6" Spacing="6">
+        <StackPanel Grid.Row="1" Margin="0,0,0,6" Spacing="6">
             <!-- Status messages -->
             <StackPanel Spacing="4">
                 <TextBlock
@@ -160,31 +152,60 @@
             </StackPanel>
         </StackPanel>
 
-        <!-- Spreadsheet host -->
-        <ContentControl
-            x:Name="SpreadsheetHost"
-            Grid.Row="2"
-            Grid.Column="0"
-            Margin="0,4,0,0"
-            HorizontalContentAlignment="Stretch"
-            VerticalContentAlignment="Stretch" />
+        <!-- Spreadsheet + add row (edit mode) — full width -->
+        <Grid Grid.Row="2" Margin="0,4,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Border
+                Grid.Row="0"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="{StaticResource ElevatedCardBackgroundBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="0">
+                <ContentControl
+                    x:Name="SpreadsheetHost"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+            </Border>
+            <Button
+                Grid.Row="1"
+                Margin="0,10,0,0"
+                HorizontalAlignment="Left"
+                Style="{StaticResource PrimaryButtonStyle}"
+                Padding="16,8"
+                Command="{Binding AddRowCommand}"
+                Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE710;" FontSize="12" />
+                    <TextBlock Text="Add row" FontSize="13" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <!-- Action overlay -->
         <Rectangle
             x:Name="ActionResultsOverlay"
-            Grid.Column="0"
             Grid.RowSpan="3"
             Fill="Black"
             Opacity="0.3"
             Visibility="Collapsed"
             Tapped="OnActionOverlayTapped" />
 
-        <!-- Action results slide panel -->
+        <!-- Action results slide panel (overlays right edge; does not shrink grid width) -->
         <Border
             x:Name="ActionResultsPanel"
-            Grid.Column="1"
             Grid.RowSpan="3"
             Width="320"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Margin="0,0,0,0"
             Padding="14"
             Visibility="Collapsed"
             CornerRadius="20"
