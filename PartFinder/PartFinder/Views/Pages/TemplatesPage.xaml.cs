@@ -63,11 +63,23 @@ public sealed partial class TemplatesPage : Page
 
         // Then load templates
         await vm.LoadAsync().ConfigureAwait(true);
-        await FavouritesSubPageControl.ShowAsync(vm).ConfigureAwait(true);
+        OnShowAllTemplatesClick(this, new RoutedEventArgs());
+
+        var pending = App.Services.GetRequiredService<IAppStateStore>().TemplatesPendingAction;
+        if (string.Equals(pending, "Create", StringComparison.Ordinal))
+        {
+            App.Services.GetRequiredService<IAppStateStore>().TemplatesPendingAction = null;
+            OnCreateNewTemplateClick(this, new RoutedEventArgs());
+        }
 
         // Hook template save to log activity
         vm.PropertyChanged += (_, args) =>
         {
+            if (args.PropertyName == nameof(TemplatesViewModel.IsCreatingTemplate) && vm.IsCreatingTemplate)
+            {
+                HideTemplateBrowsingPanels();
+            }
+
             if (args.PropertyName == nameof(TemplatesViewModel.IsCreatingTemplate) &&
                 !vm.IsCreatingTemplate &&
                 vm.SelectedTemplate is not null)
@@ -96,6 +108,7 @@ public sealed partial class TemplatesPage : Page
     private void OnCreateNewTemplateClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not TemplatesViewModel vm) return;
+        HideTemplateBrowsingPanels();
         vm.StartNewCustomTemplateCommand.Execute(null);
         vm.ColumnLabels.Clear();
         vm.ColumnLabels.Add(new ColumnLabelDraft());
@@ -152,6 +165,12 @@ public sealed partial class TemplatesPage : Page
         {
             await FavouritesSubPageControl.ShowAsync(vm).ConfigureAwait(true);
         }
+    }
+
+    private void HideTemplateBrowsingPanels()
+    {
+        FavouritesSubPageControl.Visibility = Visibility.Collapsed;
+        AllTemplatesPanel.Visibility = Visibility.Collapsed;
     }
 
     private void OnShowAllTemplatesClick(object sender, RoutedEventArgs e)
@@ -508,6 +527,44 @@ public sealed partial class TemplatesPage : Page
             FieldCountText.Text = count == 1 ? "1 field" : $"{count} fields";
         if (CanvasEmptyState is not null)
             CanvasEmptyState.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        WireCanvasInputChrome();
+    }
+
+    private bool ShouldUseLightCanvasChrome() =>
+        !App.Services.GetRequiredService<IThemeService>().IsDark;
+
+    private void WireCanvasInputChrome()
+    {
+        if (!ShouldUseLightCanvasChrome())
+        {
+            return;
+        }
+
+        foreach (var box in FindVisualChildren<TextBox>(TemplateCanvasScrollViewer))
+        {
+            UiResourceHelper.WirePersistentLightTextBox(box);
+        }
+
+        foreach (var combo in FindVisualChildren<ComboBox>(TemplateCanvasScrollViewer))
+        {
+            UiResourceHelper.WirePersistentLightComboBox(combo);
+        }
+    }
+
+    private void OnCanvasTextBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox box && ShouldUseLightCanvasChrome())
+        {
+            UiResourceHelper.WirePersistentLightTextBox(box);
+        }
+    }
+
+    private void OnCanvasComboBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ComboBox combo && ShouldUseLightCanvasChrome())
+        {
+            UiResourceHelper.WirePersistentLightComboBox(combo);
+        }
     }
 
     private void OnZoomResetClick(object sender, RoutedEventArgs e)

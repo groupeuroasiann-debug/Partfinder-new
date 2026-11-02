@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using PartFinder.Models;
 using PartFinder.Services;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace PartFinder.ViewModels;
 
@@ -12,9 +13,11 @@ public partial class UserManagementViewModel : ViewModelBase
     private readonly ITemplateSchemaService _templates;
     private readonly ILocalSetupContext _setupContext;
     private readonly ActivityLogger _activityLogger;
+    private bool _suppressGrantAllSync;
 
     public ObservableCollection<OrgAppUserSummary> Users { get; } = [];
     public ObservableCollection<TemplatePickItemViewModel> TemplateChoices { get; } = [];
+    public ObservableCollection<TemplatePickItemViewModel> SelectedTemplateAccessItems { get; } = [];
 
     public string[] RoleOptions { get; } = ["Admin", "Employee"];
 
@@ -28,7 +31,7 @@ public partial class UserManagementViewModel : ViewModelBase
     private string inviteRole = "Employee";
 
     [ObservableProperty]
-    private bool invitePartsAllTemplates = false;
+    private bool invitePartsAllTemplates;
 
     [ObservableProperty]
     private string statusMessage = string.Empty;
@@ -37,19 +40,22 @@ public partial class UserManagementViewModel : ViewModelBase
     private bool isBusy;
 
     // Granular Permissions (for Invite/Edit)
-    [ObservableProperty] private bool inviteCanAddTemplate = false;
-    [ObservableProperty] private bool inviteCanViewTemplate = false;
-    [ObservableProperty] private bool inviteCanEditTemplate = false;
-    [ObservableProperty] private bool inviteCanDeleteTemplate = false;
+    [ObservableProperty] private bool inviteCanAddTemplate;
+    [ObservableProperty] private bool inviteCanViewTemplate;
+    [ObservableProperty] private bool inviteCanEditTemplate;
+    [ObservableProperty] private bool inviteCanDeleteTemplate;
 
-    [ObservableProperty] private bool inviteCanCopyMasterData = false;
-    [ObservableProperty] private bool inviteCanViewMasterData = false;
-    [ObservableProperty] private bool inviteCanEditMasterData = false;
-    [ObservableProperty] private bool inviteCanAddMasterData = false;
-    [ObservableProperty] private bool inviteCanDeleteMasterData = false;
+    [ObservableProperty] private bool inviteCanCopyMasterData;
+    [ObservableProperty] private bool inviteCanViewMasterData;
+    [ObservableProperty] private bool inviteCanEditMasterData;
+    [ObservableProperty] private bool inviteCanAddMasterData;
+    [ObservableProperty] private bool inviteCanDeleteMasterData;
 
     [ObservableProperty]
     private bool isEditMode;
+
+    [ObservableProperty]
+    private TemplatePickItemViewModel? templatePickerHighlight;
 
     private string? _editUserId;
 
@@ -63,20 +69,14 @@ public partial class UserManagementViewModel : ViewModelBase
     [ObservableProperty]
     private string selectedRoleFilter = "All";
 
-    partial void OnSelectedRoleFilterChanged(string value)
-    {
-        ApplyFilter();
-    }
+    partial void OnSelectedRoleFilterChanged(string value) => ApplyFilter();
 
     public string[] StatusFilters { get; } = ["All Status", "Active", "Pending"];
 
     [ObservableProperty]
     private string selectedStatusFilter = "All Status";
 
-    partial void OnSelectedStatusFilterChanged(string value)
-    {
-        ApplyFilter();
-    }
+    partial void OnSelectedStatusFilterChanged(string value) => ApplyFilter();
 
     private int _totalUsersCount;
     public int TotalUsersCount
@@ -84,18 +84,21 @@ public partial class UserManagementViewModel : ViewModelBase
         get => _totalUsersCount;
         private set => SetProperty(ref _totalUsersCount, value);
     }
+
     private int _activeUsersCount;
     public int ActiveUsersCount
     {
         get => _activeUsersCount;
         private set => SetProperty(ref _activeUsersCount, value);
     }
+
     private int _adminUsersCount;
     public int AdminUsersCount
     {
         get => _adminUsersCount;
         private set => SetProperty(ref _adminUsersCount, value);
     }
+
     private int _pendingUsersCount;
     public int PendingUsersCount
     {
@@ -111,10 +114,7 @@ public partial class UserManagementViewModel : ViewModelBase
         PendingUsersCount = _allUsers.Count(u => u.Status == "Pending");
     }
 
-    partial void OnSearchQueryChanged(string value)
-    {
-        ApplyFilter();
-    }
+    partial void OnSearchQueryChanged(string value) => ApplyFilter();
 
     private void ApplyFilter()
     {
@@ -125,15 +125,15 @@ public partial class UserManagementViewModel : ViewModelBase
 
         foreach (var u in _allUsers)
         {
-            bool matchesQuery = string.IsNullOrEmpty(query) || 
-                (u.Name != null && u.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
-                (u.Email != null && u.Email.Contains(query, StringComparison.OrdinalIgnoreCase));
+            var matchesQuery = string.IsNullOrEmpty(query)
+                               || (u.Name != null && u.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                               || (u.Email != null && u.Email.Contains(query, StringComparison.OrdinalIgnoreCase));
 
-            bool matchesRole = string.Equals(roleFilter, "All", StringComparison.OrdinalIgnoreCase) ||
-                               string.Equals(u.Role, roleFilter, StringComparison.OrdinalIgnoreCase);
+            var matchesRole = string.Equals(roleFilter, "All", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(u.Role, roleFilter, StringComparison.OrdinalIgnoreCase);
 
-            bool matchesStatus = string.Equals(statusFilter, "All Status", StringComparison.OrdinalIgnoreCase) ||
-                                 string.Equals(u.Status, statusFilter, StringComparison.OrdinalIgnoreCase);
+            var matchesStatus = string.Equals(statusFilter, "All Status", StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(u.Status, statusFilter, StringComparison.OrdinalIgnoreCase);
 
             if (matchesQuery && matchesRole && matchesStatus)
             {
@@ -145,13 +145,24 @@ public partial class UserManagementViewModel : ViewModelBase
     public bool IsEmployeeRole =>
         string.Equals(InviteRole, "Employee", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsAdminRole =>
+        string.Equals(InviteRole, "Admin", StringComparison.OrdinalIgnoreCase);
+
     partial void OnInviteRoleChanged(string value)
     {
         OnPropertyChanged(nameof(IsEmployeeRole));
+        OnPropertyChanged(nameof(IsAdminRole));
         OnPropertyChanged(nameof(CanPickSpecificTemplates));
+
+        if (IsAdminRole)
+        {
+            ApplyAdminInviteDefaults();
+        }
     }
 
+    /// <summary>When false, template checklist is read-only (all templates granted).</summary>
     public bool CanPickSpecificTemplates => IsEmployeeRole && !InvitePartsAllTemplates;
+
     public bool HasTemplateChoices => TemplateChoices.Count > 0;
 
     public UserManagementViewModel(
@@ -166,29 +177,168 @@ public partial class UserManagementViewModel : ViewModelBase
         _activityLogger = activityLogger;
     }
 
-
-
     partial void OnInvitePartsAllTemplatesChanged(bool value)
     {
         OnPropertyChanged(nameof(CanPickSpecificTemplates));
+
+        if (_suppressGrantAllSync)
+        {
+            return;
+        }
+
+        if (value)
+        {
+            ApplySelectAllTemplates(updateGrantAllFlag: false);
+        }
+
+        RefreshSelectedTemplateAccessItems();
+    }
+
+    partial void OnTemplatePickerHighlightChanged(TemplatePickItemViewModel? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        value.IsSelected = true;
+        TemplatePickerHighlight = null;
+        RefreshSelectedTemplateAccessItems();
+        SyncGrantAllCheckboxFromSelection();
     }
 
     [RelayCommand]
     private void SelectAllTemplates()
     {
-        foreach (var template in TemplateChoices)
-        {
-            template.IsSelected = true;
-        }
+        ApplySelectAllTemplates(updateGrantAllFlag: true);
     }
 
     [RelayCommand]
     private void ClearTemplateSelection()
     {
+        _suppressGrantAllSync = true;
         foreach (var template in TemplateChoices)
         {
             template.IsSelected = false;
         }
+
+        InvitePartsAllTemplates = false;
+        _suppressGrantAllSync = false;
+        RefreshSelectedTemplateAccessItems();
+    }
+
+    [RelayCommand]
+    private void RemoveTemplateAccess(TemplatePickItemViewModel item)
+    {
+        item.IsSelected = false;
+        RefreshSelectedTemplateAccessItems();
+        SyncGrantAllCheckboxFromSelection();
+    }
+
+    private void ApplySelectAllTemplates(bool updateGrantAllFlag)
+    {
+        _suppressGrantAllSync = true;
+        foreach (var template in TemplateChoices)
+        {
+            template.IsSelected = true;
+        }
+
+        if (updateGrantAllFlag)
+        {
+            InvitePartsAllTemplates = true;
+        }
+
+        _suppressGrantAllSync = false;
+        RefreshSelectedTemplateAccessItems();
+    }
+
+    private void SyncGrantAllCheckboxFromSelection()
+    {
+        if (TemplateChoices.Count == 0)
+        {
+            return;
+        }
+
+        var allSelected = TemplateChoices.All(x => x.IsSelected);
+        if (allSelected == InvitePartsAllTemplates)
+        {
+            return;
+        }
+
+        _suppressGrantAllSync = true;
+        InvitePartsAllTemplates = allSelected;
+        _suppressGrantAllSync = false;
+        OnPropertyChanged(nameof(CanPickSpecificTemplates));
+    }
+
+    private void RefreshSelectedTemplateAccessItems()
+    {
+        SelectedTemplateAccessItems.Clear();
+        foreach (var item in TemplateChoices.Where(x => x.IsSelected).OrderBy(x => x.Name))
+        {
+            SelectedTemplateAccessItems.Add(item);
+        }
+
+        OnPropertyChanged(nameof(HasSelectedTemplateAccess));
+    }
+
+    public bool HasSelectedTemplateAccess => SelectedTemplateAccessItems.Count > 0;
+
+    private void WireTemplateChoice(TemplatePickItemViewModel item)
+    {
+        item.PropertyChanged += OnTemplateChoicePropertyChanged;
+    }
+
+    private void ClearTemplateChoiceHandlers()
+    {
+        foreach (var item in TemplateChoices)
+        {
+            item.PropertyChanged -= OnTemplateChoicePropertyChanged;
+        }
+    }
+
+    private void OnTemplateChoicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(TemplatePickItemViewModel.IsSelected))
+        {
+            return;
+        }
+
+        RefreshSelectedTemplateAccessItems();
+        SyncGrantAllCheckboxFromSelection();
+    }
+
+    private async Task LoadTemplateChoicesAsync(
+        IReadOnlyList<string>? preselectedIds,
+        CancellationToken cancellationToken)
+    {
+        ClearTemplateChoiceHandlers();
+        TemplateChoices.Clear();
+        SelectedTemplateAccessItems.Clear();
+
+        var all = await _templates.GetTemplatesAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var t in all.OrderBy(x => x.Name))
+        {
+            if (string.Equals(
+                    t.Id,
+                    MongoTemplateSchemaService.MasterDataTemplateId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var item = new TemplatePickItemViewModel
+            {
+                TemplateId = t.Id,
+                Name = t.Name,
+                IsSelected = preselectedIds?.Contains(t.Id, StringComparer.OrdinalIgnoreCase) == true,
+            };
+            WireTemplateChoice(item);
+            TemplateChoices.Add(item);
+        }
+
+        OnPropertyChanged(nameof(HasTemplateChoices));
+        RefreshSelectedTemplateAccessItems();
     }
 
     public async Task LoadUsersAsync()
@@ -219,10 +369,7 @@ public partial class UserManagementViewModel : ViewModelBase
         InviteName = string.Empty;
         InviteEmail = string.Empty;
         InviteRole = "Employee";
-        InvitePartsAllTemplates = true;
-        TemplateChoices.Clear();
 
-        // Default permissions for new invite
         InviteCanAddTemplate = false;
         InviteCanViewTemplate = false;
         InviteCanEditTemplate = false;
@@ -232,28 +379,12 @@ public partial class UserManagementViewModel : ViewModelBase
         InviteCanEditMasterData = false;
         InviteCanAddMasterData = false;
         InviteCanDeleteMasterData = false;
+
+        await LoadTemplateChoicesAsync(preselectedIds: null, cancellationToken).ConfigureAwait(true);
+
+        _suppressGrantAllSync = true;
         InvitePartsAllTemplates = false;
-
-        var all = await _templates.GetTemplatesAsync(cancellationToken).ConfigureAwait(true);
-        foreach (var t in all.OrderBy(x => x.Name))
-        {
-            if (string.Equals(
-                    t.Id,
-                    MongoTemplateSchemaService.MasterDataTemplateId,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            TemplateChoices.Add(
-                new TemplatePickItemViewModel
-                {
-                    TemplateId = t.Id,
-                    Name = t.Name,
-                });
-        }
-
-        OnPropertyChanged(nameof(HasTemplateChoices));
+        _suppressGrantAllSync = false;
     }
 
     public async Task PrepareEditDialogAsync(OrgAppUserSummary user, CancellationToken cancellationToken = default)
@@ -263,11 +394,7 @@ public partial class UserManagementViewModel : ViewModelBase
         InviteName = user.Name;
         InviteEmail = user.Email;
         InviteRole = user.Role;
-        InvitePartsAllTemplates = user.PartsAllTemplates;
-        TemplateChoices.Clear();
 
-        // Load permissions — default to FALSE when null (not true!)
-        // If permissions were never saved, the user should NOT have full access.
         InviteCanAddTemplate = user.TemplatePermissions?.Add ?? false;
         InviteCanViewTemplate = user.TemplatePermissions?.View ?? false;
         InviteCanEditTemplate = user.TemplatePermissions?.Edit ?? false;
@@ -279,27 +406,17 @@ public partial class UserManagementViewModel : ViewModelBase
         InviteCanAddMasterData = user.MasterDataPermissions?.Add ?? false;
         InviteCanDeleteMasterData = user.MasterDataPermissions?.Delete ?? false;
 
-        var all = await _templates.GetTemplatesAsync(cancellationToken).ConfigureAwait(true);
-        foreach (var t in all.OrderBy(x => x.Name))
-        {
-            if (string.Equals(
-                    t.Id,
-                    MongoTemplateSchemaService.MasterDataTemplateId,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+        await LoadTemplateChoicesAsync(user.AllowedTemplateIds, cancellationToken).ConfigureAwait(true);
 
-            TemplateChoices.Add(
-                new TemplatePickItemViewModel
-                {
-                    TemplateId = t.Id,
-                    Name = t.Name,
-                    IsSelected = user.AllowedTemplateIds.Contains(t.Id, StringComparer.OrdinalIgnoreCase)
-                });
+        _suppressGrantAllSync = true;
+        InvitePartsAllTemplates = user.PartsAllTemplates;
+        if (user.PartsAllTemplates)
+        {
+            ApplySelectAllTemplates(updateGrantAllFlag: false);
         }
 
-        OnPropertyChanged(nameof(HasTemplateChoices));
+        _suppressGrantAllSync = false;
+        RefreshSelectedTemplateAccessItems();
     }
 
     public async Task<(string? Error, SetupInviteUserResponse? Result)> InviteAsync()
@@ -329,31 +446,37 @@ public partial class UserManagementViewModel : ViewModelBase
             return ("Organization code is not available in local setup.", null);
         }
 
-        var partsAll = InvitePartsAllTemplates;
+        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+        if (isAdmin)
+        {
+            ApplyAdminInviteDefaults();
+        }
+
+        var partsAll = isAdmin || InvitePartsAllTemplates;
         var allowed = TemplateChoices
             .Where(x => x.IsSelected)
             .Select(x => x.TemplateId)
             .ToList();
-        if (!partsAll && allowed.Count == 0)
+        if (!isAdmin && !partsAll && allowed.Count == 0)
         {
-            return ("Select at least one part template, or enable \"All part templates\".", null);
+            return ("Select at least one part template, or enable \"Grant access to all templates\".", null);
         }
 
-        var templatePerms = new TemplatePermissionsDto
+        var templatePerms = isAdmin ? CreateFullTemplatePermissions() : new TemplatePermissionsDto
         {
             Add = InviteCanAddTemplate,
             View = InviteCanViewTemplate,
             Edit = InviteCanEditTemplate,
-            Delete = InviteCanDeleteTemplate
+            Delete = InviteCanDeleteTemplate,
         };
 
-        var masterPerms = new MasterDataPermissionsDto
+        var masterPerms = isAdmin ? CreateFullMasterDataPermissions() : new MasterDataPermissionsDto
         {
             Copy = InviteCanCopyMasterData,
             View = InviteCanViewMasterData,
             Edit = InviteCanEditMasterData,
             Add = InviteCanAddMasterData,
-            Delete = InviteCanDeleteMasterData
+            Delete = InviteCanDeleteMasterData,
         };
 
         var (ok, err, result) = await SetupApiClient.InviteUserAsync(
@@ -395,31 +518,37 @@ public partial class UserManagementViewModel : ViewModelBase
             return "Select a role.";
         }
 
-        var partsAll = InvitePartsAllTemplates;
+        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+        if (isAdmin)
+        {
+            ApplyAdminInviteDefaults();
+        }
+
+        var partsAll = isAdmin || InvitePartsAllTemplates;
         var allowed = TemplateChoices
             .Where(x => x.IsSelected)
             .Select(x => x.TemplateId)
             .ToList();
-        if (!partsAll && allowed.Count == 0 && string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase))
+        if (!isAdmin && !partsAll && allowed.Count == 0)
         {
-            return "Select at least one part template, or enable \"All part templates\".";
+            return "Select at least one part template, or enable \"Grant access to all templates\".";
         }
 
-        var templatePerms = new TemplatePermissionsDto
+        var templatePerms = isAdmin ? CreateFullTemplatePermissions() : new TemplatePermissionsDto
         {
             Add = InviteCanAddTemplate,
             View = InviteCanViewTemplate,
             Edit = InviteCanEditTemplate,
-            Delete = InviteCanDeleteTemplate
+            Delete = InviteCanDeleteTemplate,
         };
 
-        var masterPerms = new MasterDataPermissionsDto
+        var masterPerms = isAdmin ? CreateFullMasterDataPermissions() : new MasterDataPermissionsDto
         {
             Copy = InviteCanCopyMasterData,
             View = InviteCanViewMasterData,
             Edit = InviteCanEditMasterData,
             Add = InviteCanAddMasterData,
-            Delete = InviteCanDeleteMasterData
+            Delete = InviteCanDeleteMasterData,
         };
 
         var ok = await _users.UpdateUserAsync(
@@ -430,7 +559,7 @@ public partial class UserManagementViewModel : ViewModelBase
             allowed,
             templatePerms,
             masterPerms).ConfigureAwait(true);
-            
+
         if (!ok)
         {
             return "Could not update user.";
@@ -453,4 +582,40 @@ public partial class UserManagementViewModel : ViewModelBase
         _activityLogger.LogUserAction("User Deleted", $"Deleted user \"{user.Name}\" ({user.Email})");
         return null;
     }
+
+    private void ApplyAdminInviteDefaults()
+    {
+        InviteCanAddTemplate = true;
+        InviteCanViewTemplate = true;
+        InviteCanEditTemplate = true;
+        InviteCanDeleteTemplate = true;
+        InviteCanCopyMasterData = true;
+        InviteCanViewMasterData = true;
+        InviteCanEditMasterData = true;
+        InviteCanAddMasterData = true;
+        InviteCanDeleteMasterData = true;
+
+        _suppressGrantAllSync = true;
+        InvitePartsAllTemplates = true;
+        _suppressGrantAllSync = false;
+        ApplySelectAllTemplates(updateGrantAllFlag: false);
+        RefreshSelectedTemplateAccessItems();
+    }
+
+    private static TemplatePermissionsDto CreateFullTemplatePermissions() => new()
+    {
+        Add = true,
+        View = true,
+        Edit = true,
+        Delete = true,
+    };
+
+    private static MasterDataPermissionsDto CreateFullMasterDataPermissions() => new()
+    {
+        Copy = true,
+        View = true,
+        Edit = true,
+        Add = true,
+        Delete = true,
+    };
 }

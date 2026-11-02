@@ -10,4 +10,7 @@ public interface IAppStateStore
     string OrgDisplayName { get; set; }
     string OrgPlan { get; set; }
     string OrgType { get; set; }
+
+    /// <summary>When navigating to Templates from dashboard quick actions (e.g. create new).</summary>
+    string? TemplatesPendingAction { get; set; }
 }

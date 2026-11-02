@@ -30,11 +30,13 @@ public sealed partial class MainWindow : Window
     private string? _resolvedSignedInRole;
     private bool _mustChangePassword = true;
     private bool _signedInThisSession;
+    private bool _loginTotpVerifiedThisSession;
     private SetupStatusResult? _lastStatus;
 
     private Microsoft.UI.Xaml.DispatcherTimer? _maintenanceTimer;
     private DateTimeOffset? _maintenanceUntilUtc;
     private string? _orgCodeForMaintenanceRetry;
+    private bool _shellTitleBarRegionsActive;
 
     private readonly string _setupFilePath = SetupPaths.SetupStateFilePath;
 
@@ -54,8 +56,18 @@ public sealed partial class MainWindow : Window
 
     private void EnableShellTitleBar()
     {
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(ShellRoot.TitleBarDragElement);
+        try
+        {
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(ShellRoot.TitleBarDragElement);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            _shellTitleBarRegionsActive = false;
+            return;
+        }
+
+        _shellTitleBarRegionsActive = true;
 
         if (!AppWindowTitleBar.IsCustomizationSupported())
         {
@@ -70,14 +82,23 @@ public sealed partial class MainWindow : Window
 
     private void DisableShellTitleBar()
     {
-        ExtendsContentIntoTitleBar = false;
-        SetTitleBar(null);
+        _shellTitleBarRegionsActive = false;
+        try
+        {
+            ExtendsContentIntoTitleBar = false;
+            SetTitleBar(null);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // Window closing — ignore.
+        }
+
         ShellRoot.UpdateTitleBarInsets(0, 0);
     }
 
     private void OnShellRootSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (ExtendsContentIntoTitleBar)
+        if (_shellTitleBarRegionsActive)
         {
             UpdateShellTitleBarRegions();
         }
@@ -87,10 +108,10 @@ public sealed partial class MainWindow : Window
     {
         UpdateShellTitleBarRegions();
     }
-
+     
     private void UpdateShellTitleBarRegions()
     {
-        if (ShellRoot is null || !ExtendsContentIntoTitleBar)
+        if (!_shellTitleBarRegionsActive || ShellRoot is null || ShellRoot.Visibility != Visibility.Visible)
         {
             return;
         }
@@ -110,9 +131,11 @@ public sealed partial class MainWindow : Window
         catch (System.Runtime.InteropServices.COMException ex)
             when (ex.HResult == unchecked((int)0x80010108)
                   || ex.HResult == unchecked((int)0x800710DD)
-                  || ex.Message.Contains("closed", StringComparison.OrdinalIgnoreCase))
+                  || ex.HResult == unchecked((int)0x80004005)
+                  || ex.Message.Contains("closed", StringComparison.OrdinalIgnoreCase)
+                  || ex.Message.Contains("not valid", StringComparison.OrdinalIgnoreCase))
         {
-            // Window closed — ignore.
+            _shellTitleBarRegionsActive = false;
         }
         catch (Exception ex)
         {
@@ -561,6 +584,9 @@ public sealed partial class MainWindow : Window
         SetupRoot.Visibility = Visibility.Visible;
         ShellRoot.Visibility = Visibility.Collapsed;
         AppLockRoot.Visibility = Visibility.Collapsed;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        _loginTotpVerifiedThisSession = false;
+        LoginTotpBox.Text = string.Empty;
         _step = 1;
         _workingOrgCode = "";
         _cachedOrgDatabaseUri = null;
@@ -700,9 +726,20 @@ public sealed partial class MainWindow : Window
             DisableShellTitleBar();
             SetupRoot.Visibility = Visibility.Collapsed;
 
-            // Check if Windows Hello app lock is enabled
             var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
             security.Load();
+
+            if (security.TwoFactorEnabled && !_loginTotpVerifiedThisSession)
+            {
+                LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+                LoginTotpBox.Text = string.Empty;
+                LoginTwoFactorRoot.Visibility = Visibility.Visible;
+                ShellRoot.Visibility = Visibility.Collapsed;
+                AppLockRoot.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
 
             if (security.AppLockEnabled)
             {
@@ -754,6 +791,44 @@ public sealed partial class MainWindow : Window
         var shellVm = App.Services.GetRequiredService<ShellViewModel>();
         await shellVm.InitializeAsync().ConfigureAwait(true);
         LogAutoLoginIfSessionActive();
+    }
+
+    private void OnLoginTotpVerifyClick(object sender, RoutedEventArgs e)
+    {
+        LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+        var code = LoginTotpBox.Text.Trim();
+        if (code.Length != 6 || !code.All(char.IsDigit))
+        {
+            LoginTotpErrorText.Text = "Enter the 6-digit code from your authenticator app.";
+            LoginTotpErrorBorder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
+        security.Load();
+        var secret = security.GetTwoFactorSecret();
+        if (secret is null || !TotpHelper.Verify(code, secret))
+        {
+            LoginTotpErrorText.Text = "That code is not valid. Check the time on your device and try again.";
+            LoginTotpErrorBorder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        _loginTotpVerifiedThisSession = true;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        ShowShell();
+    }
+
+    private void OnLoginTotpBackClick(object sender, RoutedEventArgs e)
+    {
+        _signedInThisSession = false;
+        _loginTotpVerifiedThisSession = false;
+        LoginTotpBox.Text = string.Empty;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+        SetupRoot.Visibility = Visibility.Visible;
+        _step = 1;
+        UpdateStepUi();
     }
 
     private void LogAutoLoginIfSessionActive()

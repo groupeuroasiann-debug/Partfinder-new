@@ -10,4 +10,5 @@ public sealed class AppStateStore : IAppStateStore
     public string OrgDisplayName { get; set; } = string.Empty;
     public string OrgPlan { get; set; } = string.Empty;
     public string OrgType { get; set; } = string.Empty;
+    public string? TemplatesPendingAction { get; set; }
 }

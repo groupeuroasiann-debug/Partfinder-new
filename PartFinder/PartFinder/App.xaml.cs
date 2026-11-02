@@ -97,7 +97,7 @@ namespace PartFinder
 
             services.AddSingleton<ShellViewModel>();
             services.AddSingleton<IShellNavCoordinator>(sp => sp.GetRequiredService<ShellViewModel>());
-            services.AddTransient<DashboardViewModel>();
+            services.AddSingleton<DashboardViewModel>();
             services.AddTransient<PartsViewModel>();
             services.AddTransient<TemplatesViewModel>();
             services.AddTransient<ViewDataViewModel>();

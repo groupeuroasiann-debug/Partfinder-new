@@ -19,6 +19,7 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
     private readonly LocalProfileStore _profile;
     private readonly MongoAlertsService _alertsService;
     private readonly IThemeService _themeService;
+    private readonly DashboardViewModel _dashboard;
 
     private bool _suppressNavigation;
     private AppPage _lastSelectedPage = AppPage.Dashboard;
@@ -32,7 +33,8 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         AdminSessionStore adminSession,
         LocalProfileStore profile,
         MongoAlertsService alertsService,
-        IThemeService themeService)
+        IThemeService themeService,
+        DashboardViewModel dashboard)
     {
         _navigationService = navigationService;
         _setupContext = setupContext;
@@ -43,6 +45,7 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         _profile = profile;
         _alertsService = alertsService;
         _themeService = themeService;
+        _dashboard = dashboard;
         _themeService.ThemeChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(ThemeToggleGlyph));
@@ -215,11 +218,14 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
 
         CurrentOrgName = _appState.OrgDisplayName;
         CurrentOrgPlan = _appState.OrgPlan;
-        await LoadAvatarAsync(_profile.AvatarPath).ConfigureAwait(true);
-        await RefreshAlertBadgeAsync().ConfigureAwait(true);
 
-        await _access.RefreshAsync().ConfigureAwait(true);
-        var hasMaster = await HasMasterDataTemplateAsync().ConfigureAwait(true);
+        var avatarTask = LoadAvatarAsync(_profile.AvatarPath);
+        var alertsTask = RefreshAlertBadgeAsync();
+        var accessTask = _access.RefreshAsync();
+        var masterTask = HasMasterDataTemplateAsync();
+        var dashboardTask = _dashboard.WarmUpAsync();
+        await Task.WhenAll(avatarTask, alertsTask, accessTask, masterTask, dashboardTask).ConfigureAwait(true);
+        var hasMaster = await masterTask.ConfigureAwait(true);
         RebuildNavigationItems(hasMaster, _access.Capabilities);
 
         var startPage = ResolveStartPage(hasMaster, _access.Capabilities);

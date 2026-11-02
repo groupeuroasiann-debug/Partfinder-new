@@ -180,9 +180,16 @@ public sealed partial class ShellLayout : UserControl
 
     private void NotifyTitleBarRegionsChanged()
     {
-        if (App.MainAppWindow is MainWindow main)
+        if (App.MainAppWindow is not MainWindow main)
         {
-            main.RefreshShellTitleBarRegions();
+            return;
         }
+
+        if (Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        main.RefreshShellTitleBarRegions();
     }
 }

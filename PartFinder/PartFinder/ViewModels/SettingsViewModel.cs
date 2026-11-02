@@ -24,6 +24,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly MongoSessionService _sessionService;
     private readonly IOrgUserDirectoryService _users;
     private readonly ICurrentUserAccessService _access;
+    private readonly ITemplateSchemaService _templates;
     private string? _pendingTwoFactorSecret;
 
     public SettingsViewModel(
@@ -35,7 +36,8 @@ public partial class SettingsViewModel : ViewModelBase
         ILocalSetupContext setupContext,
         MongoSessionService sessionService,
         IOrgUserDirectoryService users,
-        ICurrentUserAccessService access)
+        ICurrentUserAccessService access,
+        ITemplateSchemaService templates)
     {
         _security = security;
         _session = session;
@@ -46,6 +48,7 @@ public partial class SettingsViewModel : ViewModelBase
         _sessionService = sessionService;
         _users = users;
         _access = access;
+        _templates = templates;
         _setupContext.Refresh();
         RefreshAllState();
     }
@@ -182,6 +185,30 @@ public partial class SettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _profileDepartment = string.Empty;
+
+    [ObservableProperty]
+    private string _profileDesignation = string.Empty;
+
+    [ObservableProperty]
+    private string _profileBio = string.Empty;
+
+    [ObservableProperty]
+    private string _profileRoleDisplay = "—";
+
+    [ObservableProperty]
+    private string _profileStatusDisplay = "—";
+
+    [ObservableProperty]
+    private string _profilePartsAccessDisplay = "—";
+
+    [ObservableProperty]
+    private string _profileTemplatePermissionsDisplay = "—";
+
+    [ObservableProperty]
+    private string _profileMasterDataPermissionsDisplay = "—";
+
+    [ObservableProperty]
+    private string _profileMemberSinceDisplay = "—";
 
     [ObservableProperty]
     private ImageSource? _avatarImageSource;
@@ -391,18 +418,20 @@ public partial class SettingsViewModel : ViewModelBase
         }
         SessionEmailDisplay = string.IsNullOrWhiteSpace(emailToShow) ? "—" : emailToShow;
 
-        // For invited users (not org creator), load profile name from database
-        var isOrgCreator = _access.Capabilities.CanAccessUserManagement;
-        if (!isOrgCreator && _setupContext.InvitedUserLogin && !string.IsNullOrWhiteSpace(emailToShow))
+        ProfileName = _profile.DisplayName ?? string.Empty;
+        ProfileDepartment = _profile.Department ?? string.Empty;
+        ProfileDesignation = _profile.Designation ?? string.Empty;
+        ProfileBio = _profile.Bio ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(emailToShow) && emailToShow != "—")
         {
-            _ = LoadProfileFromDatabaseAsync(emailToShow);
+            _ = LoadProfileFromDirectoryAsync(emailToShow);
         }
         else
         {
-            ProfileName = _profile.DisplayName ?? string.Empty;
+            ApplyCapabilitiesOnlyProfile();
         }
 
-        ProfileDepartment = _profile.Department ?? string.Empty;
         _ = LoadAvatarAsync(_profile.AvatarPath);
         OnPropertyChanged(nameof(IsStartTwoFactorEnabled));
         OnPropertyChanged(nameof(TwoFactorStatusText));
@@ -424,48 +453,169 @@ public partial class SettingsViewModel : ViewModelBase
     {
         ProfileMessage = string.Empty;
 
-        // Only org creator can edit profile name
-        if (!_access.Capabilities.CanAccessUserManagement)
-        {
-            ProfileMessage = "Profile name is managed by your organization admin.";
-            return;
-        }
-
-        var trimmed = ProfileName.Trim();
-        if (trimmed.Length > 80)
+        var canEditName = _access.Capabilities.CanAccessUserManagement;
+        var trimmedName = ProfileName.Trim();
+        if (canEditName && trimmedName.Length > 80)
         {
             ProfileMessage = "Profile name must be 80 characters or fewer.";
             return;
         }
 
-        _profile.SaveProfile(trimmed, ProfileDepartment.Trim());
-        ProfileName = _profile.DisplayName ?? string.Empty;
+        var nameToSave = canEditName
+            ? trimmedName
+            : (_profile.DisplayName ?? trimmedName);
+
+        _profile.SaveProfile(
+            nameToSave,
+            ProfileDepartment.Trim(),
+            ProfileDesignation.Trim(),
+            ProfileBio.Trim());
+
+        if (canEditName)
+        {
+            ProfileName = _profile.DisplayName ?? string.Empty;
+        }
+
         ProfileDepartment = _profile.Department ?? string.Empty;
-        ProfileMessage = string.IsNullOrWhiteSpace(ProfileName)
-            ? "Profile name cleared. Email will be shown."
-            : "Profile name updated.";
-        _activityLogger.LogUserAction("Profile Updated", $"Display name set to \"{ProfileName}\"");
+        ProfileDesignation = _profile.Designation ?? string.Empty;
+        ProfileBio = _profile.Bio ?? string.Empty;
+        ProfileMessage = "Profile updated.";
+        _activityLogger.LogUserAction("Profile Updated", $"Profile saved for \"{SessionEmailDisplay}\"");
     }
 
-    private async Task LoadProfileFromDatabaseAsync(string email)
+    private async Task LoadProfileFromDirectoryAsync(string email)
     {
         try
         {
             var record = await _users.FindByEmailAsync(email).ConfigureAwait(true);
             if (record is not null)
             {
-                ProfileName = record.Name;
+                await ApplyOrgUserToProfileAsync(record).ConfigureAwait(true);
             }
             else
             {
-                ProfileName = _profile.DisplayName ?? string.Empty;
+                ApplyCapabilitiesOnlyProfile();
+                if (string.IsNullOrWhiteSpace(ProfileName))
+                {
+                    ProfileName = _profile.DisplayName ?? string.Empty;
+                }
             }
         }
         catch
         {
-            ProfileName = _profile.DisplayName ?? string.Empty;
+            ApplyCapabilitiesOnlyProfile();
         }
+
         OnPropertyChanged(nameof(AvatarInitial));
+    }
+
+    private void ApplyCapabilitiesOnlyProfile()
+    {
+        var caps = _access.Capabilities;
+        ProfileRoleDisplay = caps.CanAccessUserManagement ? "Administrator" : "Employee";
+        ProfileStatusDisplay = "Active";
+        ProfilePartsAccessDisplay = caps.PartsAllTemplates
+            ? "All part templates"
+            : caps.AllowedTemplateIds.Count > 0
+                ? $"{caps.AllowedTemplateIds.Count} assigned template(s)"
+                : "—";
+        ProfileTemplatePermissionsDisplay = FormatTemplatePermissions(caps);
+        ProfileMasterDataPermissionsDisplay = FormatMasterDataPermissions(caps);
+        ProfileMemberSinceDisplay = "—";
+    }
+
+    private async Task ApplyOrgUserToProfileAsync(OrgAppUserSummary record)
+    {
+        if (string.IsNullOrWhiteSpace(_profile.DisplayName))
+        {
+            ProfileName = record.Name;
+        }
+
+        ProfileRoleDisplay = record.Role;
+        ProfileStatusDisplay = record.Status;
+        ProfileMemberSinceDisplay = record.InvitedAtDisplay;
+        ProfileTemplatePermissionsDisplay = FormatTemplatePermissions(record.TemplatePermissions);
+        ProfileMasterDataPermissionsDisplay = FormatMasterDataPermissions(record.MasterDataPermissions);
+
+        if (string.Equals(record.Role, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            ProfilePartsAccessDisplay = "Full access (all templates)";
+        }
+        else if (record.PartsAllTemplates)
+        {
+            ProfilePartsAccessDisplay = "All part templates";
+        }
+        else
+        {
+            try
+            {
+                var all = await _templates.GetTemplatesAsync().ConfigureAwait(true);
+                var names = all
+                    .Where(t => record.AllowedTemplateIds.Contains(t.Id, StringComparer.OrdinalIgnoreCase))
+                    .Select(t => t.Name)
+                    .OrderBy(n => n)
+                    .ToList();
+                ProfilePartsAccessDisplay = names.Count > 0
+                    ? string.Join(", ", names)
+                    : record.PartsScopeDisplay;
+            }
+            catch
+            {
+                ProfilePartsAccessDisplay = record.PartsScopeDisplay;
+            }
+        }
+    }
+
+    private static string FormatTemplatePermissions(TemplatePermissionsDto? p)
+    {
+        if (p is null)
+        {
+            return "None configured";
+        }
+
+        var parts = new List<string>();
+        if (p.View) parts.Add("View");
+        if (p.Add) parts.Add("Add");
+        if (p.Edit) parts.Add("Edit");
+        if (p.Delete) parts.Add("Delete");
+        return parts.Count > 0 ? string.Join(", ", parts) : "None";
+    }
+
+    private static string FormatTemplatePermissions(UserAccessCapabilities caps)
+    {
+        var parts = new List<string>();
+        if (caps.CanViewTemplate) parts.Add("View");
+        if (caps.CanAddTemplate) parts.Add("Add");
+        if (caps.CanEditTemplate) parts.Add("Edit");
+        if (caps.CanDeleteTemplate) parts.Add("Delete");
+        return parts.Count > 0 ? string.Join(", ", parts) : "None";
+    }
+
+    private static string FormatMasterDataPermissions(MasterDataPermissionsDto? p)
+    {
+        if (p is null)
+        {
+            return "None configured";
+        }
+
+        var parts = new List<string>();
+        if (p.View) parts.Add("View");
+        if (p.Edit) parts.Add("Edit");
+        if (p.Add) parts.Add("Add");
+        if (p.Delete) parts.Add("Delete");
+        if (p.Copy) parts.Add("Copy");
+        return parts.Count > 0 ? string.Join(", ", parts) : "None";
+    }
+
+    private static string FormatMasterDataPermissions(UserAccessCapabilities caps)
+    {
+        var parts = new List<string>();
+        if (caps.CanViewMasterData) parts.Add("View");
+        if (caps.CanEditMasterData) parts.Add("Edit");
+        if (caps.CanAddMasterData) parts.Add("Add");
+        if (caps.CanDeleteMasterData) parts.Add("Delete");
+        if (caps.CanCopyMasterData) parts.Add("Copy");
+        return parts.Count > 0 ? string.Join(", ", parts) : "None";
     }
 
     [RelayCommand]

@@ -211,8 +211,20 @@
                                 VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <ComboBox Grid.Column="1" MinWidth="140" FontSize="11" PlaceholderText="Category" />
-                        <ComboBox Grid.Column="2" MinWidth="140" FontSize="11" PlaceholderText="Status" />
+                        <ComboBox Grid.Column="1" MinWidth="160" FontSize="11"
+                                  ItemsSource="{x:Bind ViewModel.CategoryFilterOptions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedCategoryFilter, Mode=TwoWay}"
+                                  Background="{StaticResource InputBackgroundBrush}"
+                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                  BorderBrush="{StaticResource BorderDefaultBrush}"
+                                  PlaceholderForeground="{StaticResource TextTertiaryBrush}" />
+                        <ComboBox Grid.Column="2" MinWidth="160" FontSize="11"
+                                  ItemsSource="{x:Bind ViewModel.StatusFilterOptions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedStatusFilter, Mode=TwoWay}"
+                                  Background="{StaticResource InputBackgroundBrush}"
+                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                  BorderBrush="{StaticResource BorderDefaultBrush}"
+                                  PlaceholderForeground="{StaticResource TextTertiaryBrush}" />
                         <Button Grid.Column="3" Style="{StaticResource GhostButtonStyle}" Content="Clear Filters" FontSize="11" />
                     </Grid>
                 </Border>

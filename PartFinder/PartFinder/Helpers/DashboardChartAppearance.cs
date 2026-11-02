@@ -35,6 +35,8 @@ internal static class DashboardChartAppearance
                 LabelsPaint = axisPaint,
                 SeparatorsPaint = gridPaint,
                 TextSize = 11,
+                ShowSeparatorLines = true,
+                SubseparatorsCount = 4,
             },
         };
 
@@ -45,6 +47,8 @@ internal static class DashboardChartAppearance
                 LabelsPaint = axisPaint,
                 SeparatorsPaint = gridPaint,
                 TextSize = 11,
+                ShowSeparatorLines = true,
+                SubseparatorsCount = 4,
             },
         };
 
@@ -67,6 +71,29 @@ internal static class DashboardChartAppearance
                 TextSize = 11,
                 LabelsPaint = axisPaint,
                 SeparatorsPaint = gridPaint,
+                ShowSeparatorLines = true,
+                SubseparatorsCount = 4,
+            },
+        ];
+    }
+
+    public static Axis[] BuildStockLevelYAxes(string[] labels, bool isDark)
+    {
+        var appearance = ForLightMode(isDark);
+        var axisPaint = appearance.YAxes[0].LabelsPaint;
+        var gridPaint = appearance.YAxes[0].SeparatorsPaint;
+        var displayLabels = labels is { Length: > 0 } ? labels : ["—"];
+
+        return
+        [
+            new Axis
+            {
+                Labels = displayLabels,
+                LabelsPaint = axisPaint,
+                SeparatorsPaint = gridPaint,
+                TextSize = 11,
+                ShowSeparatorLines = true,
+                SubseparatorsCount = 4,
             },
         ];
     }

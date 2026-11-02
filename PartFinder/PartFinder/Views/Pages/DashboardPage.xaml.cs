@@ -39,6 +39,7 @@ public sealed partial class DashboardPage : Page
             or nameof(DashboardViewModel.ChartXAxes)
             or nameof(DashboardViewModel.ChartYAxes)
             or nameof(DashboardViewModel.TrendXAxes)
+            or nameof(DashboardViewModel.StockLevelYAxes)
             or nameof(DashboardViewModel.TrendSeries)
             or nameof(DashboardViewModel.StockLevelSeries))
         {
@@ -71,7 +72,9 @@ public sealed partial class DashboardPage : Page
                 : _viewModel.ChartXAxes;
             TrendChart.YAxes = _viewModel.ChartYAxes;
             StockLevelChart.XAxes = _viewModel.ChartXAxes;
-            StockLevelChart.YAxes = _viewModel.ChartYAxes;
+            StockLevelChart.YAxes = _viewModel.StockLevelYAxes is { Length: > 0 }
+                ? _viewModel.StockLevelYAxes
+                : _viewModel.ChartYAxes;
         }
         catch (Exception ex)
         {
@@ -84,18 +87,19 @@ public sealed partial class DashboardPage : Page
         try
         {
             ApplyChartChrome();
+            EnsureDashboardVisible();
 
             PlayEntrance(HeaderGrid, HeaderSlide, delay: 0);
-            PlayEntrance(KpiRow, KpiSlide, delay: 80);
-            PlayEntrance(Row1, Row1Slide, delay: 160);
-            PlayEntrance(Row2, Row2Slide, delay: 240);
-            PlayEntrance(Row3, Row3Slide, delay: 320);
+            PlayEntrance(KpiRow, KpiSlide, delay: 40);
+            PlayEntrance(Row1, Row1Slide, delay: 80);
+            PlayEntrance(Row2, Row2Slide, delay: 120);
+            PlayEntrance(Row3, Row3Slide, delay: 160);
 
             StartPulseDot();
 
             if (_viewModel.LazyLoadTrendCommand.CanExecute(null))
             {
-                await _viewModel.LazyLoadTrendCommand.ExecuteAsync(null);
+                _ = _viewModel.LazyLoadTrendCommand.ExecuteAsync(null);
             }
 
             if (_viewModel.HasLowStock)

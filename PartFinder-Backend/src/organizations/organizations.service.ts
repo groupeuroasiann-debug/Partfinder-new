@@ -12,6 +12,7 @@ import { Model, Types } from 'mongoose';
 import { BanLicenseDto } from './dto/ban-license.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { resolveInviteDownloadLink } from '../common/invite-download-link.util';
 import { computeValidity } from './org.constants';
 import { PlatformSettingsService } from '../platform/platform-settings.service';
 import { Organization, OrganizationDocument } from './schemas/organization.schema';
@@ -335,9 +336,9 @@ export class OrganizationsService {
       '';
     const fromName =
       this.config.get<string>('INVITE_FROM_NAME')?.trim() || 'PartFinder';
-    const downloadLink =
-      this.config.get<string>('INVITE_DOWNLOAD_LINK')?.trim() ||
-      'https://shipspan.com';
+    const downloadLink = resolveInviteDownloadLink(
+      this.config.get<string>('INVITE_DOWNLOAD_LINK'),
+    );
     const secureEnv =
       this.config.get<string>('INVITE_SMTP_SECURE') ??
       (port === 465 ? 'true' : 'false');

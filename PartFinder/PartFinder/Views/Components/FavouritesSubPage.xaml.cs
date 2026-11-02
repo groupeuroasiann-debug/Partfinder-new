@@ -17,7 +17,7 @@ namespace PartFinder.Views.Components;
 
 public sealed partial class FavouritesSubPage : UserControl
 {
-    private FavouritesViewModel? _vm;
+    private readonly FavouritesViewModel _vm;
     private TemplatesViewModel? _templatesVm;
     private readonly List<Border> _cardElements = new();
 
@@ -50,6 +50,8 @@ public sealed partial class FavouritesSubPage : UserControl
     public FavouritesSubPage()
     {
         InitializeComponent();
+        _vm = App.Services.GetRequiredService<FavouritesViewModel>();
+        DataContext = _vm;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -59,9 +61,6 @@ public sealed partial class FavouritesSubPage : UserControl
     public async Task ShowAsync(TemplatesViewModel templatesVm)
     {
         _templatesVm = templatesVm;
-
-        _vm = App.Services.GetRequiredService<FavouritesViewModel>();
-        DataContext = _vm;
 
         _vm.PropertyChanged -= OnVmPropertyChanged; // Avoid duplicates
         _vm.PropertyChanged += OnVmPropertyChanged;

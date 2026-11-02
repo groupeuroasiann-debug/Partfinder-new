@@ -22,6 +22,7 @@ import { SetupInviteUserDto } from './dto/setup-invite-user.dto';
 import { SetupOrgAdminDto } from './dto/setup-org-admin.dto';
 import { SetupChangePasswordDto } from './dto/setup-change-password.dto';
 import { replaceMongoDatabasePath } from './org-database-uri.util';
+import { resolveInviteDownloadLink } from '../common/invite-download-link.util';
 import { TenantMongoService } from './tenant-mongo.service';
 import { CasbinService } from '../casbin/casbin.service';
 import { JwtService } from '@nestjs/jwt';
@@ -520,9 +521,9 @@ export class SetupService {
       '';
     const fromName =
       this.config.get<string>('INVITE_FROM_NAME')?.trim() || 'PartFinder';
-    const downloadLink =
-      this.config.get<string>('INVITE_DOWNLOAD_LINK')?.trim() ||
-      'https://shipspan.com';
+    const downloadLink = resolveInviteDownloadLink(
+      this.config.get<string>('INVITE_DOWNLOAD_LINK'),
+    );
     const secureEnv =
       this.config.get<string>('INVITE_SMTP_SECURE') ??
       (port === 465 ? 'true' : 'false');

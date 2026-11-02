@@ -26,6 +26,14 @@ public partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private double _totalValue;
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private InventoryItem? _selectedItem;
+    [ObservableProperty] private string _selectedCategoryFilter = "All categories";
+    [ObservableProperty] private string _selectedStatusFilter = "All statuses";
+
+    public IReadOnlyList<string> CategoryFilterOptions { get; } =
+        ["All categories", "Engine", "Electrical", "Hardware", "General"];
+
+    public IReadOnlyList<string> StatusFilterOptions { get; } =
+        ["All statuses", "In Stock", "Low Stock", "Out of Stock"];
 
     public string TotalValueFormatted => TotalValue >= 1_000_000
         ? $"${TotalValue / 1_000_000:F1}M"

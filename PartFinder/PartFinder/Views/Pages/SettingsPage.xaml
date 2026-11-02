@@ -273,10 +273,10 @@
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Border Background="#101F7AE0" BorderBrush="#301F7AE0" BorderThickness="1" CornerRadius="4" Padding="8,2">
-                                            <TextBlock Text="Administrator" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" />
+                                            <TextBlock Text="{Binding ProfileRoleDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" />
                                         </Border>
                                         <Border Background="#102ABD8F" BorderBrush="#302ABD8F" BorderThickness="1" CornerRadius="4" Padding="8,2">
-                                            <TextBlock Text="Verified User" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                                            <TextBlock Text="{Binding ProfileStatusDisplay}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
                                         </Border>
                                     </StackPanel>
                                 </StackPanel>
@@ -319,7 +319,8 @@
 
                                 <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6">
                                     <TextBlock Text="Designation" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBox Style="{StaticResource StandardTextBoxStyle}" PlaceholderText="e.g. Lead Engineer" />
+                                    <TextBox Style="{StaticResource StandardTextBoxStyle}" PlaceholderText="e.g. Lead Engineer"
+                                             Text="{Binding ProfileDesignation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
 
                                 <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
@@ -344,22 +345,46 @@
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="20">
-                                <TextBox Style="{StaticResource StandardTextBoxStyle}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" />
-                                
-                                <Grid ColumnSpacing="24">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <ToggleSwitch Grid.Column="0" Header="Public Explorer Visibility" IsOn="True" />
-                                    <ToggleSwitch Grid.Column="1" Header="Show Online Status" IsOn="True" />
-                                </Grid>
+                                <TextBox Style="{StaticResource StandardTextBoxStyle}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
+                                         PlaceholderText="Brief description of your role and responsibilities…"
+                                         Text="{Binding ProfileBio, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,32,0,0"
-                              Visibility="{Binding CanEditProfileName, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <!-- Organization access (from directory) -->
+                    <Border Style="{StaticResource SettingRowBorderStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="3*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Access &amp; Permissions" Style="{StaticResource SettingLabelStyle}" />
+                                <TextBlock Text="Role, template scope, and permissions assigned to your account." Style="{StaticResource SettingHintStyle}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Member since" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding ProfileMemberSinceDisplay}" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Template access" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding ProfilePartsAccessDisplay}" FontSize="13" TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Template permissions" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding ProfileTemplatePermissionsDisplay}" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Master data permissions" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding ProfileMasterDataPermissionsDisplay}" FontSize="13" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,32,0,0">
                         <TextBlock Text="{Binding ProfileMessage}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
                         <Button Style="{StaticResource GhostButtonStyle}" Content="Discard" />
                         <Button Style="{StaticResource PrimaryButtonStyle}" Content="Save Changes" Command="{Binding SaveProfileCommand}" Padding="24,8" />

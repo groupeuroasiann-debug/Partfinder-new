@@ -337,29 +337,21 @@
                                 AnimationsSpeed="00:00:00.9"
                                 InitialRotation="-90"/>
                         </Border>
-                        <!-- Legend -->
-                        <StackPanel Spacing="5">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="#1F7AE0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Turbocharger" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="42%" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="#2ABD8F" VerticalAlignment="Center"/>
-                                <TextBlock Text="Fuel Injector" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="28%" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="#FEBC2E" VerticalAlignment="Center"/>
-                                <TextBlock Text="Valve Assembly" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="18%" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="#8B5CF6" VerticalAlignment="Center"/>
-                                <TextBlock Text="Shaft Log" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="12%" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </StackPanel>
+                        <!-- Legend (bound to same data as pie slices) -->
+                        <ItemsControl ItemsSource="{Binding DistributionItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:DistributionItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,0,0,4">
+                                        <Border Width="10" Height="10" CornerRadius="5"
+                                                Background="{x:Bind ColorBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{x:Bind Name}" FontSize="11"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="140"/>
+                                        <TextBlock Text="{x:Bind PercentDisplay}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -551,7 +543,7 @@
                                    Foreground="{StaticResource TextTertiaryBrush}"/>
                         <StackPanel Spacing="7">
 
-                            <Button Style="{StaticResource ActionRowStyle}">
+                            <Button Style="{StaticResource ActionRowStyle}" Command="{Binding QuickActionNewTemplateCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="8" Background="#151F7AE0">
                                         <FontIcon Glyph="&#xE710;" FontSize="14" Foreground="{StaticResource AccentPrimaryBrush}"/>
@@ -565,7 +557,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ActionRowStyle}">
+                            <Button Style="{StaticResource ActionRowStyle}" Command="{Binding QuickActionImportDataCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="8" Background="#152ABD8F">
                                         <FontIcon Glyph="&#xE8B5;" FontSize="14" Foreground="{StaticResource SuccessBrush}"/>
@@ -577,7 +569,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ActionRowStyle}">
+                            <Button Style="{StaticResource ActionRowStyle}" Command="{Binding QuickActionInviteMemberCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="8" Background="#15FEBC2E">
                                         <FontIcon Glyph="&#xE8FA;" FontSize="14" Foreground="{StaticResource WarningBrush}"/>
@@ -589,7 +581,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ActionRowStyle}">
+                            <Button Style="{StaticResource ActionRowStyle}" Command="{Binding QuickActionExportReportCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="8" Background="#158B5CF6">
                                         <FontIcon Glyph="&#xEDE1;" FontSize="14" Foreground="#8B5CF6"/>
@@ -601,7 +593,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ActionRowStyle}">
+                            <Button Style="{StaticResource ActionRowStyle}" Command="{Binding QuickActionScanQrCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="8" Background="#15FFB4AB">
                                         <FontIcon Glyph="&#xE9D9;" FontSize="14" Foreground="{StaticResource DangerBrush}"/>

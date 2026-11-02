@@ -163,7 +163,8 @@
 
         <Grid
             Grid.Row="1"
-            Background="Transparent"
+            Canvas.ZIndex="10"
+            Background="{StaticResource PageBackgroundBrush}"
             Visibility="{Binding IsCreatingTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -327,9 +328,11 @@
                                                     FontSize="11"
                                                     Padding="6,0,20,0"
                                                     Background="{StaticResource InputBackgroundBrush}"
-                                                    BorderBrush="{StaticResource GlassStrokeBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
                                                     BorderThickness="1"
                                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                                    PlaceholderForeground="{StaticResource TextTertiaryBrush}"
+                                                    Loaded="OnCanvasComboBoxLoaded"
                                                     DisplayMemberPath="Label"
                                                     ItemsSource="{Binding DataContext.FieldTypeOptions, ElementName=TemplatesPageRoot}"
                                                     SelectedValue="{Binding FieldType, Mode=TwoWay}"
@@ -361,8 +364,8 @@
                                                 <Border
                                                     MinHeight="34"
                                                     Padding="10,8"
-                                                    Background="#0D1E33"
-                                                    BorderBrush="#2A3D58"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
                                                     BorderThickness="1"
                                                     CornerRadius="6"
                                                     Visibility="{Binding FieldType, Converter={StaticResource TemplateFieldTypeEqualsToVisibilityConverter}, ConverterParameter=Text}">
@@ -375,8 +378,8 @@
                                                 <Border
                                                     MinHeight="34"
                                                     Padding="10,8"
-                                                    Background="#0D1E33"
-                                                    BorderBrush="#2A3D58"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
                                                     BorderThickness="1"
                                                     CornerRadius="6"
                                                     Visibility="{Binding FieldType, Converter={StaticResource TemplateFieldTypeEqualsToVisibilityConverter}, ConverterParameter=Number}">
@@ -389,8 +392,8 @@
                                                 <Border
                                                     MinHeight="34"
                                                     Padding="10,8"
-                                                    Background="#0D1E33"
-                                                    BorderBrush="#2A3D58"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
                                                     BorderThickness="1"
                                                     CornerRadius="6"
                                                     Visibility="{Binding FieldType, Converter={StaticResource TemplateFieldTypeEqualsToVisibilityConverter}, ConverterParameter=Decimal}">
@@ -409,6 +412,10 @@
                                                     Height="34"
                                                     HorizontalAlignment="Stretch"
                                                     VerticalAlignment="Center"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                                                    Foreground="{StaticResource TextPrimaryBrush}"
+                                                    Loaded="OnCanvasComboBoxLoaded"
                                                     SelectedIndex="0"
                                                     Visibility="{Binding FieldType, Converter={StaticResource TemplateFieldTypeEqualsToVisibilityConverter}, ConverterParameter=Boolean}">
                                                     <x:String>Yes</x:String>
@@ -432,8 +439,11 @@
                                                             VerticalAlignment="Center"
                                                             FontSize="12"
                                                             BorderThickness="1"
-                                                            Background="#0D1E33"
-                                                            BorderBrush="#2A3D58"
+                                                            Background="{StaticResource InputBackgroundBrush}"
+                                                            BorderBrush="{StaticResource BorderDefaultBrush}"
+                                                            Foreground="{StaticResource TextPrimaryBrush}"
+                                                            PlaceholderForeground="{StaticResource TextTertiaryBrush}"
+                                                            Loaded="OnCanvasTextBoxLoaded"
                                                             PlaceholderText="Add option..."
                                                             Text="{Binding PendingDropdownOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             KeyDown="OnDropdownOptionInputKeyDown" />
@@ -481,6 +491,11 @@
                                                 <ComboBox
                                                     Height="34"
                                                     VerticalAlignment="Center"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                                                    Foreground="{StaticResource TextPrimaryBrush}"
+                                                    PlaceholderForeground="{StaticResource TextTertiaryBrush}"
+                                                    Loaded="OnCanvasComboBoxLoaded"
                                                     PlaceholderText="Select linked template"
                                                     DisplayMemberPath="Name"
                                                     SelectedValuePath="Id"
@@ -500,8 +515,11 @@
                                                     VerticalAlignment="Center"
                                                     FontSize="13"
                                                     BorderThickness="1"
-                                                    Background="#0D1E33"
-                                                    BorderBrush="#2A3D58"
+                                                    Background="{StaticResource InputBackgroundBrush}"
+                                                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                                                    Foreground="{StaticResource TextPrimaryBrush}"
+                                                    PlaceholderForeground="{StaticResource TextTertiaryBrush}"
+                                                    Loaded="OnCanvasTextBoxLoaded"
                                                     PlaceholderText="Enter column name"
                                                     Text="{Binding Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </StackPanel>
