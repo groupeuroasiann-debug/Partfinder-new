@@ -454,11 +454,7 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         try
         {
             var list = await _templateSchema.GetTemplatesAsync().ConfigureAwait(false);
-            return list.Any(
-                t => string.Equals(
-                    t.Name,
-                    MongoTemplateSchemaService.MasterDataTemplateName,
-                    StringComparison.OrdinalIgnoreCase));
+            return list.Count > 0;
         }
         catch
         {

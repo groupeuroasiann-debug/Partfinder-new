@@ -25,6 +25,7 @@ public sealed partial class MasterDataPage : Page
     private readonly IExcelTemplateService _excelTemplateService;
     private readonly ActivityLogger _activity;
     private readonly List<ActionResultDisplayItem> _actionResultRows = new();
+    private Grid? _sheetGrid;
 
     public MasterDataPage()
     {
@@ -49,6 +50,7 @@ public sealed partial class MasterDataPage : Page
         vm.Rows.CollectionChanged += OnGridStructureChanged;
         vm.Columns.CollectionChanged += OnGridStructureChanged;
         vm.PropertyChanged += OnViewModelPropertyChanged;
+        vm.ColumnFiltersChanged += OnColumnFiltersChanged;
         await vm.LoadAsync().ConfigureAwait(true);
         RebuildSpreadsheet();
     }
@@ -61,9 +63,12 @@ public sealed partial class MasterDataPage : Page
             _viewModel.Rows.CollectionChanged -= OnGridStructureChanged;
             _viewModel.Columns.CollectionChanged -= OnGridStructureChanged;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _viewModel.ColumnFiltersChanged -= OnColumnFiltersChanged;
             _viewModel = null;
         }
     }
+
+    private void OnColumnFiltersChanged(object? sender, EventArgs e) => ApplyRowFilters();
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -76,6 +81,36 @@ public sealed partial class MasterDataPage : Page
     private void OnGridStructureChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RebuildSpreadsheet();
+    }
+
+    private void OnColumnFilterTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_viewModel is null || sender is not TextBox box || box.Tag is not string fieldKey)
+        {
+            return;
+        }
+
+        _viewModel.SetColumnFilter(fieldKey, box.Text);
+    }
+
+    private void ApplyRowFilters()
+    {
+        if (_viewModel is null || _sheetGrid is null)
+        {
+            return;
+        }
+
+        foreach (var child in _sheetGrid.Children)
+        {
+            if (child is not FrameworkElement element || element.Tag is not MasterDataRowViewModel rowVm)
+            {
+                continue;
+            }
+
+            element.Visibility = _viewModel.IsRowVisible(rowVm)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
     }
 
     private async void OnToggleEditModeClicked(object sender, RoutedEventArgs e)
@@ -279,37 +314,51 @@ public sealed partial class MasterDataPage : Page
         if (_viewModel.Columns.Count == 0)
         {
             SpreadsheetHost.Content = null;
+            _sheetGrid = null;
             return;
         }
 
-        var visibleRows = _viewModel.GetVisibleRows();
-
-        const double minColWidth = GridCellTextWidth + (GridCellHorizontalPadding * 2);
+        var allRows = _viewModel.Rows.ToList();
         var colCount = _viewModel.Columns.Count;
-        var rowCount = visibleRows.Count;
+        var rowCount = allRows.Count;
 
         var scroll = new ScrollViewer
         {
-            HorizontalScrollMode = ScrollMode.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollMode = ScrollMode.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
 
         var grid = new Grid
         {
-            MinWidth = colCount * minColWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Background = (Brush)Application.Current.Resources["CardBackgroundBrush"],
         };
 
+        void FitGridToViewport(object? sender, object e)
+        {
+            var width = scroll.ActualWidth;
+            if (width <= 0 && SpreadsheetHost.ActualWidth > 0)
+            {
+                width = SpreadsheetHost.ActualWidth;
+            }
+
+            if (width > 0)
+            {
+                grid.Width = width;
+            }
+        }
+
+        scroll.SizeChanged += FitGridToViewport;
+        scroll.Loaded += (_, _) => FitGridToViewport(null, EventArgs.Empty);
+
         for (var c = 0; c < colCount; c++)
         {
-            grid.ColumnDefinitions.Add(
-                new ColumnDefinition
-                {
-                    Width = new GridLength(1, GridUnitType.Star),
-                    MinWidth = minColWidth,
-                });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         }
 
         for (var r = 0; r <= rowCount; r++)
@@ -319,7 +368,6 @@ public sealed partial class MasterDataPage : Page
 
         var headerBg = (Brush)Application.Current.Resources["GridHeaderBackgroundBrush"];
         var borderBrush = (Brush)Application.Current.Resources["BorderDefaultBrush"];
-        var headerForeground = (Brush)Application.Current.Resources["TextSecondaryBrush"];
 
         for (var c = 0; c < colCount; c++)
         {
@@ -340,16 +388,25 @@ public sealed partial class MasterDataPage : Page
             var headerGrid = new Grid();
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var title = new TextBlock
+
+            var filterBox = new TextBox
             {
-                Text = headerLabel,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                TextWrapping = TextWrapping.WrapWholeWords,
-                Foreground = headerForeground,
+                PlaceholderText = headerLabel,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
+                Style = (Style)Application.Current.Resources["GridFilterTextBoxStyle"],
+                Tag = field.Key,
             };
-            Grid.SetColumn(title, 0);
-            headerGrid.Children.Add(title);
+            if (_viewModel.TryGetColumnFilter(field.Key, out var savedFilter))
+            {
+                filterBox.Text = savedFilter;
+            }
+
+            ToolTipService.SetToolTip(filterBox, $"Search in {field.Label}");
+            filterBox.TextChanged += OnColumnFilterTextChanged;
+
+            Grid.SetColumn(filterBox, 0);
+            headerGrid.Children.Add(filterBox);
 
             if (_viewModel.IsEditMode)
             {
@@ -402,7 +459,8 @@ public sealed partial class MasterDataPage : Page
 
         for (var r = 0; r < rowCount; r++)
         {
-            var rowVm = visibleRows[r];
+            var rowVm = allRows[r];
+            var rowVisible = _viewModel.IsRowVisible(rowVm);
             for (var c = 0; c < colCount; c++)
             {
                 var cellVm = rowVm.Cells[c];
@@ -418,10 +476,13 @@ public sealed partial class MasterDataPage : Page
 
                 var cellBorder = new Border
                 {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
                     Background = (Brush)Application.Current.Resources[
                         r % 2 == 0 ? "CardBackgroundBrush" : "GridRowAltBackgroundBrush"],
                     BorderBrush = borderBrush,
                     BorderThickness = new Thickness(0, 0, 1, 1),
+                    Tag = rowVm,
+                    Visibility = rowVisible ? Visibility.Visible : Visibility.Collapsed,
                     Child = cellContent,
                 };
                 Grid.SetRow(cellBorder, r + 1);
@@ -471,6 +532,8 @@ public sealed partial class MasterDataPage : Page
 
         scroll.Content = grid;
         SpreadsheetHost.Content = scroll;
+        _sheetGrid = grid;
+        FitGridToViewport(null, EventArgs.Empty);
     }
 
     private async void OnInsertColumnFromHeaderClick(object sender, RoutedEventArgs e)
@@ -504,7 +567,7 @@ public sealed partial class MasterDataPage : Page
         var box = new TextBox
         {
             MinHeight = 36,
-            Width = GridCellTextWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(GridCellHorizontalPadding, 6, GridCellHorizontalPadding, 6),
             BorderThickness = new Thickness(0),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -530,7 +593,7 @@ public sealed partial class MasterDataPage : Page
         var box = new TextBox
         {
             MinHeight = 36,
-            Width = GridCellTextWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(GridCellHorizontalPadding, 6, GridCellHorizontalPadding, 6),
             BorderThickness = new Thickness(0),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
