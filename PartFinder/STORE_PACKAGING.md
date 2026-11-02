@@ -21,10 +21,10 @@ Each **new upload** must have a unique four-part `Identity Version`. Use:
 # First package on a line: set explicitly (e.g. after a duplicate-version error)
 powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -Set 3.0.3.0
 # Each subsequent GitHub Store release: bump revision
-powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -BumpRevision
+powershell -File .\PartFinder\scripts\bump-store-msix-version.ps1 -BumpBuild
 ```
 
-Sequence: `3.0.3.0` → `3.0.3.1` → … → `3.0.3.9` → `3.0.4.0`. Rebuild with `build-msix-store.ps1` after every bump.
+Sequence: `3.0.5.0` → `3.0.6.0` → `3.0.7.0` (4th segment must stay **0**; Partner Center rejects `3.0.5.1`). Rebuild with `build-msix-store.ps1` after every bump.
 
 ## Store upload package (preferred)
 
