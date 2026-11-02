@@ -1,0 +1,153 @@
+import type { FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { Icon, MarketingFrame } from './SiteChrome'
+
+const fieldClass =
+  'w-full h-11 px-3 bg-surface-container-lowest rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary border-0'
+
+type AdminLoginViewProps = {
+  email: string
+  password: string
+  error: string
+  loginPending: boolean
+  isAuthenticated: boolean
+  onEmailChange: (value: string) => void
+  onPasswordChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}
+
+export function AdminLoginView({
+  email,
+  password,
+  error,
+  loginPending,
+  isAuthenticated,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+}: AdminLoginViewProps) {
+  return (
+    <MarketingFrame>
+      <main className="w-full pt-20 bg-background">
+        <div className="relative w-full overflow-hidden">
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[1100px] h-[480px] bg-gradient-to-b from-primary/10 via-secondary-container/10 to-transparent blur-3xl pointer-events-none -z-10" />
+          <section className="max-w-[1360px] mx-auto px-gutter pt-space-lg pb-space-xl">
+            <div className="flex items-center gap-space-xs text-primary font-mono-data text-mono-data tracking-widest uppercase bg-surface-container px-space-sm py-1 rounded w-fit mb-space-md">
+              <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span>ADMIN — SIGN IN</span>
+            </div>
+            <div className="bg-surface-container-lowest rounded-xl p-space-lg md:p-space-xl shadow-lg">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter-lg items-center">
+                <div className="lg:col-span-6 flex flex-col gap-space-sm">
+                  <span className="font-caption text-caption text-primary uppercase font-bold tracking-widest">
+                    Operations Portal
+                  </span>
+                  <h1 className="font-headline-xl text-headline-xl text-on-surface font-extrabold tracking-tight m-0">
+                    Sign in to PartFinder Admin
+                  </h1>
+                  <p className="font-body-md text-body-md text-on-surface-variant m-0">
+                    Use the administrator email and password already provisioned for this portfolio. Registration stays behind the same security gate.
+                  </p>
+                  <div className="flex flex-col gap-2 mt-space-sm">
+                    <div className="flex items-center gap-2">
+                      <Icon name="check_circle" className="text-primary text-[20px]" />
+                      <span className="font-body-sm text-body-sm text-on-surface font-semibold">
+                        Organizations, releases, and database clusters
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Icon name="check_circle" className="text-primary text-[20px]" />
+                      <span className="font-body-sm text-body-sm text-on-surface font-semibold">
+                        Session stays on this browser until you log out
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Icon name="check_circle" className="text-primary text-[20px]" />
+                      <span className="font-body-sm text-body-sm text-on-surface font-semibold">
+                        New administrators register through the security checkpoint
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <form
+                  className="lg:col-span-6 bg-surface-container-low rounded-xl p-space-lg shadow-sm flex flex-col gap-space-md"
+                  onSubmit={onSubmit}
+                >
+                  <div className="flex items-center justify-between pb-space-xs">
+                    <span className="font-label-md text-label-md font-bold text-on-surface">
+                      Administrator credentials
+                    </span>
+                    <span className="font-mono-data text-mono-data text-primary font-bold">Secure</span>
+                  </div>
+                  {isAuthenticated ? (
+                    <div className="flex items-center justify-between gap-3 bg-secondary-fixed text-on-secondary-fixed rounded-lg px-3 py-2 font-body-sm text-body-sm">
+                      <span>You have an active session.</span>
+                      <Link to="/admin/dashboard" className="font-label-md text-label-md text-on-secondary-fixed-variant font-bold whitespace-nowrap">
+                        Go to Dashboard
+                      </Link>
+                    </div>
+                  ) : null}
+                  <div>
+                    <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="admin-email">
+                      Email ID
+                    </label>
+                    <input
+                      id="admin-email"
+                      className={fieldClass}
+                      type="email"
+                      placeholder="admin@partfinder.com"
+                      value={email}
+                      onChange={(event) => onEmailChange(event.target.value)}
+                      autoComplete="username"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="admin-password">
+                      Password
+                    </label>
+                    <input
+                      id="admin-password"
+                      className={fieldClass}
+                      type="password"
+                      placeholder="Enter password"
+                      value={password}
+                      onChange={(event) => onPasswordChange(event.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  {error ? (
+                    <div className="flex items-start gap-2 rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm text-body-sm">
+                      <Icon name="error" className="text-[18px] mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className="bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md px-space-md py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm border-0 disabled:opacity-60"
+                    disabled={loginPending}
+                  >
+                    <span>{loginPending ? 'Signing in…' : 'Login'}</span>
+                    <Icon name="arrow_forward" className="text-[18px]" />
+                  </button>
+                  <div className="flex items-center gap-2 font-caption text-caption text-outline">
+                    <Icon name="lock" className="text-[16px] text-secondary" />
+                    <span>Encrypted sign-in. Credentials are checked by the existing admin API.</span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-space-xs">
+                    <Link to="/" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
+                      Public portfolio
+                    </Link>
+                    <Link to="/admin/register" className="font-label-md text-label-md text-primary font-bold inline-flex items-center gap-1">
+                      <Icon name="lock" className="text-[16px]" />
+                      Register as Admin
+                    </Link>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </MarketingFrame>
+  )
+}

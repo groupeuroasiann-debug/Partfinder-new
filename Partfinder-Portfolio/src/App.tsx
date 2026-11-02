@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
+import { AdminLoginView } from './components/marketing/AdminLoginView'
+import { SolutionsPage } from './components/marketing/SolutionsPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
@@ -70,7 +72,7 @@ function postLoginPath(pathname: string): string {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<PublicDashboardPage />} />
+      <Route path="/" element={<SolutionsPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
       <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
@@ -92,16 +94,9 @@ function PublicDashboardPage() {
         <p className="sub">
           See the headline metrics and open the admin area when you need to manage the platform.
         </p>
-        <div className="actions">
+          <div className="actions">
           <Link to="/admin/dashboard" className="btn-primary">
             Open Dashboard
-          </Link>
-          <Link to="/admin" className="btn-primary">
-            Admin Login
-          </Link>
-          <Link to="/admin/register" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span>Admin Registration</span>
-            <span aria-hidden="true">🔒</span>
           </Link>
         </div>
       </header>
@@ -174,72 +169,16 @@ function AdminPortalPage() {
 
   if (isLoginRoute || (!isAuthenticated && !isPublicDashboardRoute)) {
     return (
-      <main className="auth-page">
-        <section className="auth-card">
-          <h1>Admin Portal Login</h1>
-          <p>Sign in with your email and password.</p>
-
-          {isAuthenticated ? (
-            <div
-              style={{
-                background: 'rgba(56, 189, 248, 0.1)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                marginBottom: 16,
-                fontSize: 13,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <span style={{ color: '#e2e8f0' }}>You have an active session.</span>
-              <Link
-                to="/admin/dashboard"
-                style={{ color: '#38bdf8', fontWeight: 600, textDecoration: 'none' }}
-              >
-                Go to Dashboard →
-              </Link>
-            </div>
-          ) : null}
-
-          <form className="auth-form" onSubmit={handleLogin}>
-            <label htmlFor="admin-email">Email ID</label>
-            <input
-              id="admin-email"
-              type="email"
-              placeholder="admin@partfinder.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-
-            <label htmlFor="admin-password">Password</label>
-            <input
-              id="admin-password"
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-
-            {error ? <p className="form-error">{error}</p> : null}
-
-            <button type="submit" className="btn-primary" disabled={loginPending}>
-              {loginPending ? 'Signing in…' : 'Login'}
-            </button>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)', fontSize: 13 }}>
-              <Link to="/" style={{ color: '#94a3b8', textDecoration: 'none' }}>
-                ← Public Dashboard
-              </Link>
-              <Link to="/admin/register" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <span>Register as Admin</span>
-                <span aria-hidden="true">🔒→</span>
-              </Link>
-            </div>
-          </form>
-        </section>
-      </main>
+      <AdminLoginView
+        email={email}
+        password={password}
+        error={error}
+        loginPending={loginPending}
+        isAuthenticated={isAuthenticated}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={handleLogin}
+      />
     )
   }
 
