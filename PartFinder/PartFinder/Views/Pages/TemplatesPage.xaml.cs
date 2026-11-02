@@ -8,6 +8,7 @@ using PartFinder.Services;
 using PartFinder.ViewModels;
 using System.ComponentModel;
 using WinRT.Interop;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using System.Linq;
 using Microsoft.UI.Dispatching;
@@ -127,6 +128,7 @@ public sealed partial class TemplatesPage : Page
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add(".xlsx");
         picker.FileTypeFilter.Add(".xlsm");
+        picker.FileTypeFilter.Add(".csv");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainAppWindow));
         var file = await picker.PickSingleFileAsync();
         if (file is null)
@@ -134,29 +136,85 @@ public sealed partial class TemplatesPage : Page
             return;
         }
 
-        var result = await vm.ImportBulkTemplatesFromExcelAsync(file.Path).ConfigureAwait(true);
-        var summary = result.CreatedCount > 0
-            ? $"Created {result.CreatedCount} template(s)."
-            : "No templates were created.";
-        if (result.SkippedCount > 0)
+        string? tempPath = null;
+        try
         {
-            summary += $" Skipped {result.SkippedCount}.";
-        }
-
-        if (result.Errors.Count > 0)
-        {
-            var detail = string.Join("\n", result.Errors.Take(8));
-            if (result.Errors.Count > 8)
+            SetImportStatus("Reading file…", file.Name, isActive: true);
+            var path = await ResolvePickerFilePathAsync(file).ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(path))
             {
-                detail += $"\n…and {result.Errors.Count - 8} more.";
+                SetImportStatus("Import failed.", "Could not access the selected file.", isActive: false);
+                await ShowBulkImportDialogAsync("Could not access the selected file.", XamlRoot).ConfigureAwait(true);
+                return;
             }
 
-            await ShowSimpleDialogAsync($"{summary}\n\n{detail}", XamlRoot).ConfigureAwait(true);
-            return;
-        }
+            tempPath = path != file.Path ? path : null;
+            SetImportStatus("Importing templates…", "Creating templates and loading rows.", isActive: true);
 
-        await ShowSimpleDialogAsync(summary, XamlRoot).ConfigureAwait(true);
-        OnShowAllTemplatesClick(sender, e);
+            var result = await vm.ImportBulkTemplatesFromFileAsync(path).ConfigureAwait(true);
+
+            var summaryParts = new List<string>();
+            if (result.CreatedCount > 0)
+            {
+                summaryParts.Add($"Created {result.CreatedCount} template(s).");
+            }
+
+            if (result.ImportedRowCount > 0)
+            {
+                summaryParts.Add($"Imported {result.ImportedRowCount} data row(s).");
+            }
+
+            if (result.SkippedCount > 0)
+            {
+                summaryParts.Add($"Matched {result.SkippedCount} existing template name(s) (data may still have been added).");
+            }
+
+            var summary = summaryParts.Count > 0
+                ? string.Join(" ", summaryParts)
+                : "No templates or rows were imported.";
+
+            if (result.Errors.Count > 0)
+            {
+                var detail = string.Join("\n", result.Errors.Take(8));
+                if (result.Errors.Count > 8)
+                {
+                    detail += $"\n…and {result.Errors.Count - 8} more.";
+                }
+
+                SetImportStatus("Import finished with notes.", summary, isActive: false);
+                await ShowBulkImportDialogAsync($"{summary}\n\n{detail}", XamlRoot).ConfigureAwait(true);
+            }
+            else
+            {
+                SetImportStatus("Import complete.", summary, isActive: false);
+                await ShowBulkImportDialogAsync(summary, XamlRoot).ConfigureAwait(true);
+            }
+
+            if (result.HasWork)
+            {
+                OnShowAllTemplatesClick(sender, e);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetImportStatus("Import failed.", ex.Message, isActive: false);
+            await ShowBulkImportDialogAsync($"Import failed:\n{ex.Message}", XamlRoot).ConfigureAwait(true);
+        }
+        finally
+        {
+            SetImportStatus(null);
+            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Best-effort temp cleanup.
+                }
+            }
+        }
     }
 
     private async void OnShowFavouritesInlineClick(object sender, RoutedEventArgs e)
@@ -1201,6 +1259,37 @@ public sealed partial class TemplatesPage : Page
         _ = await err.ShowAsync();
     }
 
+    private static async Task ShowBulkImportDialogAsync(string message, XamlRoot xamlRoot)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Bulk upload",
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.WrapWholeWords },
+            CloseButtonText = "OK",
+            XamlRoot = xamlRoot,
+        };
+        _ = await dialog.ShowAsync();
+    }
+
+    private static async Task<string?> ResolvePickerFilePathAsync(StorageFile file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.Path) && File.Exists(file.Path))
+        {
+            return file.Path;
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "PartFinderBulkImport");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = Path.Combine(tempDir, $"{Guid.NewGuid():N}_{file.Name}");
+        using (var source = await file.OpenStreamForReadAsync().ConfigureAwait(true))
+        await using (var dest = File.Create(tempPath))
+        {
+            await source.CopyToAsync(dest).ConfigureAwait(true);
+        }
+
+        return tempPath;
+    }
+
     private sealed class RuleRowUi
     {
         public RuleRowUi(ComboBox targetField, ComboBox sourceField, TextBox literalTb)
@@ -1552,6 +1641,7 @@ public sealed partial class TemplatesPage : Page
         }
 
         ImportStatusPanel.Visibility = Visibility.Visible;
+        ImportProgressRing.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
         ImportProgressRing.IsActive = isActive;
         ImportStatusText.Text = headline;
         ImportStatusDetailText.Text = detail ?? string.Empty;

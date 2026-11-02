@@ -31,6 +31,11 @@ public sealed partial class AllTemplatesCarousel : UserControl
     private const double PEEK_MAX   = 130.0;
     private const double CARD_GAP   = 12.0;
 
+    /// <summary>Data cells in the all-templates preview table (ID, BRAND, etc.).</summary>
+    private const double DataRowMinHeight = 46;
+    private const double DataRowFontSize = 13;
+    private const double TableDataAreaMaxHeight = 420;
+
     private static readonly Color[] _accents = new[]
     {
         Color.FromArgb(255, 94, 162, 255),
@@ -595,12 +600,16 @@ public sealed partial class AllTemplatesCarousel : UserControl
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        var rowCount = allRecords.Count;
         centerStack.Children.Add(new TextBlock
         {
-            Text = $"{template.Fields.Count} column{(template.Fields.Count == 1 ? "" : "s")}",
+            Text = rowCount > 0
+                ? $"{rowCount} row{(rowCount == 1 ? "" : "s")} · {template.Fields.Count} column{(template.Fields.Count == 1 ? "" : "s")}"
+                : $"{template.Fields.Count} column{(template.Fields.Count == 1 ? "" : "s")}",
             FontSize = 14,
             Foreground = new SolidColorBrush(Color.FromArgb(255, 123, 141, 168)),
-            HorizontalAlignment = HorizontalAlignment.Center, CharacterSpacing = 20,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            CharacterSpacing = 20,
         });
         Grid.SetColumn(centerStack, 1);
         bottomGrid.Children.Add(centerStack);
@@ -737,7 +746,8 @@ public sealed partial class AllTemplatesCarousel : UserControl
             var headerCell = new Border
             {
                 Background  = new SolidColorBrush(Color.FromArgb(50, accent.R, accent.G, accent.B)),
-                Padding     = new Thickness(6, 12, 6, 12),
+                Padding     = new Thickness(10, 14, 10, 14),
+                MinHeight   = 48,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
             };
 
@@ -820,17 +830,21 @@ public sealed partial class AllTemplatesCarousel : UserControl
                 dataStack.Children.Add(new Border
                 {
                     Background  = new SolidColorBrush(Color.FromArgb(ri % 2 == 0 ? (byte)10 : (byte)4, 255, 255, 255)),
-                    Padding     = new Thickness(6, 7, 6, 7),
+                    Padding     = new Thickness(10, 14, 10, 14),
+                    MinHeight   = DataRowMinHeight,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
                     Child = new TextBlock
                     {
                         Text = string.IsNullOrWhiteSpace(cellValue) ? "—" : cellValue,
-                        FontSize = 11,
-                        Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                        HorizontalAlignment = HorizontalAlignment.Center,
+                        FontSize = DataRowFontSize,
+                        LineHeight = 20,
+                        Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        VerticalAlignment = VerticalAlignment.Center,
                         TextAlignment = TextAlignment.Center,
                         TextTrimming = TextTrimming.CharacterEllipsis,
-                        MaxLines = 1,
+                        MaxLines = 2,
                     },
                 });
             }
@@ -839,10 +853,10 @@ public sealed partial class AllTemplatesCarousel : UserControl
             {
                 Content = dataStack,
                 VerticalScrollMode            = ScrollMode.Auto,
-                VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
                 HorizontalScrollMode          = ScrollMode.Disabled,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 245,
+                MaxHeight = TableDataAreaMaxHeight,
             });
 
             colBorder.Child = colStack;

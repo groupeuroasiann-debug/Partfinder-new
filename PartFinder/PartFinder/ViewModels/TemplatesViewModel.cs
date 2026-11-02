@@ -92,22 +92,26 @@ public partial class TemplatesViewModel : ViewModelBase
 
     public bool IsAllTemplatesGalleryEmpty => Templates.Count == 0;
 
-    public async Task<BulkTemplateImportResult> ImportBulkTemplatesFromExcelAsync(string filePath)
+    public async Task<BulkTemplateImportResult> ImportBulkTemplatesFromFileAsync(string filePath)
     {
-        if (!_access.Capabilities.CanAddTemplate)
+        var caps = _access.Capabilities;
+        if (!caps.CanAddTemplate && !caps.CanAddMasterData)
         {
             return new BulkTemplateImportResult
             {
-                Errors = ["You do not have permission to add templates."],
+                Errors = ["You do not have permission to add templates or import data."],
             };
         }
 
-        var result = await _bulkImport.ImportFromExcelAsync(filePath).ConfigureAwait(true);
-        if (result.CreatedCount > 0)
+        var result = await _bulkImport
+            .ImportFromFileAsync(filePath, caps.CanAddTemplate, caps.CanAddMasterData)
+            .ConfigureAwait(true);
+
+        if (result.HasWork)
         {
             _activityLogger.LogTemplateChange(
                 "Bulk Template Import",
-                $"Imported {result.CreatedCount} template(s) from Excel.");
+                $"Created {result.CreatedCount} template(s), imported {result.ImportedRowCount} row(s).");
             await LoadAsync().ConfigureAwait(true);
             await _shellNav.NotifyTemplatesChangedAsync().ConfigureAwait(true);
             OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));

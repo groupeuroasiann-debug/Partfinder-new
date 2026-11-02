@@ -6,34 +6,68 @@ namespace PartFinder.Services;
 public sealed class BulkTemplateImportService
 {
     private readonly ITemplateSchemaService _templates;
+    private readonly IMasterDataRecordsService _records;
 
-    public BulkTemplateImportService(ITemplateSchemaService templates)
+    public BulkTemplateImportService(
+        ITemplateSchemaService templates,
+        IMasterDataRecordsService records)
     {
         _templates = templates;
+        _records = records;
     }
 
-    public async Task<BulkTemplateImportResult> ImportFromExcelAsync(
+    public async Task<BulkTemplateImportResult> ImportFromFileAsync(
         string sourcePath,
+        bool canAddTemplate,
+        bool canAddMasterData,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var existing = await _templates.GetTemplatesAsync(cancellationToken).ConfigureAwait(false);
-        var existingNames = new HashSet<string>(
-            existing.Select(t => t.Name),
-            StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            return new BulkTemplateImportResult
+            {
+                Errors = ["Could not read the selected file. Try saving it locally and choose it again."],
+            };
+        }
 
-        var drafts = ParseWorkbook(sourcePath);
+        List<BulkTemplateDraft> drafts;
+        try
+        {
+            drafts = IsCsvPath(sourcePath)
+                ? ParseCsvFile(sourcePath)
+                : ParseWorkbook(sourcePath);
+        }
+        catch (Exception ex)
+        {
+            return new BulkTemplateImportResult
+            {
+                Errors = [$"Could not parse the file: {ex.Message}"],
+            };
+        }
+
         if (drafts.Count == 0)
         {
             return new BulkTemplateImportResult
             {
-                Errors = ["No templates found. Use one sheet per template (sheet name = template name, row 1 = column labels) or a sheet named BulkTemplates with columns TemplateName and Columns."],
+                Errors =
+                [
+                    "No templates found.",
+                    "Excel: one sheet per template (sheet name = template name, row 1 = column labels, row 2+ = data),",
+                    "or a sheet named BulkTemplates with columns TemplateName and Columns.",
+                    "CSV: same BulkTemplates header row, or row 1 = column labels with data below (file name = template name),",
+                    "or row 1 includes TemplateName plus data columns (one row per record, grouped by template).",
+                ],
             };
         }
 
+        var existing = await _templates.GetTemplatesAsync(cancellationToken).ConfigureAwait(false);
+        var existingByName = existing.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+
         var created = 0;
         var skipped = 0;
+        var importedRows = 0;
         var errors = new List<string>();
 
         foreach (var draft in drafts)
@@ -47,13 +81,6 @@ public sealed class BulkTemplateImportService
                 continue;
             }
 
-            if (existingNames.Contains(draft.Name))
-            {
-                errors.Add($"Skipped \"{draft.Name}\" — a template with that name already exists.");
-                skipped++;
-                continue;
-            }
-
             if (draft.ColumnLabels.Count == 0)
             {
                 errors.Add($"Skipped \"{draft.Name}\" — no column labels.");
@@ -61,35 +88,77 @@ public sealed class BulkTemplateImportService
                 continue;
             }
 
-            var fields = draft.ColumnLabels
-                .Select((label, index) => new TemplateFieldDefinition
-                {
-                    Key = MakeFieldKey(label, index),
-                    Label = label,
-                    Type = TemplateFieldType.Text,
-                    DisplayOrder = index,
-                    IsRequired = false,
-                })
-                .ToList();
+            var name = draft.Name.Trim();
+            PartTemplateDefinition? template;
 
-            var def = new PartTemplateDefinition
+            if (existingByName.TryGetValue(name, out var existingTemplate))
             {
-                Id = Guid.NewGuid().ToString("N"),
-                Name = draft.Name.Trim(),
-                Version = 1,
-                IsPublished = true,
-                Fields = fields,
-            };
+                template = existingTemplate;
+                skipped++;
+            }
+            else
+            {
+                if (!canAddTemplate)
+                {
+                    errors.Add($"Skipped \"{name}\" — template does not exist and you cannot add templates.");
+                    skipped++;
+                    continue;
+                }
+
+                var fields = draft.ColumnLabels
+                    .Select(
+                        (label, index) => new TemplateFieldDefinition
+                        {
+                            Key = MakeFieldKey(label, index),
+                            Label = label,
+                            Type = TemplateFieldType.Text,
+                            DisplayOrder = index,
+                            IsRequired = false,
+                        })
+                    .ToList();
+
+                template = new PartTemplateDefinition
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = name,
+                    Version = 1,
+                    IsPublished = true,
+                    Fields = fields,
+                };
+
+                try
+                {
+                    await _templates.SaveTemplateAsync(template, cancellationToken).ConfigureAwait(false);
+                    existingByName[name] = template;
+                    created++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Failed to save \"{name}\": {ex.Message}");
+                    continue;
+                }
+            }
+
+            if (draft.DataRows.Count == 0)
+            {
+                continue;
+            }
+
+            if (!canAddMasterData)
+            {
+                errors.Add(
+                    $"\"{name}\": {draft.DataRows.Count} data row(s) were not imported — you do not have permission to add master data.");
+                continue;
+            }
 
             try
             {
-                await _templates.SaveTemplateAsync(def, cancellationToken).ConfigureAwait(false);
-                existingNames.Add(def.Name);
-                created++;
+                importedRows += await ImportDataRowsAsync(template, draft.DataRows, cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                errors.Add($"Failed to save \"{draft.Name}\": {ex.Message}");
+                errors.Add($"Failed to import rows for \"{name}\": {ex.Message}");
             }
         }
 
@@ -97,9 +166,58 @@ public sealed class BulkTemplateImportService
         {
             CreatedCount = created,
             SkippedCount = skipped,
+            ImportedRowCount = importedRows,
             Errors = errors,
         };
     }
+
+    private async Task<int> ImportDataRowsAsync(
+        PartTemplateDefinition template,
+        IReadOnlyList<IReadOnlyDictionary<string, string>> rowsByLabel,
+        CancellationToken cancellationToken)
+    {
+        var existingRows = await _records.GetRowsAsync(template.Id, cancellationToken).ConfigureAwait(false);
+        var startOrder = existingRows.Count;
+        var imported = 0;
+
+        foreach (var source in rowsByLabel)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var field in template.Fields.OrderBy(f => f.DisplayOrder))
+            {
+                if (source.TryGetValue(field.Label, out var byLabel) && !string.IsNullOrWhiteSpace(byLabel))
+                {
+                    values[field.Key] = byLabel.Trim();
+                    continue;
+                }
+
+                if (source.TryGetValue(field.Key, out var byKey))
+                {
+                    values[field.Key] = byKey?.Trim() ?? string.Empty;
+                    continue;
+                }
+
+                values[field.Key] = string.Empty;
+            }
+
+            if (values.Values.All(string.IsNullOrWhiteSpace))
+            {
+                continue;
+            }
+
+            await _records
+                .UpsertRowAsync(template.Id, null, startOrder + imported, values, cancellationToken)
+                .ConfigureAwait(false);
+            imported++;
+        }
+
+        return imported;
+    }
+
+    private static bool IsCsvPath(string path) =>
+        path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
 
     private static List<BulkTemplateDraft> ParseWorkbook(string sourcePath)
     {
@@ -109,7 +227,7 @@ public sealed class BulkTemplateImportService
 
         if (bulkSheet is not null)
         {
-            return ParseBulkTemplatesSheet(bulkSheet);
+            return ParseBulkTemplatesDefinitionRows(ParseBulkTemplatesSheet(bulkSheet));
         }
 
         var list = new List<BulkTemplateDraft>();
@@ -120,15 +238,14 @@ public sealed class BulkTemplateImportService
                 continue;
             }
 
-            var fromSheet = ParseTemplateSheet(sheet.Name, sheet);
-            if (fromSheet is not null)
-            {
-                list.Add(fromSheet);
-            }
+            list.AddRange(ParseTemplateSheets(sheet.Name, sheet));
         }
 
         return list;
     }
+
+    private static List<BulkTemplateDraft> ParseBulkTemplatesDefinitionRows(List<BulkTemplateDraft> definitionRows) =>
+        definitionRows.Select(d => new BulkTemplateDraft(d.Name, d.ColumnLabels, [])).ToList();
 
     private static List<BulkTemplateDraft> ParseBulkTemplatesSheet(IXLWorksheet sheet)
     {
@@ -139,10 +256,12 @@ public sealed class BulkTemplateImportService
         }
 
         var header = sheet.Row(1).CellsUsed().Select(c => c.GetString().Trim()).ToList();
-        var nameIdx = header.FindIndex(h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
-                                            || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
-        var colsIdx = header.FindIndex(h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
-                                             || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase));
+        var nameIdx = header.FindIndex(
+            h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
+        var colsIdx = header.FindIndex(
+            h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase));
 
         var list = new List<BulkTemplateDraft>();
         for (var r = 2; r <= lastRow; r++)
@@ -157,40 +276,344 @@ public sealed class BulkTemplateImportService
             var labels = SplitColumnLabels(colsRaw);
             if (labels.Count == 0 && colsIdx < 0)
             {
-                labels = sheet.Row(r).CellsUsed().Skip(1).Select(c => c.GetString().Trim()).Where(x => x.Length > 0).ToList();
+                labels = sheet.Row(r).CellsUsed().Skip(1).Select(c => c.GetString().Trim()).Where(x => x.Length > 0)
+                    .ToList();
             }
 
-            list.Add(new BulkTemplateDraft(name, labels));
+            list.Add(new BulkTemplateDraft(name, labels, []));
         }
 
         return list;
     }
 
-    private static BulkTemplateDraft? ParseTemplateSheet(string sheetName, IXLWorksheet sheet)
+    private static List<BulkTemplateDraft> ParseTemplateSheets(string sheetName, IXLWorksheet sheet)
     {
         var lastCol = sheet.LastColumnUsed()?.ColumnNumber() ?? 0;
         if (lastCol == 0)
         {
-            return null;
+            return [];
         }
 
-        var labels = new List<string>();
+        var headerCells = new List<string>();
         for (var c = 1; c <= lastCol; c++)
         {
-            var label = sheet.Cell(1, c).GetString().Trim();
-            if (!string.IsNullOrWhiteSpace(label))
-            {
-                labels.Add(label);
-            }
+            headerCells.Add(sheet.Cell(1, c).GetString().Trim());
         }
 
+        var templateNameIdx = headerCells.FindIndex(
+            h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
+
+        if (templateNameIdx >= 0 && headerCells.Count > 1
+            && !headerCells.Any(
+                h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
+                     || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ParseSheetWithTemplateNameColumn(sheet, headerCells, templateNameIdx);
+        }
+
+        var labels = headerCells.Where(h => !string.IsNullOrWhiteSpace(h)).ToList();
         if (labels.Count == 0)
         {
-            return null;
+            return [];
         }
 
         var name = sheetName.Trim();
-        return string.IsNullOrWhiteSpace(name) ? null : new BulkTemplateDraft(name, labels);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return [];
+        }
+
+        var dataRows = ReadExcelDataRows(sheet, headerCells, startRow: 2);
+        return [new BulkTemplateDraft(name, labels, dataRows)];
+    }
+
+    private static List<BulkTemplateDraft> ParseSheetWithTemplateNameColumn(
+        IXLWorksheet sheet,
+        IReadOnlyList<string> headerCells,
+        int templateNameIdx)
+    {
+        var labels = headerCells
+            .Where((h, i) => i != templateNameIdx && !string.IsNullOrWhiteSpace(h))
+            .ToList();
+        if (labels.Count == 0)
+        {
+            return [];
+        }
+
+        var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;
+        var groups = new Dictionary<string, List<IReadOnlyDictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
+
+        for (var r = 2; r <= lastRow; r++)
+        {
+            var templateName = sheet.Cell(r, templateNameIdx + 1).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(templateName))
+            {
+                continue;
+            }
+
+            var rowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var c = 0; c < headerCells.Count; c++)
+            {
+                if (c == templateNameIdx || string.IsNullOrWhiteSpace(headerCells[c]))
+                {
+                    continue;
+                }
+
+                rowMap[headerCells[c]] = sheet.Cell(r, c + 1).GetString().Trim();
+            }
+
+            if (rowMap.Values.All(string.IsNullOrWhiteSpace))
+            {
+                continue;
+            }
+
+            if (!groups.TryGetValue(templateName, out var list))
+            {
+                list = [];
+                groups[templateName] = list;
+            }
+
+            list.Add(rowMap);
+        }
+
+        return groups.Select(g => new BulkTemplateDraft(g.Key, labels, g.Value)).ToList();
+    }
+
+    private static List<IReadOnlyDictionary<string, string>> ReadExcelDataRows(
+        IXLWorksheet sheet,
+        IReadOnlyList<string> headerCells,
+        int startRow)
+    {
+        var columns = new List<(string Label, int Col)>();
+        for (var c = 0; c < headerCells.Count; c++)
+        {
+            if (!string.IsNullOrWhiteSpace(headerCells[c]))
+            {
+                columns.Add((headerCells[c], c + 1));
+            }
+        }
+
+        var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;
+        var rows = new List<IReadOnlyDictionary<string, string>>();
+
+        for (var r = startRow; r <= lastRow; r++)
+        {
+            var rowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (label, col) in columns)
+            {
+                rowMap[label] = sheet.Cell(r, col).GetString().Trim();
+            }
+
+            if (rowMap.Values.All(string.IsNullOrWhiteSpace))
+            {
+                continue;
+            }
+
+            rows.Add(rowMap);
+        }
+
+        return rows;
+    }
+
+    private static List<BulkTemplateDraft> ParseCsvFile(string sourcePath)
+    {
+        var table = CsvTable.Read(sourcePath);
+        if (table.Count == 0)
+        {
+            return [];
+        }
+
+        var header = table[0];
+        if (IsBulkTemplatesHeader(header))
+        {
+            return ParseBulkTemplatesCsvRows(table);
+        }
+
+        var templateNameIdx = IndexOfHeader(
+            header,
+            h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
+        var columnsIdx = IndexOfHeader(
+            header,
+            h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase));
+
+        if (templateNameIdx >= 0 && columnsIdx >= 0)
+        {
+            return ParseBulkTemplatesCsvRows(table);
+        }
+
+        if (templateNameIdx >= 0)
+        {
+            return ParseCsvGroupedByTemplateName(table, header, templateNameIdx);
+        }
+
+        var labels = header.Where(h => !string.IsNullOrWhiteSpace(h)).ToList();
+        if (labels.Count == 0)
+        {
+            return [];
+        }
+
+        var name = Path.GetFileNameWithoutExtension(sourcePath).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "Imported Template";
+        }
+
+        var dataRows = ParseCsvDataRows(table, header, labels, startRowIndex: 1);
+        return [new BulkTemplateDraft(name, labels, dataRows)];
+    }
+
+    private static List<BulkTemplateDraft> ParseBulkTemplatesCsvRows(IReadOnlyList<IReadOnlyList<string>> table)
+    {
+        var header = table[0];
+        var nameIdx = IndexOfHeader(
+            header,
+            h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
+        var colsIdx = IndexOfHeader(
+            header,
+            h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase));
+
+        var list = new List<BulkTemplateDraft>();
+        for (var r = 1; r < table.Count; r++)
+        {
+            var row = PadRow(table[r], header.Count);
+            var name = nameIdx >= 0 ? row[nameIdx].Trim() : string.Empty;
+            var colsRaw = colsIdx >= 0 ? row[colsIdx] : string.Empty;
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(colsRaw))
+            {
+                continue;
+            }
+
+            var labels = SplitColumnLabels(colsRaw);
+            list.Add(new BulkTemplateDraft(name, labels, []));
+        }
+
+        return list;
+    }
+
+    private static List<BulkTemplateDraft> ParseCsvGroupedByTemplateName(
+        IReadOnlyList<IReadOnlyList<string>> table,
+        IReadOnlyList<string> header,
+        int templateNameIdx)
+    {
+        var labels = header
+            .Where((h, i) => i != templateNameIdx && !string.IsNullOrWhiteSpace(h))
+            .ToList();
+        if (labels.Count == 0)
+        {
+            return [];
+        }
+
+        var groups = new Dictionary<string, List<IReadOnlyDictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
+        for (var r = 1; r < table.Count; r++)
+        {
+            var row = PadRow(table[r], header.Count);
+            var templateName = row[templateNameIdx].Trim();
+            if (string.IsNullOrWhiteSpace(templateName))
+            {
+                continue;
+            }
+
+            var rowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var c = 0; c < header.Count; c++)
+            {
+                if (c == templateNameIdx || string.IsNullOrWhiteSpace(header[c]))
+                {
+                    continue;
+                }
+
+                rowMap[header[c]] = row[c].Trim();
+            }
+
+            if (rowMap.Values.All(string.IsNullOrWhiteSpace))
+            {
+                continue;
+            }
+
+            if (!groups.TryGetValue(templateName, out var list))
+            {
+                list = [];
+                groups[templateName] = list;
+            }
+
+            list.Add(rowMap);
+        }
+
+        return groups.Select(g => new BulkTemplateDraft(g.Key, labels, g.Value)).ToList();
+    }
+
+    private static List<IReadOnlyDictionary<string, string>> ParseCsvDataRows(
+        IReadOnlyList<IReadOnlyList<string>> table,
+        IReadOnlyList<string> header,
+        IReadOnlyList<string> labels,
+        int startRowIndex)
+    {
+        var rows = new List<IReadOnlyDictionary<string, string>>();
+        for (var r = startRowIndex; r < table.Count; r++)
+        {
+            var row = PadRow(table[r], header.Count);
+            var rowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < labels.Count; i++)
+            {
+                var headerIdx = IndexOfHeader(
+                    header,
+                    h => string.Equals(h, labels[i], StringComparison.OrdinalIgnoreCase));
+                rowMap[labels[i]] = headerIdx >= 0 && headerIdx < row.Count ? row[headerIdx].Trim() : string.Empty;
+            }
+
+            if (rowMap.Values.All(string.IsNullOrWhiteSpace))
+            {
+                continue;
+            }
+
+            rows.Add(rowMap);
+        }
+
+        return rows;
+    }
+
+    private static bool IsBulkTemplatesHeader(IReadOnlyList<string> header)
+    {
+        var hasName = header.Any(
+            h => h.Equals("TemplateName", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Template Name", StringComparison.OrdinalIgnoreCase));
+        var hasCols = header.Any(
+            h => h.Equals("Columns", StringComparison.OrdinalIgnoreCase)
+                 || h.Equals("Column Labels", StringComparison.OrdinalIgnoreCase));
+        return hasName && hasCols;
+    }
+
+    private static int IndexOfHeader(IReadOnlyList<string> header, Func<string, bool> predicate)
+    {
+        for (var i = 0; i < header.Count; i++)
+        {
+            if (predicate(header[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static IReadOnlyList<string> PadRow(IReadOnlyList<string> row, int width)
+    {
+        if (row.Count >= width)
+        {
+            return row;
+        }
+
+        var padded = row.ToList();
+        while (padded.Count < width)
+        {
+            padded.Add(string.Empty);
+        }
+
+        return padded;
     }
 
     private static List<string> SplitColumnLabels(string raw)
@@ -220,14 +643,82 @@ public sealed class BulkTemplateImportService
         return $"{baseKey}_{index}";
     }
 
-    private sealed record BulkTemplateDraft(string Name, List<string> ColumnLabels);
+    private sealed record BulkTemplateDraft(
+        string Name,
+        List<string> ColumnLabels,
+        List<IReadOnlyDictionary<string, string>> DataRows);
+
+    private static class CsvTable
+    {
+        public static List<List<string>> Read(string path)
+        {
+            var rows = new List<List<string>>();
+            using var reader = new StreamReader(path);
+            while (true)
+            {
+                var line = reader.ReadLine();
+                if (line is null)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                rows.Add(ParseLine(line));
+            }
+
+            return rows;
+        }
+
+        private static List<string> ParseLine(string line)
+        {
+            var fields = new List<string>();
+            var current = new System.Text.StringBuilder();
+            var inQuotes = false;
+
+            for (var i = 0; i < line.Length; i++)
+            {
+                var ch = line[i];
+                if (ch == '"')
+                {
+                    if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = !inQuotes;
+                    }
+
+                    continue;
+                }
+
+                if (ch == ',' && !inQuotes)
+                {
+                    fields.Add(current.ToString().Trim());
+                    current.Clear();
+                    continue;
+                }
+
+                current.Append(ch);
+            }
+
+            fields.Add(current.ToString().Trim());
+            return fields;
+        }
+    }
 }
 
 public sealed class BulkTemplateImportResult
 {
     public int CreatedCount { get; init; }
     public int SkippedCount { get; init; }
+    public int ImportedRowCount { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 
-    public bool Success => CreatedCount > 0 && Errors.Count == 0;
+    public bool HasWork => CreatedCount > 0 || ImportedRowCount > 0;
 }
