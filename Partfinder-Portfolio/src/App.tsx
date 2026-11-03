@@ -5,6 +5,11 @@ import { AdminRegisterPage } from './components/AdminRegisterPage'
 import { AccountSignInPage } from './components/marketing/AccountSignInPage'
 import { AdminLoginView } from './components/marketing/AdminLoginView'
 import { GetLicencePage } from './components/marketing/GetLicencePage'
+import { IndustriesPage } from './components/marketing/IndustriesPage'
+import { FeaturesPage } from './components/marketing/FeaturesPage'
+import { PricingPage } from './components/marketing/PricingPage'
+import { ResourcesPage } from './components/marketing/ResourcesPage'
+import { ProductsPage } from './components/marketing/ProductsPage'
 import { SolutionsPage } from './components/marketing/SolutionsPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
@@ -79,6 +84,11 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<SolutionsPage />} />
+      <Route path="/products" element={<ProductsPage />} />
+      <Route path="/industries" element={<IndustriesPage />} />
+      <Route path="/features" element={<FeaturesPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/get-licence" element={<GetLicencePage />} />
       <Route path="/sign-in" element={<AccountSignInPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon, MarketingFrame } from './SiteChrome'
 
 const SHIP_IMAGE =
@@ -93,6 +94,13 @@ export function SolutionsPage() {
                 <p className="font-body-lg text-body-lg text-on-surface-variant max-w-3xl mt-space-xs m-0">
                   Whether managing global shipping fleets, high-throughput manufacturing plants, or mission-critical aviation fleets, PartFinder delivers bespoke operational intelligence to eliminate downtime.
                 </p>
+                <Link
+                  to="/products"
+                  className="mt-space-md inline-flex items-center gap-1.5 bg-primary text-on-primary font-label-md text-label-md px-space-md py-space-sm rounded-lg hover:bg-primary-container transition-colors shadow-sm"
+                >
+                  Browse PartFinder products
+                  <Icon name="arrow_forward" className="text-[18px]" />
+                </Link>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-gutter mt-space-lg">
                 <KpiCard
