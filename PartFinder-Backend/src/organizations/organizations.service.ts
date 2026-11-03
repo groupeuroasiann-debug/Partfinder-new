@@ -163,18 +163,72 @@ export class OrganizationsService {
   }
 
   async create(dto: CreateOrganizationDto) {
-    const existing = await this.orgModel.findOne({ orgCode: dto.orgCode }).exec();
-    if (existing) {
-      throw new ConflictException('Organization code already exists');
-    }
-    const firstAdminEmail = dto.firstAdminEmail.trim().toLowerCase();
-    const temporaryPassword = this.generateTemporaryPassword();
-    const created = new this.orgModel({
-      orgCode: dto.orgCode,
+    await this.persistNewOrganization({
+      orgCode: dto.orgCode.trim(),
       name: dto.name.trim(),
       type: dto.type,
       plan: dto.plan,
-      validity: computeValidity(dto.plan),
+      firstAdminEmail: dto.firstAdminEmail,
+    });
+    return this.findAll();
+  }
+
+  /** Self-serve licence purchase after payment — allocates a unique 6-digit org code. */
+  async createSelfServeLicense(input: {
+    name: string;
+    firstAdminEmail: string;
+    plan?: string;
+    type?: string;
+  }) {
+    const orgCode = await this.allocateOrgCode();
+    const plan = input.plan?.trim() || 'starter';
+    const type = input.type?.trim() || 'standard';
+    const email = input.firstAdminEmail.trim().toLowerCase();
+    const temporaryPassword = await this.persistNewOrganization({
+      orgCode,
+      name: input.name.trim(),
+      type,
+      plan,
+      firstAdminEmail: email,
+    });
+    return {
+      orgCode,
+      temporaryPassword,
+      email,
+      organisationName: input.name.trim(),
+    };
+  }
+
+  private async allocateOrgCode(): Promise<string> {
+    for (let attempt = 0; attempt < 64; attempt++) {
+      const orgCode = String(Math.floor(100000 + Math.random() * 900000));
+      const existing = await this.orgModel.findOne({ orgCode }).exec();
+      if (!existing) {
+        return orgCode;
+      }
+    }
+    throw new ConflictException('Could not allocate an organization code. Try again.');
+  }
+
+  private async persistNewOrganization(input: {
+    orgCode: string;
+    name: string;
+    type: string;
+    plan: string;
+    firstAdminEmail: string;
+  }): Promise<string> {
+    const existing = await this.orgModel.findOne({ orgCode: input.orgCode }).exec();
+    if (existing) {
+      throw new ConflictException('Organization code already exists');
+    }
+    const firstAdminEmail = input.firstAdminEmail.trim().toLowerCase();
+    const temporaryPassword = this.generateTemporaryPassword();
+    const created = new this.orgModel({
+      orgCode: input.orgCode,
+      name: input.name.trim(),
+      type: input.type,
+      plan: input.plan,
+      validity: computeValidity(input.plan),
       status: 'Active',
       licensePermanentlyBanned: false,
       licenseBannedUntil: null,
@@ -190,10 +244,10 @@ export class OrganizationsService {
     await created.save();
     await this.sendFirstAdminInviteEmail({
       email: firstAdminEmail,
-      orgCode: dto.orgCode.trim(),
+      orgCode: input.orgCode.trim(),
       temporaryPassword,
     });
-    return this.findAll();
+    return temporaryPassword;
   }
 
   async update(id: string, dto: UpdateOrganizationDto) {

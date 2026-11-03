@@ -9,16 +9,55 @@ export const LOGO_SRC = '/partfinder-logo.png'
 export const STORE_URL =
   'https://apps.microsoft.com/detail/9N6XVKPX189W?hl=en-us&gl=IN&ocid=pdpshare'
 
-const NAV = [
-  { label: 'Products', href: '/#solutions' },
-  { label: 'Solutions', href: '/#solutions', current: true },
-  { label: 'Industries', href: '/#solutions' },
-  { label: 'Features', href: '/#impact' },
-  { label: 'Pricing', href: '/#impact' },
-  { label: 'Resources', href: '/#architect' },
+type NavItem = {
+  label: string
+  href: string
+  productsPage?: boolean
+  industriesPage?: boolean
+  featuresPage?: boolean
+  pricingPage?: boolean
+  resourcesPage?: boolean
+  homeCurrent?: boolean
+}
+
+const NAV: NavItem[] = [
+  { label: 'Products', href: '/products', productsPage: true },
+  { label: 'Solutions', href: '/#solutions', homeCurrent: true },
+  { label: 'Industries', href: '/industries', industriesPage: true },
+  { label: 'Features', href: '/features', featuresPage: true },
+  { label: 'Pricing', href: '/pricing', pricingPage: true },
+  { label: 'Resources', href: '/resources', resourcesPage: true },
   { label: 'About', href: '/#impact' },
   { label: 'Contact', href: '/#architect' },
-] as const
+]
+
+function isNavItemActive(item: NavItem, pathname: string, onHome: boolean) {
+  if (item.productsPage) {
+    return pathname === '/products'
+  }
+  if (item.industriesPage) {
+    return pathname === '/industries'
+  }
+  if (item.featuresPage) {
+    return pathname === '/features'
+  }
+  if (item.pricingPage) {
+    return pathname === '/pricing'
+  }
+  if (item.resourcesPage) {
+    return pathname === '/resources'
+  }
+  if (item.homeCurrent) {
+    return onHome && pathname === '/'
+  }
+  return false
+}
+
+function navLinkClass(active: boolean) {
+  return active
+    ? 'transition-colors text-primary font-label-md font-bold whitespace-nowrap'
+    : 'font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors whitespace-nowrap'
+}
 
 export function Icon({
   name,
@@ -57,13 +96,20 @@ function DownloadLink({ className = '' }: { className?: string }) {
 export function SiteHeader() {
   const location = useLocation()
   const [account, setAccount] = useState<AccountSession | null>(() => readAccountSession())
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const onHome = location.pathname === '/'
   const onLicence = location.pathname === '/get-licence'
   const onSignIn = location.pathname === '/sign-in'
+  const onProducts = location.pathname === '/products'
+  const onIndustries = location.pathname === '/industries'
 
   useEffect(() => {
     setAccount(readAccountSession())
   }, [location.pathname])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname, location.hash])
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
@@ -75,19 +121,15 @@ export function SiteHeader() {
             src={LOGO_SRC}
           />
         </Link>
-        <nav className="hidden xl:flex items-center gap-3 2xl:gap-space-lg">
+        <nav className="hidden xl:flex items-center gap-3 2xl:gap-space-lg" aria-label="Main">
           {NAV.map((item) => {
-            const active = onHome && 'current' in item && item.current
+            const active = isNavItemActive(item, location.pathname, onHome)
             return (
               <Link
                 key={item.label}
                 to={item.href}
                 aria-current={active ? 'page' : undefined}
-                className={
-                  active
-                    ? 'transition-colors text-primary font-label-md font-bold whitespace-nowrap'
-                    : 'font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors whitespace-nowrap'
-                }
+                className={navLinkClass(active)}
               >
                 {item.label}
               </Link>
@@ -95,6 +137,30 @@ export function SiteHeader() {
           })}
         </nav>
         <div className="flex items-center gap-2 md:gap-space-md shrink min-w-0">
+          <Link
+            to="/products"
+            className={`xl:hidden ${navLinkClass(onProducts)} px-1 hidden sm:inline`}
+            aria-current={onProducts ? 'page' : undefined}
+          >
+            Products
+          </Link>
+          <Link
+            to="/industries"
+            className={`xl:hidden ${navLinkClass(onIndustries)} px-1 hidden sm:inline`}
+            aria-current={onIndustries ? 'page' : undefined}
+          >
+            Industries
+          </Link>
+          <button
+            type="button"
+            className="xl:hidden w-10 h-10 rounded-lg bg-surface-container text-on-surface border-0 flex items-center justify-center hover:bg-surface-container-high"
+            aria-expanded={mobileNavOpen}
+            aria-controls="site-mobile-nav"
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            <Icon name={mobileNavOpen ? 'close' : 'menu'} className="text-[22px]" />
+          </button>
           {account ? (
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-label-md text-label-md text-on-surface truncate max-w-[140px] sm:max-w-[220px]" title={account.email}>
@@ -137,6 +203,29 @@ export function SiteHeader() {
           <DownloadLink className="hidden lg:inline-flex" />
         </div>
       </div>
+      {mobileNavOpen ? (
+        <nav
+          id="site-mobile-nav"
+          className="xl:hidden border-t border-outline-variant/20 bg-surface-container-lowest/95 backdrop-blur-md max-h-[min(70vh,420px)] overflow-y-auto"
+          aria-label="Main mobile"
+        >
+          <div className="max-w-[1360px] mx-auto px-gutter py-space-md flex flex-col gap-1">
+            {NAV.map((item) => {
+              const active = isNavItemActive(item, location.pathname, onHome)
+              return (
+                <Link
+                  key={item.label}
+                  to={item.href}
+                  className={`${navLinkClass(active)} py-2.5 px-2 rounded-lg hover:bg-surface-container-low`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      ) : null}
     </header>
   )
 }
@@ -187,11 +276,12 @@ export function SiteFooter() {
           <FooterColumn
             title="Platform"
             links={[
-              { label: 'AI Smart Search', href: '/#solutions' },
-              { label: 'Inventory Intelligence', href: '/#solutions' },
-              { label: 'Supplier Network', href: '/#solutions' },
-              { label: 'Technical Specs', href: '/#impact' },
-              { label: 'API & Integrations', href: '/#architect' },
+              { label: 'All products', href: '/products' },
+              { label: 'AI Smart Search', href: '/products#ai-smart-search' },
+              { label: 'Inventory Intelligence', href: '/products#inventory-intelligence' },
+              { label: 'Supplier Network', href: '/products#supplier-network' },
+              { label: 'Technical Specs', href: '/products#technical-specs' },
+              { label: 'API & Integrations', href: '/products#api-integrations' },
             ]}
           />
           <FooterColumn
@@ -206,21 +296,23 @@ export function SiteFooter() {
           <FooterColumn
             title="Industries"
             links={[
-              { label: 'Marine', href: '/#solutions' },
-              { label: 'Automotive', href: '/#solutions' },
-              { label: 'Aviation', href: '/#solutions' },
-              { label: 'Industrial & Plants', href: '/#solutions' },
-              { label: 'Electronics', href: '/#solutions' },
+              { label: 'All industries', href: '/industries' },
+              { label: 'Marine', href: '/industries#marine' },
+              { label: 'Automotive', href: '/industries#automotive' },
+              { label: 'Aviation', href: '/industries#aviation' },
+              { label: 'Industrial & Plants', href: '/industries#industrial-plants' },
+              { label: 'Electronics', href: '/industries#electronics' },
             ]}
           />
           <FooterColumn
             title="Resources"
             links={[
-              { label: 'Documentation', href: '/#architect' },
-              { label: 'IMPA/ISSA Guides', href: '/#solutions' },
+              { label: 'All resources', href: '/resources' },
+              { label: 'Documentation & API', href: '/resources#api' },
+              { label: 'IMPA/ISSA Guides', href: '/industries#marine' },
               { label: 'Case Studies', href: '/#impact' },
-              { label: 'Whitepapers', href: '/#impact' },
-              { label: 'System Status', href: '/#impact' },
+              { label: 'Release notes', href: '/resources#release-notes' },
+              { label: 'System Status', href: '/resources#system-status' },
               { label: 'Download Windows App', href: STORE_URL, external: true, icon: 'download' },
             ]}
           />
