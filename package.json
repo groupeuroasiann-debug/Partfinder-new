@@ -1,0 +1,8 @@
+{
+  "name": "partfinder-new",
+  "private": true,
+  "scripts": {
+    "dev:portfolio": "npm run dev --prefix Partfinder-Portfolio",
+    "build:portfolio": "npm run build --prefix Partfinder-Portfolio"
+  }
+}

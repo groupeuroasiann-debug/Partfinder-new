@@ -11,6 +11,7 @@ import { DbClustersModule } from './db-clusters/db-clusters.module';
 import { DebugModule } from './debug/debug.module';
 import { ImportModule } from './import/import.module';
 import { LicenseModule } from './license/license.module';
+import { LicensePurchaseModule } from './license-purchase/license-purchase.module';
 import { RedisModule } from './common/redis/redis.module';
 import { ElasticsearchModule } from './common/elasticsearch/elasticsearch.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -46,6 +47,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     OrganizationsModule,
     DbClustersModule,
     LicenseModule,
+    LicensePurchaseModule,
     PlatformModule,
     TemplatesModule,
     RelationsModule,
