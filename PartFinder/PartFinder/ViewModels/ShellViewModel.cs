@@ -194,6 +194,7 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
 
     public async Task InitializeAsync()
     {
+        _lastSelectedPage = AppPage.Dashboard;
         _setupContext.Refresh();
         _adminSession.Load();
         _profile.Load();
@@ -250,7 +251,8 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
             return;
         }
 
-        ApplyNavigationSelection(startItem, navigate: true);
+        ApplyNavigationSelection(startItem, navigate: false);
+        _navigationService.ResetTo(startPage);
     }
 
     /// <summary>Top-nav click: always updates selection and navigates (even if already selected).</summary>
@@ -474,6 +476,8 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
     [RelayCommand]
     private void SignOutSession()
     {
+        _lastSelectedPage = AppPage.Dashboard;
+        _navigationService.Clear();
         _adminSession.Clear();
         // Do NOT delete setup-state.json — it holds orgCode/dbUri needed after re-login
         _setupContext.Refresh();

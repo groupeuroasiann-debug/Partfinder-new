@@ -12,5 +12,7 @@ public sealed class PartTemplateDefinition
 
     public required IReadOnlyList<TemplateFieldDefinition> Fields { get; init; }
 
+    public string ColumnCountLabel => Fields.Count == 1 ? "1 column" : $"{Fields.Count} columns";
+
     public override string ToString() => Name;
 }

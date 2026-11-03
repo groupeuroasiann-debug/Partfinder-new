@@ -54,7 +54,7 @@
                     FontSize="12"
                     DisplayMemberPath="Name"
                     ItemsSource="{Binding DataTemplates}"
-                    PlaceholderText="Choose templateâ€¦"
+                    PlaceholderText="Choose template…"
                     SelectedItem="{Binding SelectedDataTemplate, Mode=TwoWay}" />
             </Border>
 
@@ -91,7 +91,6 @@
             </StackPanel>
 
             <StackPanel
-                Grid.Column="2"
                 Orientation="Horizontal"
                 Spacing="6"
                 HorizontalAlignment="Right"
@@ -152,69 +151,62 @@
             </StackPanel>
         </StackPanel>
 
-        <!-- Spreadsheet + add row (edit mode) — full width -->
-        <Grid Grid.Row="2" Margin="0,4,0,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Border
-                Grid.Row="0"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"
-                Background="{StaticResource ElevatedCardBackgroundBrush}"
-                BorderBrush="{StaticResource GlassStrokeBrush}"
-                BorderThickness="1"
-                CornerRadius="16"
-                Padding="0">
-                <ContentControl
-                    x:Name="SpreadsheetHost"
+        <!-- Spreadsheet + optional detail column (no modal overlay) -->
+        <Grid
+            Grid.Row="2"
+            Margin="0,4,0,0"
+            ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="ActionResultsColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border
+                    Grid.Row="0"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Stretch"
-                    HorizontalContentAlignment="Stretch"
-                    VerticalContentAlignment="Stretch" />
-            </Border>
-            <Button
-                Grid.Row="1"
-                Margin="0,10,0,0"
-                HorizontalAlignment="Left"
-                Style="{StaticResource PrimaryButtonStyle}"
-                Padding="16,8"
-                Command="{Binding AddRowCommand}"
-                Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon Glyph="&#xE710;" FontSize="12" />
-                    <TextBlock Text="Add row" FontSize="13" />
-                </StackPanel>
-            </Button>
-        </Grid>
+                    Background="{StaticResource ElevatedCardBackgroundBrush}"
+                    BorderBrush="{StaticResource GlassStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="16"
+                    Padding="0">
+                    <ContentControl
+                        x:Name="SpreadsheetHost"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
+                </Border>
+                <Button
+                    Grid.Row="1"
+                    Margin="0,10,0,0"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Padding="16,8"
+                    Command="{Binding AddRowCommand}"
+                    Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE710;" FontSize="12" />
+                        <TextBlock Text="Add row" FontSize="13" />
+                    </StackPanel>
+                </Button>
+            </Grid>
 
-        <!-- Action overlay -->
-        <Rectangle
-            x:Name="ActionResultsOverlay"
-            Grid.RowSpan="3"
-            Fill="Black"
-            Opacity="0.3"
-            Visibility="Collapsed"
-            Tapped="OnActionOverlayTapped" />
-
-        <!-- Action results slide panel (overlays right edge; does not shrink grid width) -->
-        <Border
-            x:Name="ActionResultsPanel"
-            Grid.RowSpan="3"
-            Width="320"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Stretch"
-            Margin="0,0,0,0"
-            Padding="14"
-            Visibility="Collapsed"
-            CornerRadius="20"
-            Background="{StaticResource ElevatedCardBackgroundBrush}"
-            BorderBrush="{StaticResource GlassStrongStrokeBrush}"
-            BorderThickness="1">
-            <Border.RenderTransform>
-                <TranslateTransform x:Name="ActionResultsTransform" X="320" />
-            </Border.RenderTransform>
+            <Border
+                x:Name="ActionResultsPanel"
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Padding="14"
+                Visibility="Collapsed"
+                CornerRadius="16"
+                Background="{StaticResource ElevatedCardBackgroundBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}"
+                BorderThickness="1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -278,7 +270,8 @@
                     </ListView.ItemTemplate>
                 </ListView>
             </Grid>
-        </Border>
+            </Border>
+        </Grid>
     </Grid>
 </Page>
 

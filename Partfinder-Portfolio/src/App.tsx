@@ -15,6 +15,10 @@ function normalizeApiBase(rawUrl?: string): string {
     if (!/^https?:\/\//i.test(trimmed)) {
       trimmed = `https://${trimmed}`
     }
+    // Portfolio calls `${apiBase}/api/...` — strip a trailing /api from env misconfiguration.
+    if (trimmed.toLowerCase().endsWith('/api')) {
+      trimmed = trimmed.slice(0, -4)
+    }
     return trimmed
   }
   return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
@@ -109,19 +113,39 @@ function PublicDashboardPage() {
   )
 }
 
+async function validateAdminSession(apiBaseUrl: string): Promise<boolean> {
+  const token =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem(ADMIN_TOKEN_KEY)
+      : null
+  if (!token) {
+    return false
+  }
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/organizations`, {
+      headers: authJsonHeaders(),
+    })
+    return response.ok
+  } catch {
+    // Offline or API unreachable — keep the stored token so a retry can succeed.
+    return true
+  }
+}
+
 function AdminPortalPage() {
   const defaultDevEmail =
     import.meta.env.MODE === 'development' ? 'jayandraa5@gmail.com' : ''
   const [email, setEmail] = useState(defaultDevEmail)
   const [password, setPassword] = useState('')
-  const [isAuthenticated, setIsAuthenticated] = useState(readStoredAuth)
+  const [authState, setAuthState] = useState<'checking' | 'guest' | 'authenticated'>(() =>
+    readStoredAuth() ? 'checking' : 'guest',
+  )
+  const isAuthenticated = authState === 'authenticated'
   const [error, setError] = useState('')
   const [loginPending, setLoginPending] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const isPublicDashboardRoute =
-    location.pathname === '/admin/dashboard' ||
-    location.pathname === '/dashboard'
+  const isPublicDashboardRoute = location.pathname === '/dashboard'
 
   const isLoginRoute =
     location.pathname === '/admin' ||
@@ -131,25 +155,50 @@ function AdminPortalPage() {
 
   const handleSessionExpired = useCallback(() => {
     window.localStorage.removeItem(ADMIN_TOKEN_KEY)
-    setIsAuthenticated(false)
+    setAuthState('guest')
     navigate('/admin', { replace: true })
   }, [navigate])
+
+  useEffect(() => {
+    if (authState !== 'checking') {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const valid = await validateAdminSession(apiBase)
+      if (cancelled) {
+        return
+      }
+      if (!valid) {
+        window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+        setAuthState('guest')
+        return
+      }
+      setAuthState('authenticated')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authState])
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!email.trim() || !password.trim()) {
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !password.trim()) {
       setError('Please enter email and password.')
       return
     }
 
     setError('')
     setLoginPending(true)
+    window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+    setAuthState('guest')
     try {
       const response = await fetch(`${apiBase}/api/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       })
       const data: unknown = await response.json().catch(() => null)
       if (!response.ok) {
@@ -162,13 +211,28 @@ function AdminPortalPage() {
         return
       }
       window.localStorage.setItem(ADMIN_TOKEN_KEY, token)
-      setIsAuthenticated(true)
+      setAuthState('authenticated')
       navigate(postLoginPath(location.pathname), { replace: true })
     } catch {
-      setError('Cannot reach the server. Is the API running?')
+      setError(
+        import.meta.env.DEV
+          ? 'Cannot reach the API. Start PartFinder-Backend locally or set VITE_API_URL (dev uses the Vite /api proxy).'
+          : 'Cannot reach the server. Check your connection and API URL.',
+      )
     } finally {
       setLoginPending(false)
     }
+  }
+
+  if (authState === 'checking') {
+    return (
+      <main className="page">
+        <header className="hero">
+          <p className="badge">Admin</p>
+          <h1>Checking session…</h1>
+        </header>
+      </main>
+    )
   }
 
   if (isLoginRoute || (!isAuthenticated && !isPublicDashboardRoute)) {
@@ -254,7 +318,7 @@ function AdminPortalPage() {
           className="sidebar-logout"
           onClick={() => {
             window.localStorage.removeItem(ADMIN_TOKEN_KEY)
-            setIsAuthenticated(false)
+            setAuthState('guest')
             navigate('/admin', { replace: true })
           }}
         >

@@ -788,6 +788,7 @@ public sealed partial class MainWindow : Window
     {
         // Always re-initialize shell with fresh data (permissions, name, nav items)
         // This ensures no stale data from previous user session.
+        App.Services.GetRequiredService<INavigationService>().Clear();
         var shellVm = App.Services.GetRequiredService<ShellViewModel>();
         await shellVm.InitializeAsync().ConfigureAwait(true);
         LogAutoLoginIfSessionActive();

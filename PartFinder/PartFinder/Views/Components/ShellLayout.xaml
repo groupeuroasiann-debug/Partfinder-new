@@ -343,16 +343,11 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="2"
-                Margin="12,8,12,12"
-                CornerRadius="28"
-                Background="{StaticResource ContentShellBackgroundBrush}"
-                BorderBrush="{StaticResource GlassStrokeBrush}"
-                BorderThickness="1">
+        <Grid Grid.Row="2">
             <Frame x:Name="ContentFrame"
-                   Background="Transparent"
+                   Background="{StaticResource ContentShellBackgroundBrush}"
                    HorizontalAlignment="Stretch"
                    VerticalAlignment="Stretch" />
-        </Border>
+        </Grid>
     </Grid>
 </UserControl>

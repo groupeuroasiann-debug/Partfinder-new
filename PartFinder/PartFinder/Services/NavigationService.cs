@@ -1,3 +1,4 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
 using PartFinder.Views.Pages;
@@ -23,6 +24,7 @@ public sealed class NavigationService : INavigationService
     };
 
     private Frame? _frame;
+    private int _resetGeneration;
 
     public bool IsFrameReady => _frame is not null;
 
@@ -40,6 +42,96 @@ public sealed class NavigationService : INavigationService
     }
 
     public bool Navigate(AppPage page, object? parameter = null)
+    {
+        _resetGeneration++;
+        return NavigateCore(page, parameter, new DrillInNavigationTransitionInfo());
+    }
+
+    public bool ResetTo(AppPage page)
+    {
+        var generation = ++_resetGeneration;
+        var navigated = ShowFresh(page);
+        if (_frame is null)
+        {
+            return navigated;
+        }
+
+        // The shell frame keeps its last page while it is hidden. A layout pass after
+        // login can put that page back, so confirm the home page once layout has run.
+        _frame.DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            if (generation != _resetGeneration || _frame is null)
+            {
+                return;
+            }
+
+            if (!_routes.TryGetValue(page, out var targetType))
+            {
+                return;
+            }
+
+            if (_frame.Content?.GetType() != targetType)
+            {
+                ShowFresh(page);
+            }
+            else
+            {
+                _frame.BackStack.Clear();
+                _frame.ForwardStack.Clear();
+            }
+        });
+        return navigated;
+    }
+
+    public void Clear()
+    {
+        _resetGeneration++;
+        if (_frame is null)
+        {
+            return;
+        }
+
+        _frame.BackStack.Clear();
+        _frame.ForwardStack.Clear();
+        if (_frame.Content is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _frame.Content = null;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[NavigationService] Could not clear frame content: {ex.Message}");
+        }
+    }
+
+    private bool ShowFresh(AppPage page)
+    {
+        if (_frame is null || !_routes.TryGetValue(page, out var targetType))
+        {
+            return false;
+        }
+
+        var alreadyThere = _frame.Content?.GetType() == targetType;
+        if (!alreadyThere)
+        {
+            NavigateCore(page, null, new SuppressNavigationTransitionInfo());
+        }
+
+        if (_frame.Content?.GetType() != targetType)
+        {
+            return false;
+        }
+
+        _frame.BackStack.Clear();
+        _frame.ForwardStack.Clear();
+        return true;
+    }
+
+    private bool NavigateCore(AppPage page, object? parameter, NavigationTransitionInfo transition)
     {
         if (_frame is null)
         {
@@ -60,13 +152,14 @@ public sealed class NavigationService : INavigationService
         }
 
         System.Diagnostics.Debug.WriteLine($"[NavigationService] Navigating to {page} ({targetType.Name})...");
-        bool result = _frame.Navigate(targetType, parameter, new DrillInNavigationTransitionInfo());
+        bool result = _frame.Navigate(targetType, parameter, transition);
         System.Diagnostics.Debug.WriteLine($"[NavigationService] Frame.Navigate result: {result}");
         return result;
     }
 
     public void GoBack()
     {
+        _resetGeneration++;
         if (CanGoBack)
             _frame!.GoBack();
     }

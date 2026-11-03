@@ -14,6 +14,9 @@ function normalizeApiBase(rawUrl?: string): string {
     if (!/^https?:\/\//i.test(trimmed)) {
       trimmed = `https://${trimmed}`
     }
+    if (trimmed.toLowerCase().endsWith('/api')) {
+      trimmed = trimmed.slice(0, -4)
+    }
     return trimmed
   }
   return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'

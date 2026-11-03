@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PartFinder.Services;
 using PartFinder.ViewModels;
-using PartFinder.Views.Components;
 
 namespace PartFinder.Views.Pages;
 
@@ -27,92 +26,75 @@ public sealed partial class InventoryPage : Page
 
     private async void OnPageLoaded(object sender, RoutedEventArgs e)
     {
-        await ViewModel.LoadInventoryAsync();
+        if (ViewModel.FormMode == InventoryFormMode.None)
+        {
+            await ViewModel.LoadInventoryAsync();
+        }
     }
 
-    private async void OnAddStockClick(object sender, RoutedEventArgs e)
+    private void OnAddStockClick(object sender, RoutedEventArgs e)
     {
-        await ShowAddNewItemDialogAsync();
+        ItemFormPanel.PrepareForAdd();
+        ViewModel.BeginAddForm();
     }
 
-    private async void OnEditInventoryClick(object sender, RoutedEventArgs e)
+    private void OnEditInventoryClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.DataContext is InventoryItem item)
         {
-            await ShowEditItemDialogAsync(item);
+            ItemFormPanel.PrepareForEdit(item);
+            ViewModel.BeginEditForm(item);
         }
     }
 
-    private XamlRoot? ResolveDialogXamlRoot()
+    private void OnCancelFormClick(object sender, RoutedEventArgs e)
     {
-        if (XamlRoot is not null)
-        {
-            return XamlRoot;
-        }
-
-        if (App.MainAppWindow?.Content is FrameworkElement rootFe)
-        {
-            return rootFe.XamlRoot;
-        }
-
-        return null;
+        ViewModel.CloseForm();
     }
 
-    private async Task ShowAddNewItemDialogAsync()
+    private async void OnSaveFormClick(object sender, RoutedEventArgs e)
     {
-        var xamlRoot = ResolveDialogXamlRoot();
-        if (xamlRoot is null)
+        ViewModel.FormStatusMessage = string.Empty;
+
+        if (ViewModel.FormMode == InventoryFormMode.Add)
         {
-            return;
+            await SaveNewItemAsync();
         }
-
-        var form = new InventoryItemFormPanel();
-        form.PrepareForAdd();
-
-        var dialog = new ContentDialog
+        else if (ViewModel.FormMode == InventoryFormMode.Edit && ViewModel.SelectedItem is not null)
         {
-            Title = "Add New Inventory Item",
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-            Content = form,
-            RequestedTheme = ElementTheme.Light,
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
+            await SaveEditedItemAsync(ViewModel.SelectedItem);
         }
+    }
 
-        var partName = form.PartName;
+    private async Task SaveNewItemAsync()
+    {
+        var partName = ItemFormPanel.PartName;
         if (string.IsNullOrWhiteSpace(partName))
         {
-            await ShowErrorAsync("Part name is required.");
+            ViewModel.FormStatusMessage = "Part name is required.";
             return;
         }
 
-        if (!int.TryParse(form.QuantityText, out var qty) || qty < 0)
+        if (!int.TryParse(ItemFormPanel.QuantityText, out var qty) || qty < 0)
         {
-            await ShowErrorAsync("Quantity must be a valid non-negative number.");
+            ViewModel.FormStatusMessage = "Quantity must be a valid non-negative number.";
             return;
         }
 
-        int.TryParse(form.MinStockText, out var minStock);
-        double.TryParse(form.UnitPriceText, out var unitPrice);
+        int.TryParse(ItemFormPanel.MinStockText, out var minStock);
+        double.TryParse(ItemFormPanel.UnitPriceText, out var unitPrice);
 
         var doc = new InventoryDoc
         {
             PartName = partName,
-            PartId = form.PartId,
-            Category = form.Category,
-            Supplier = form.Supplier,
-            Location = form.Location,
+            PartId = ItemFormPanel.PartId,
+            Category = ItemFormPanel.Category,
+            Supplier = ItemFormPanel.Supplier,
+            Location = ItemFormPanel.Location,
             Quantity = qty,
             MinStock = minStock > 0 ? minStock : 10,
             UnitPrice = unitPrice,
-            Notes = form.Notes,
+            Notes = ItemFormPanel.Notes,
             LastUpdated = DateTime.UtcNow,
         };
 
@@ -130,57 +112,32 @@ public sealed partial class InventoryPage : Page
                 Timestamp = DateTime.UtcNow,
             }).ConfigureAwait(true);
 
+            ViewModel.CloseForm();
             await ViewModel.LoadInventoryAsync().ConfigureAwait(true);
-            await ShowSuccessAsync("Item Added", $"{partName} ({qty} units) saved to inventory.");
+            ViewModel.StatusMessage = $"{partName} ({qty} units) saved to inventory.";
         }
         catch (Exception ex)
         {
-            await ShowErrorAsync($"Failed to save: {ex.Message}");
+            ViewModel.FormStatusMessage = $"Failed to save: {ex.Message}";
         }
     }
 
-    private async Task ShowEditItemDialogAsync(InventoryItem item)
+    private async Task SaveEditedItemAsync(InventoryItem item)
     {
-        var xamlRoot = ResolveDialogXamlRoot();
-        if (xamlRoot is null)
+        if (!int.TryParse(ItemFormPanel.QuantityText, out var newQty) || newQty < 0)
         {
+            ViewModel.FormStatusMessage = "Quantity must be a valid non-negative number.";
             return;
         }
 
-        var form = new InventoryItemFormPanel();
-        form.PrepareForEdit(item);
-
-        var dialog = new ContentDialog
-        {
-            Title = $"Edit: {item.PartName}",
-            PrimaryButtonText = "Update",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-            Content = form,
-            RequestedTheme = ElementTheme.Light,
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        if (!int.TryParse(form.QuantityText, out var newQty) || newQty < 0)
-        {
-            await ShowErrorAsync("Quantity must be a valid non-negative number.");
-            return;
-        }
-
-        int.TryParse(form.MinStockText, out var newMinStock);
-        double.TryParse(form.UnitPriceText, out var newUnitPrice);
+        int.TryParse(ItemFormPanel.MinStockText, out var newMinStock);
+        double.TryParse(ItemFormPanel.UnitPriceText, out var newUnitPrice);
 
         var allDocs = await _inventoryService.GetAllAsync().ConfigureAwait(true);
         var doc = allDocs.FirstOrDefault(d => d.MongoId.ToString() == item.Id);
         if (doc is null)
         {
-            await ShowErrorAsync("Item not found in database.");
+            ViewModel.FormStatusMessage = "Item not found in database.";
             return;
         }
 
@@ -188,8 +145,8 @@ public sealed partial class InventoryPage : Page
         doc.Quantity = newQty;
         doc.MinStock = newMinStock > 0 ? newMinStock : doc.MinStock;
         doc.UnitPrice = newUnitPrice > 0 ? newUnitPrice : doc.UnitPrice;
-        doc.Location = string.IsNullOrWhiteSpace(form.Location) ? doc.Location : form.Location;
-        doc.Supplier = string.IsNullOrWhiteSpace(form.Supplier) ? doc.Supplier : form.Supplier;
+        doc.Location = string.IsNullOrWhiteSpace(ItemFormPanel.Location) ? doc.Location : ItemFormPanel.Location;
+        doc.Supplier = string.IsNullOrWhiteSpace(ItemFormPanel.Supplier) ? doc.Supplier : ItemFormPanel.Supplier;
         doc.LastUpdated = DateTime.UtcNow;
 
         try
@@ -207,52 +164,13 @@ public sealed partial class InventoryPage : Page
                 Timestamp = DateTime.UtcNow,
             }).ConfigureAwait(true);
 
+            ViewModel.CloseForm();
             await ViewModel.LoadInventoryAsync().ConfigureAwait(true);
-            await ShowSuccessAsync("Updated", $"{item.PartName} updated to {newQty} units.");
+            ViewModel.StatusMessage = $"{item.PartName} updated to {newQty} units.";
         }
         catch (Exception ex)
         {
-            await ShowErrorAsync($"Failed to update: {ex.Message}");
+            ViewModel.FormStatusMessage = $"Failed to update: {ex.Message}";
         }
-    }
-
-    private async Task ShowSuccessAsync(string title, string message)
-    {
-        var xamlRoot = ResolveDialogXamlRoot();
-        if (xamlRoot is null)
-        {
-            return;
-        }
-
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = new TextBlock { Text = message, FontSize = 13, TextWrapping = TextWrapping.Wrap },
-            PrimaryButtonText = "OK",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-            RequestedTheme = ElementTheme.Light,
-        };
-        await dialog.ShowAsync();
-    }
-
-    private async Task ShowErrorAsync(string message)
-    {
-        var xamlRoot = ResolveDialogXamlRoot();
-        if (xamlRoot is null)
-        {
-            return;
-        }
-
-        var dialog = new ContentDialog
-        {
-            Title = "Error",
-            Content = new TextBlock { Text = message, FontSize = 13, TextWrapping = TextWrapping.Wrap },
-            PrimaryButtonText = "OK",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = xamlRoot,
-            RequestedTheme = ElementTheme.Light,
-        };
-        await dialog.ShowAsync();
     }
 }

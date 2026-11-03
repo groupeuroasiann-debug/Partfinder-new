@@ -5,6 +5,13 @@ using System.Collections.ObjectModel;
 
 namespace PartFinder.ViewModels;
 
+public enum InventoryFormMode
+{
+    None,
+    Add,
+    Edit,
+}
+
 public partial class InventoryViewModel : ViewModelBase
 {
     private readonly MongoInventoryService _inventoryService;
@@ -28,6 +35,43 @@ public partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private InventoryItem? _selectedItem;
     [ObservableProperty] private string _selectedCategoryFilter = "All categories";
     [ObservableProperty] private string _selectedStatusFilter = "All statuses";
+
+    [ObservableProperty] private InventoryFormMode _formMode = InventoryFormMode.None;
+
+    [ObservableProperty] private string _formTitle = string.Empty;
+
+    [ObservableProperty] private string _formStatusMessage = string.Empty;
+
+    public bool IsListVisible => FormMode == InventoryFormMode.None;
+
+    public bool IsFormVisible => FormMode != InventoryFormMode.None;
+
+    partial void OnFormModeChanged(InventoryFormMode value)
+    {
+        OnPropertyChanged(nameof(IsListVisible));
+        OnPropertyChanged(nameof(IsFormVisible));
+        FormStatusMessage = string.Empty;
+    }
+
+    public void BeginAddForm()
+    {
+        FormTitle = "Add inventory item";
+        FormMode = InventoryFormMode.Add;
+    }
+
+    public void BeginEditForm(InventoryItem item)
+    {
+        SelectedItem = item;
+        FormTitle = $"Edit — {item.PartName}";
+        FormMode = InventoryFormMode.Edit;
+    }
+
+    public void CloseForm()
+    {
+        FormMode = InventoryFormMode.None;
+        FormStatusMessage = string.Empty;
+        SelectedItem = null;
+    }
 
     public IReadOnlyList<string> CategoryFilterOptions { get; } =
         ["All categories", "Engine", "Electrical", "Hardware", "General"];

@@ -4,7 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:components="using:PartFinder.Views.Components"
     xmlns:converters="using:PartFinder.Converters"
-    xmlns:viewmodels="using:PartFinder.ViewModels">
+    xmlns:viewmodels="using:PartFinder.ViewModels"
+    x:Name="PageRoot">
     <Page.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -12,10 +13,11 @@
                 <ResourceDictionary Source="ms-appx:///Styles/Controls.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
         </ResourceDictionary>
     </Page.Resources>
 
-    <Grid Background="Transparent" Transitions="{StaticResource LuxuryPanelTransitions}">
+    <Grid Background="Transparent" Transitions="{StaticResource LuxuryPanelTransitions}" DataContext="{x:Bind ViewModel, Mode=OneWay}">
         <VisualStateManager.VisualStateGroups>
             <VisualStateGroup x:Name="AdaptiveStates">
                 <VisualState x:Name="WideState">
@@ -50,7 +52,11 @@
                 </VisualState>
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Background="Transparent">
+        <ScrollViewer
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Auto"
+            Background="Transparent"
+            Visibility="{x:Bind ViewModel.IsListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
             <StackPanel Padding="24,20,24,32" Spacing="18" HorizontalAlignment="Stretch">
                 <StackPanel.ChildrenTransitions>
                     <StaticResource ResourceKey="LuxuryListTransitions" />
@@ -305,6 +311,55 @@
                     </StackPanel>
                 </Border>
 
+            </StackPanel>
+        </ScrollViewer>
+
+        <ScrollViewer
+            VerticalScrollBarVisibility="Auto"
+            Background="Transparent"
+            Visibility="{x:Bind ViewModel.IsFormVisible, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+            <StackPanel Padding="24,20,24,32" Spacing="16" MaxWidth="900" HorizontalAlignment="Stretch">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        Style="{StaticResource GhostButtonStyle}"
+                        Click="OnCancelFormClick"
+                        ToolTipService.ToolTip="Back to inventory">
+                        <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                    </Button>
+                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Text="INVENTORY" FontSize="10" Foreground="{StaticResource AccentPrimaryBrush}" CharacterSpacing="100" FontWeight="SemiBold" />
+                        <TextBlock Text="{x:Bind ViewModel.FormTitle, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock
+                    Text="{x:Bind ViewModel.FormStatusMessage, Mode=OneWay}"
+                    FontSize="12"
+                    Foreground="{StaticResource DangerBrush}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind ViewModel.FormStatusMessage, Mode=OneWay, Converter={StaticResource StringToVisibilityConverter}}" />
+
+                <Border
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20">
+                    <components:InventoryItemFormPanel x:Name="ItemFormPanel" />
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Style="{StaticResource PrimaryButtonStyle}" Click="OnSaveFormClick">
+                        <TextBlock Text="Save" FontSize="13" />
+                    </Button>
+                    <Button Style="{StaticResource OutlinedButtonStyle}" Click="OnCancelFormClick">
+                        <TextBlock Text="Cancel" FontSize="13" />
+                    </Button>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </Grid>

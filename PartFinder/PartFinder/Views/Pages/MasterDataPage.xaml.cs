@@ -20,7 +20,7 @@ public sealed partial class MasterDataPage : Page
 {
     private const double GridCellTextWidth = 160d;
     private const double GridCellHorizontalPadding = 10d;
-    private const double ActionPanelWidth = 320;
+    private const double ActionPanelWidth = 360;
     private MasterDataViewModel? _viewModel;
     private readonly IExcelTemplateService _excelTemplateService;
     private readonly ActivityLogger _activity;
@@ -599,7 +599,7 @@ public sealed partial class MasterDataPage : Page
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.WrapWholeWords,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0),
         };
         box.SetBinding(
@@ -753,63 +753,26 @@ public sealed partial class MasterDataPage : Page
         CloseActionPanel();
     }
 
-    private void OnActionOverlayTapped(object sender, TappedRoutedEventArgs e)
-    {
-        CloseActionPanel();
-    }
-
     private void OpenActionPanel()
     {
-        if (ActionResultsPanel is null || ActionResultsTransform is null || ActionResultsOverlay is null)
+        if (ActionResultsPanel is null || ActionResultsColumn is null)
         {
             return;
         }
 
+        ActionResultsColumn.Width = new GridLength(ActionPanelWidth);
         ActionResultsPanel.Visibility = Visibility.Visible;
-        ActionResultsOverlay.Visibility = Visibility.Visible;
-
-        var animation = new DoubleAnimation
-        {
-            Duration = TimeSpan.FromMilliseconds(200),
-            From = ActionPanelWidth,
-            To = 0,
-            EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 },
-            EnableDependentAnimation = true,
-        };
-        Storyboard.SetTarget(animation, ActionResultsTransform);
-        Storyboard.SetTargetProperty(animation, "X");
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        storyboard.Begin();
     }
 
     private void CloseActionPanel()
     {
-        if (ActionResultsPanel is null || ActionResultsTransform is null || ActionResultsOverlay is null)
+        if (ActionResultsPanel is null || ActionResultsColumn is null)
         {
             return;
         }
 
-        var animation = new DoubleAnimation
-        {
-            Duration = TimeSpan.FromMilliseconds(200),
-            From = 0,
-            To = ActionPanelWidth,
-            EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 },
-            EnableDependentAnimation = true,
-        };
-        Storyboard.SetTarget(animation, ActionResultsTransform);
-        Storyboard.SetTargetProperty(animation, "X");
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        storyboard.Completed += (_, _) =>
-        {
-            ActionResultsPanel.Visibility = Visibility.Collapsed;
-            ActionResultsOverlay.Visibility = Visibility.Collapsed;
-        };
-        storyboard.Begin();
+        ActionResultsPanel.Visibility = Visibility.Collapsed;
+        ActionResultsColumn.Width = new GridLength(0);
     }
 
     private static List<TemplateFieldDefinition> ResolveDisplayFields(
@@ -968,46 +931,33 @@ public sealed partial class MasterDataPage : Page
             .ConfigureAwait(true);
 
         var row = rows.FirstOrDefault();
-        var stack = new StackPanel { Spacing = 10 };
+
+        ActionTitleText.Text = $"Linked — {template.Name}";
+        ActionCountText.Text = row is null ? "Record details" : template.Name;
+        _actionResultRows.Clear();
+
         if (row is null)
         {
-            stack.Children.Add(
-                new TextBlock
-                {
-                    Text = "That row no longer exists. Clear the link or pick another row.",
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                });
+            _actionResultRows.Add(
+                new ActionResultDisplayItem(
+                    "Missing row",
+                    new[] { "That row no longer exists. Clear the link or pick another row." }));
         }
         else
         {
-            foreach (var f in template.Fields.OrderBy(x => x.DisplayOrder))
-            {
-                var val = row.Values.TryGetValue(f.Key, out var v) ? v : string.Empty;
-                stack.Children.Add(
-                    new TextBlock
-                    {
-                        Text = $"{f.Label}: {val}",
-                        TextWrapping = TextWrapping.WrapWholeWords,
-                    });
-            }
+            var lines = template.Fields
+                .OrderBy(x => x.DisplayOrder)
+                .Select(f =>
+                {
+                    var val = row.Values.TryGetValue(f.Key, out var v) ? v : string.Empty;
+                    return $"{f.Label}: {val}";
+                })
+                .ToList();
+            _actionResultRows.Add(new ActionResultDisplayItem("Linked record", lines));
         }
 
-        var scroll = new ScrollViewer
-        {
-            MaxHeight = 420,
-            Content = stack,
-        };
-
-        var dlg = new ContentDialog
-        {
-            Title = $"Linked — {template.Name}",
-            Content = scroll,
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
-
-        _ = await dlg.ShowAsync();
+        ActionRowsListView.ItemsSource = _actionResultRows;
+        OpenActionPanel();
     }
 
     private static string FormatRowDisplay(MasterDataRowRecord row, string displayKey)
