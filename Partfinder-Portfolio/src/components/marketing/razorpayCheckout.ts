@@ -1,4 +1,4 @@
-import { readApiMessage, setupApiBase } from './accountSession'
+import { buildApiUrl, readFetchErrorMessage } from './accountSession'
 
 export type LicenceCredentials = {
   organisationName: string
@@ -41,6 +41,16 @@ declare global {
 
 const SCRIPT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (!text.trim()) return null
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
+  }
+}
+
 let scriptPromise: Promise<void> | null = null
 
 function loadRazorpayScript() {
@@ -72,14 +82,16 @@ export async function startLicencePayment(input: {
   email: string
   mobile: string
 }): Promise<LicenceCredentials> {
-  const response = await fetch(`${setupApiBase()}/api/public/license-purchase/checkout`, {
+  const response = await fetch(buildApiUrl('/public/license-purchase/checkout'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
-  const data: unknown = await response.json().catch(() => null)
+  const data = await parseResponseBody(response)
   if (!response.ok) {
-    throw new Error(readApiMessage(data, 'Could not start checkout.'))
+    throw new Error(
+      readFetchErrorMessage(response, data, 'Could not start checkout. Is the API running with licence purchase enabled?'),
+    )
   }
   const session = data as CheckoutSession & { ok?: boolean; keyId?: string; orderId?: string }
   if (!session.keyId || !session.orderId) {
@@ -124,7 +136,7 @@ export async function startLicencePayment(input: {
 }
 
 async function verifyLicencePayment(payment: RazorpayHandlerResponse): Promise<LicenceCredentials> {
-  const response = await fetch(`${setupApiBase()}/api/public/license-purchase/verify`, {
+  const response = await fetch(buildApiUrl('/public/license-purchase/verify'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -133,9 +145,9 @@ async function verifyLicencePayment(payment: RazorpayHandlerResponse): Promise<L
       razorpaySignature: payment.razorpay_signature,
     }),
   })
-  const data: unknown = await response.json().catch(() => null)
+  const data = await parseResponseBody(response)
   if (!response.ok) {
-    throw new Error(readApiMessage(data, 'Could not verify payment.'))
+    throw new Error(readFetchErrorMessage(response, data, 'Could not verify payment.'))
   }
   const result = data as LicenceCredentials & { ok?: boolean }
   if (!result.orgCode || !result.temporaryPassword) {

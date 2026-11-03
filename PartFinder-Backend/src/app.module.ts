@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MongooseModule } from '@nestjs/mongoose';
-import { join } from 'path';
 import { AppController } from './app.controller';
+import { backendEnvFilePaths } from './config/backend-env';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { assertMongoUri, normalizeMongoUri } from './mongo-uri';
@@ -29,7 +29,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     EventEmitterModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [join(process.cwd(), '.env')],
+      envFilePath: backendEnvFilePaths(),
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
