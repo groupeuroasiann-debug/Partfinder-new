@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { setupApiBase } from './accountSession'
+import { buildApiUrl, setupApiBase } from './accountSession'
 import { Icon, MarketingFrame, STORE_URL } from './SiteChrome'
 
 type ResourceLink = {
@@ -183,7 +183,7 @@ function PlatformStatusPanel() {
     let cancelled = false
     ;(async () => {
       try {
-        const response = await fetch(`${setupApiBase()}/api/public/platform/maintenance`)
+        const response = await fetch(buildApiUrl('/public/platform/maintenance'))
         const data = (await response.json().catch(() => null)) as {
           active?: boolean
           maintenanceUntil?: string

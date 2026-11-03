@@ -1,9 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { buildApiUrl } from './accountSession'
 import { Icon, MarketingFrame } from './SiteChrome'
 import { SELF_SERVE_PRICE_LABEL } from './pricing.constants'
 import { startLicencePayment, type LicenceCredentials } from './razorpayCheckout'
+
+type CheckoutStatus = {
+  ready?: boolean
+  enabled?: boolean
+  configured?: boolean
+  testMode?: boolean | null
+  priceLabel?: string
+  message?: string | null
+}
 
 const fieldClass =
   'w-full h-11 px-3 bg-surface-container-lowest rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary border-0'
@@ -15,6 +25,25 @@ export function GetLicencePage() {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const [credentials, setCredentials] = useState<LicenceCredentials | null>(null)
+  const [checkoutStatus, setCheckoutStatus] = useState<CheckoutStatus | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const response = await fetch(buildApiUrl('/public/license-purchase/status'))
+        const data = (await response.json().catch(() => null)) as CheckoutStatus | null
+        if (!cancelled && response.ok && data) {
+          setCheckoutStatus(data)
+        }
+      } catch {
+        if (!cancelled) setCheckoutStatus({ ready: false, enabled: false, configured: false })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -112,8 +141,24 @@ export function GetLicencePage() {
               >
                 <div className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest px-space-md py-space-sm flex items-center justify-between gap-space-md">
                   <span className="font-label-md text-label-md text-on-surface">Licence fee</span>
-                  <span className="font-headline-sm text-headline-sm text-primary font-bold">{SELF_SERVE_PRICE_LABEL}</span>
+                  <span className="font-headline-sm text-headline-sm text-primary font-bold">
+                    {checkoutStatus?.priceLabel ?? SELF_SERVE_PRICE_LABEL}
+                  </span>
                 </div>
+                {checkoutStatus && checkoutStatus.ready === false ? (
+                  <div className="flex items-start gap-2 rounded-lg bg-surface-container text-on-surface-variant px-3 py-2 font-body-sm text-body-sm border border-outline-variant/40">
+                    <Icon name="info" className="text-[18px] shrink-0" />
+                    <span>
+                      {checkoutStatus.message ??
+                        'Licence checkout is not ready. Start PartFinder-Backend and configure Razorpay in PartFinder-Backend/.env.'}
+                    </span>
+                  </div>
+                ) : null}
+                {checkoutStatus?.ready && checkoutStatus.testMode ? (
+                  <p className="font-caption text-caption text-outline m-0">
+                    Razorpay Test Mode — use test cards from the Razorpay docs; no real money is charged.
+                  </p>
+                ) : null}
                 <div>
                   <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="licence-org">
                     Organisation name

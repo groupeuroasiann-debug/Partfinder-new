@@ -4,9 +4,9 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import {
   type AccountSession,
   readAccountSession,
+  buildApiUrl,
   readApiMessage,
   saveAccountSession,
-  setupApiBase,
 } from './accountSession'
 import { Icon, MarketingFrame } from './SiteChrome'
 
@@ -54,7 +54,7 @@ export function AccountSignInPage() {
     setError('')
     setPending(true)
     try {
-      const response = await fetch(`${setupApiBase()}/api/public/setup/invite-login`, {
+      const response = await fetch(buildApiUrl('/public/setup/invite-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,7 +108,7 @@ export function AccountSignInPage() {
     setError('')
     setPending(true)
     try {
-      const response = await fetch(`${setupApiBase()}/api/public/setup/change-password`, {
+      const response = await fetch(buildApiUrl('/public/setup/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
