@@ -1,10 +1,18 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { MongoConnectivityExceptionFilter } from './common/filters/mongo-connectivity-exception.filter';
+import { backendEnvFilePaths } from './config/backend-env';
 import { AggregatingLogger } from './debug/aggregating-logger';
 import { DebugLogsService } from './debug/debug-logs.service';
+import {
+  isLicensePurchaseEnabled,
+  isRazorpayConfigured,
+  isRazorpayTestKeyId,
+  razorpayConfigurationMessage,
+  readRazorpayKeys,
+} from './license-purchase/license-purchase.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -40,5 +48,16 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT') ?? 3000;
   await app.listen(port);
+
+  const boot = new Logger('Bootstrap');
+  boot.log(`Env files: ${backendEnvFilePaths().join(', ')}`);
+  const { keyId } = readRazorpayKeys(config);
+  boot.log(
+    `Licence checkout: enabled=${isLicensePurchaseEnabled(config)} razorpayConfigured=${isRazorpayConfigured(config)} keyId=${keyId ? (isRazorpayTestKeyId(keyId) ? 'test' : 'live') : 'missing'}`,
+  );
+  const razorpayNote = razorpayConfigurationMessage(config);
+  if (razorpayNote) {
+    boot.warn(razorpayNote);
+  }
 }
 bootstrap();

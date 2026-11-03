@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { StartLicenseCheckoutDto } from './dto/start-license-checkout.dto';
 import { VerifyLicensePaymentDto } from './dto/verify-license-payment.dto';
 import { LicensePurchaseService } from './license-purchase.service';
@@ -7,6 +7,12 @@ import { LicensePurchaseService } from './license-purchase.service';
 @Controller('public/license-purchase')
 export class LicensePurchaseController {
   constructor(private readonly licensePurchase: LicensePurchaseService) {}
+
+  /** Whether checkout is enabled and Razorpay credentials are present (no secrets returned). */
+  @Get('status')
+  status() {
+    return this.licensePurchase.getPublicStatus();
+  }
 
   @Post('checkout')
   startCheckout(@Body() dto: StartLicenseCheckoutDto) {

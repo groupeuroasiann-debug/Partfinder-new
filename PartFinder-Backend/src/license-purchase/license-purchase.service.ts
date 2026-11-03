@@ -6,17 +6,28 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import { createHmac, timingSafeEqual } from 'crypto';
+import Razorpay from 'razorpay';
+import { verifyRazorpayCheckoutSignature } from './license-purchase.signature';
 import { Model } from 'mongoose';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { StartLicenseCheckoutDto } from './dto/start-license-checkout.dto';
 import { VerifyLicensePaymentDto } from './dto/verify-license-payment.dto';
 import {
+  isLicensePurchaseEnabled,
+  isRazorpayConfigured,
+  isRazorpayTestKeyId,
+  razorpayConfigurationMessage,
+  readRazorpayKeys,
+} from './license-purchase.config';
+import {
   LicensePurchase,
   LicensePurchaseDocument,
 } from './schemas/license-purchase.schema';
 
-/** PartFinder self-serve licence price (USD). */
+/**
+ * PartFinder self-serve licence: $10.00 USD.
+ * Razorpay `amount` for USD is in cents (1000 = $10.00). Do not use INR paise semantics.
+ */
 export const LICENSE_PRICE_USD_CENTS = 1000;
 
 @Injectable()
@@ -28,25 +39,51 @@ export class LicensePurchaseService {
     private readonly config: ConfigService,
   ) {}
 
+  getPublicStatus() {
+    const enabled = isLicensePurchaseEnabled(this.config);
+    const configured = isRazorpayConfigured(this.config);
+    const { keyId } = readRazorpayKeys(this.config);
+    const configMessage = razorpayConfigurationMessage(this.config);
+    return {
+      ok: true as const,
+      enabled,
+      configured,
+      ready: enabled && configured,
+      /** Public Razorpay Key ID only — never expose RAZORPAY_KEY_SECRET to clients. */
+      keyId: configured ? keyId : null,
+      testMode: configured ? isRazorpayTestKeyId(keyId) : null,
+      amount: LICENSE_PRICE_USD_CENTS,
+      currency: 'USD',
+      priceLabel: '$10 USD',
+      message: configMessage,
+    };
+  }
+
   async startCheckout(dto: StartLicenseCheckoutDto) {
-    const { keyId, keySecret } = this.razorpayKeys();
+    this.assertCheckoutAvailable();
+    const { keyId } = readRazorpayKeys(this.config);
+    const razorpay = this.razorpayClient();
+
     const organisationName = dto.organisationName.trim();
     const email = dto.email.trim().toLowerCase();
     const mobile = dto.mobile.trim();
 
     const receipt = `pf-lic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const order = await this.createRazorpayOrder({
-      keyId,
-      keySecret,
-      amountCents: LICENSE_PRICE_USD_CENTS,
-      currency: 'USD',
-      receipt,
-      notes: {
-        organisationName,
-        email,
-        mobile,
-      },
-    });
+    let order: { id: string };
+    try {
+      order = (await razorpay.orders.create({
+        amount: LICENSE_PRICE_USD_CENTS,
+        currency: 'USD',
+        receipt,
+        notes: {
+          organisationName,
+          email,
+          mobile,
+        },
+      })) as { id: string };
+    } catch (error) {
+      throw this.mapRazorpayError(error);
+    }
 
     const orderId = String(order.id);
     await this.purchaseModel.create({
@@ -78,13 +115,16 @@ export class LicensePurchaseService {
   }
 
   async verifyPayment(dto: VerifyLicensePaymentDto) {
-    const { keySecret } = this.razorpayKeys();
+    this.assertCheckoutAvailable();
+    const { keySecret } = readRazorpayKeys(this.config);
     const orderId = dto.razorpayOrderId.trim();
     const paymentId = dto.razorpayPaymentId.trim();
     const signature = dto.razorpaySignature.trim();
 
-    if (!this.verifyCheckoutSignature(orderId, paymentId, signature, keySecret)) {
-      throw new BadRequestException('Payment verification failed.');
+    if (!verifyRazorpayCheckoutSignature(orderId, paymentId, signature, keySecret)) {
+      throw new BadRequestException(
+        'Payment signature verification failed. The licence was not activated.',
+      );
     }
 
     const purchase = await this.purchaseModel.findOne({ razorpayOrderId: orderId }).exec();
@@ -110,6 +150,16 @@ export class LicensePurchaseService {
       await purchase.save();
     }
 
+    if (purchase.status === 'fulfilled' && purchase.orgCode && purchase.temporaryPassword) {
+      return {
+        ok: true as const,
+        organisationName: purchase.organisationName,
+        email: purchase.email,
+        orgCode: purchase.orgCode,
+        temporaryPassword: purchase.temporaryPassword,
+      };
+    }
+
     if (!purchase.orgCode || !purchase.temporaryPassword) {
       const provisioned = await this.organizations.createSelfServeLicense({
         name: purchase.organisationName,
@@ -132,101 +182,84 @@ export class LicensePurchaseService {
     };
   }
 
-  private razorpayKeys() {
-    const keyId = this.config.get<string>('RAZORPAY_KEY_ID')?.trim() ?? '';
-    const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET')?.trim() ?? '';
-    if (!keyId || !keySecret) {
-      throw new ServiceUnavailableException(
-        'Online licence payment is not configured. Contact support.',
-      );
-    }
-    return { keyId, keySecret };
-  }
-
-  private verifyCheckoutSignature(
-    orderId: string,
-    paymentId: string,
-    signature: string,
-    keySecret: string,
-  ) {
-    const expected = createHmac('sha256', keySecret)
-      .update(`${orderId}|${paymentId}`)
-      .digest('hex');
-    try {
-      const a = Buffer.from(expected, 'utf8');
-      const b = Buffer.from(signature, 'utf8');
-      return a.length === b.length && timingSafeEqual(a, b);
-    } catch {
-      return false;
+  private assertCheckoutAvailable() {
+    const message = razorpayConfigurationMessage(this.config);
+    if (message) {
+      throw new ServiceUnavailableException(message);
     }
   }
 
-  private async createRazorpayOrder(input: {
-    keyId: string;
-    keySecret: string;
-    amountCents: number;
-    currency: string;
-    receipt: string;
-    notes: Record<string, string>;
-  }) {
-    const auth = Buffer.from(`${input.keyId}:${input.keySecret}`).toString('base64');
-    const response = await fetch('https://api.razorpay.com/v1/orders', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: input.amountCents,
-        currency: input.currency,
-        receipt: input.receipt,
-        notes: input.notes,
-      }),
-    });
-    const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
+  private razorpayClient() {
+    const { keyId, keySecret } = readRazorpayKeys(this.config);
+    return new Razorpay({ key_id: keyId, key_secret: keySecret });
+  }
+
+  private mapRazorpayError(error: unknown): BadRequestException | InternalServerErrorException {
+    if (error && typeof error === 'object') {
+      const err = error as {
+        statusCode?: number;
+        error?: { description?: string; reason?: string; code?: string };
+        description?: string;
+      };
+      if (err.statusCode === 401) {
+        return new BadRequestException(
+          'Razorpay rejected the API credentials. The Key Secret in PartFinder-Backend/.env must be the secret shown for the same Test Mode Key ID (Dashboard → API Keys → Reveal). Random or placeholder secrets will not work.',
+        );
+      }
       const message =
-        body && typeof body === 'object' && 'error' in body
-          ? String((body as { error?: { description?: string } }).error?.description ?? '')
-          : '';
-      throw new BadRequestException(
-        message || 'Could not start payment. Check Razorpay currency settings (USD).',
-      );
+        err.error?.description ||
+        err.error?.reason ||
+        err.description ||
+        '';
+      if (message) {
+        const lower = message.toLowerCase();
+        if (lower.includes('currency') || err.error?.code === 'BAD_REQUEST_ERROR') {
+          return new BadRequestException(
+            lower.includes('currency')
+              ? `${message} PartFinder charges $10 USD — enable USD / international payments on your Razorpay account before checkout.`
+              : message,
+          );
+        }
+        return new BadRequestException(message);
+      }
     }
-    const order = body as { id?: string };
-    if (!order?.id) {
-      throw new InternalServerErrorException('Invalid response from payment provider.');
-    }
-    return order as { id: string };
+    return new InternalServerErrorException(
+      'Could not create a Razorpay order. Check API credentials and that your Razorpay account supports USD for this amount ($10.00).',
+    );
   }
 
   private async assertPaymentCaptured(paymentId: string, orderId: string) {
-    const { keyId, keySecret } = this.razorpayKeys();
-    const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-    const response = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
-    const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new BadRequestException('Could not confirm payment status.');
-    }
-    const payment = body as {
+    const razorpay = this.razorpayClient();
+    let payment: {
       status?: string;
       order_id?: string;
       amount?: number;
       currency?: string;
     };
+    try {
+      payment = (await razorpay.payments.fetch(paymentId)) as typeof payment;
+    } catch {
+      throw new BadRequestException(
+        'Could not confirm payment with Razorpay. The licence was not activated.',
+      );
+    }
     if (payment.status !== 'captured' && payment.status !== 'authorized') {
-      throw new BadRequestException('Payment was not completed.');
+      throw new BadRequestException(
+        `Payment was not completed (status: ${payment.status ?? 'unknown'}). The licence was not activated.`,
+      );
     }
     if (payment.order_id !== orderId) {
-      throw new BadRequestException('Payment does not match this order.');
+      throw new BadRequestException(
+        'Payment does not match this checkout order. The licence was not activated.',
+      );
     }
     if (
       payment.amount !== LICENSE_PRICE_USD_CENTS ||
       (payment.currency ?? '').toUpperCase() !== 'USD'
     ) {
-      throw new BadRequestException('Payment amount does not match the licence price.');
+      throw new BadRequestException(
+        `Payment amount or currency does not match the $10 USD licence price (got ${payment.amount ?? '?'} ${payment.currency ?? '?'}). The licence was not activated.`,
+      );
     }
   }
 }
