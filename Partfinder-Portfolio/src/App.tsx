@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
+import { AccountSignInPage } from './components/marketing/AccountSignInPage'
 import { AdminLoginView } from './components/marketing/AdminLoginView'
+import { GetLicencePage } from './components/marketing/GetLicencePage'
 import { SolutionsPage } from './components/marketing/SolutionsPage'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
@@ -73,6 +75,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<SolutionsPage />} />
+      <Route path="/get-licence" element={<GetLicencePage />} />
+      <Route path="/sign-in" element={<AccountSignInPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
       <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
