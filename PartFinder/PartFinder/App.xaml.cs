@@ -102,6 +102,7 @@ namespace PartFinder
             services.AddTransient<TemplatesViewModel>();
             services.AddTransient<ViewDataViewModel>();
             services.AddTransient<WorksheetRelationsViewModel>();
+            services.AddTransient<LinkedTemplatesViewModel>();
             services.AddTransient<MasterDataViewModel>();
             services.AddTransient<SettingsViewModel>();
             services.AddTransient<UserManagementViewModel>();
@@ -120,6 +121,7 @@ namespace PartFinder
             services.AddTransient<TemplatesPage>();
             services.AddTransient<ViewDataPage>();
             services.AddTransient<WorksheetRelationsPage>();
+            services.AddTransient<LinkedTemplatesPage>();
             services.AddTransient<SettingsPage>();
             services.AddTransient<UserManagementPage>();
             services.AddTransient<QrCodeManagerPage>();

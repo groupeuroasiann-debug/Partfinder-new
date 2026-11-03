@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Text.Json;
 using Windows.Foundation;
 using Windows.Graphics;
+using WinRT.Interop;
 
 namespace PartFinder;
 
@@ -118,7 +119,7 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var windowId = AppWindow.Id;
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowNative.GetWindowHandle(this));
             var inputSource = InputNonClientPointerSource.GetForWindowId(windowId);
             if (inputSource is null)
             {

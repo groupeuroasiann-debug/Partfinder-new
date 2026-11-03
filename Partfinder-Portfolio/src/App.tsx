@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
 import { AccountSignInPage } from './components/marketing/AccountSignInPage'
 import { AdminLoginView } from './components/marketing/AdminLoginView'
@@ -11,26 +11,18 @@ import { PricingPage } from './components/marketing/PricingPage'
 import { ResourcesPage } from './components/marketing/ResourcesPage'
 import { ProductsPage } from './components/marketing/ProductsPage'
 import { SolutionsPage } from './components/marketing/SolutionsPage'
+import { apiBase } from './config/apiBase'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
-function normalizeApiBase(rawUrl?: string): string {
-  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim() !== '') {
-    let trimmed = rawUrl.trim().replace(/\/$/, '')
-    if (!/^https?:\/\//i.test(trimmed)) {
-      trimmed = `https://${trimmed}`
-    }
-    // Portfolio calls `${apiBase}/api/...` — strip a trailing /api from env misconfiguration.
-    if (trimmed.toLowerCase().endsWith('/api')) {
-      trimmed = trimmed.slice(0, -4)
-    }
-    return trimmed
-  }
-  return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
+function isAdminLoginPath(pathname: string): boolean {
+  return (
+    pathname === '/admin' ||
+    pathname === '/admin/' ||
+    pathname === '/admin/login' ||
+    pathname === '/login'
+  )
 }
-
-/** In dev, prefer same-origin `/api` (Vite proxy) unless VITE_API_URL is set — avoids stale SW/caches to :3000. */
-const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 function parseApiErrorMessage(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -66,12 +58,7 @@ function authJsonHeaders(): HeadersInit {
 }
 
 function postLoginPath(pathname: string): string {
-  if (
-    pathname === '/admin' ||
-    pathname === '/admin/' ||
-    pathname === '/admin/login' ||
-    pathname === '/login'
-  ) {
+  if (isAdminLoginPath(pathname)) {
     return '/admin/dashboard'
   }
   if (pathname.startsWith('/admin/')) {
@@ -91,35 +78,18 @@ function App() {
       <Route path="/resources" element={<ResourcesPage />} />
       <Route path="/get-licence" element={<GetLicencePage />} />
       <Route path="/sign-in" element={<AccountSignInPage />} />
-      <Route path="/dashboard" element={<PublicDashboardPage />} />
-      <Route path="/login" element={<Navigate to="/admin" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
+      {/* Hidden admin URLs — not linked from marketing; open by direct address only */}
+      <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/register" element={<Navigate to="/admin/register" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
-      <Route path="/register" element={<AdminRegisterPage />} />
+      <Route path="/admin/login" element={<AdminPortalPage />} />
+      <Route path="/admin" element={<AdminPortalPage />} />
       <Route path="/admin/*" element={<AdminPortalPage />} />
-      <Route path="/home" element={<Navigate to="/dashboard" replace />} />
       <Route path="/test" element={<R4a />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
-  )
-}
-
-function PublicDashboardPage() {
-  return (
-    <main className="page">
-      <header className="hero">
-        <p className="badge">PartFinder Dashboard</p>
-        <h1>Everyone can view the live platform dashboard</h1>
-        <p className="sub">
-          See the headline metrics and open the admin area when you need to manage the platform.
-        </p>
-          <div className="actions">
-          <Link to="/admin/dashboard" className="btn-primary">
-            Open Dashboard
-          </Link>
-        </div>
-      </header>
-      <DashboardSection />
-    </main>
   )
 }
 
@@ -155,18 +125,12 @@ function AdminPortalPage() {
   const [loginPending, setLoginPending] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const isPublicDashboardRoute = location.pathname === '/dashboard'
-
-  const isLoginRoute =
-    location.pathname === '/admin' ||
-    location.pathname === '/admin/' ||
-    location.pathname === '/admin/login' ||
-    location.pathname === '/login'
+  const isLoginRoute = isAdminLoginPath(location.pathname)
 
   const handleSessionExpired = useCallback(() => {
     window.localStorage.removeItem(ADMIN_TOKEN_KEY)
     setAuthState('guest')
-    navigate('/admin', { replace: true })
+    navigate('/admin/login', { replace: true })
   }, [navigate])
 
   useEffect(() => {
@@ -245,36 +209,21 @@ function AdminPortalPage() {
     )
   }
 
-  if (isLoginRoute || (!isAuthenticated && !isPublicDashboardRoute)) {
+  if (isAuthenticated && isLoginRoute) {
+    return <Navigate to="/admin/dashboard" replace />
+  }
+
+  if (!isAuthenticated) {
     return (
       <AdminLoginView
         email={email}
         password={password}
         error={error}
         loginPending={loginPending}
-        isAuthenticated={isAuthenticated}
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onSubmit={handleLogin}
       />
-    )
-  }
-
-  if (!isAuthenticated && isPublicDashboardRoute) {
-    return (
-      <main className="page">
-        <header className="hero">
-          <p className="badge">Public Dashboard</p>
-          <h1>PartFinder platform overview</h1>
-          <p className="sub">This dashboard is visible to anyone without signing in.</p>
-          <div className="actions">
-            <Link to="/admin" className="btn-primary">
-              Admin Login
-            </Link>
-          </div>
-        </header>
-        <DashboardSection />
-      </main>
     )
   }
 
@@ -329,7 +278,7 @@ function AdminPortalPage() {
           onClick={() => {
             window.localStorage.removeItem(ADMIN_TOKEN_KEY)
             setAuthState('guest')
-            navigate('/admin', { replace: true })
+            navigate('/admin/login', { replace: true })
           }}
         >
           Logout

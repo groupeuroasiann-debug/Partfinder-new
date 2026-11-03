@@ -2,27 +2,12 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AdminRegisterView } from './marketing/AdminRegisterView'
+import { apiBase } from '../config/apiBase'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 const GATE_SESSION_KEY = 'pf_admin_gate_unlocked'
 const DEFAULT_GATE_PASSWORD = 'J@yandra06'
 const ACCEPTED_GATE_PASSWORDS = ['J@yandra06', 'j@yandra@06', 'j@yandra06']
-
-function normalizeApiBase(rawUrl?: string): string {
-  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim() !== '') {
-    let trimmed = rawUrl.trim().replace(/\/$/, '')
-    if (!/^https?:\/\//i.test(trimmed)) {
-      trimmed = `https://${trimmed}`
-    }
-    if (trimmed.toLowerCase().endsWith('/api')) {
-      trimmed = trimmed.slice(0, -4)
-    }
-    return trimmed
-  }
-  return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
-}
-
-const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 function parseApiErrorMessage(body: unknown): string {
   if (!body || typeof body !== 'object') {

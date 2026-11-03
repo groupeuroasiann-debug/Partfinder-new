@@ -155,7 +155,7 @@
                     FontWeight="SemiBold"
                     Foreground="{StaticResource TextPrimaryBrush}" />
                 <TextBlock
-                    Text="Connect columns between templates to enable cross-template lookups and data enrichment in your inventory explorer."
+                    Text="Connect columns between templates to enable cross-template lookups and data enrichment. To browse linked data, use Linked Templates in the sidebar."
                     FontSize="12"
                     Foreground="{StaticResource TextSecondaryBrush}"
                     TextWrapping="WrapWholeWords" />
@@ -185,8 +185,7 @@
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════
-             ROW 1 — RELATIONS CHIP STRIP (NEW)
-             Horizontal scrollable list of saved relations
+             ROW 1 — RELATIONS CHIP STRIP
         ════════════════════════════════════════════════════════════════ -->
         <Border
             x:Name="ChipStrip"

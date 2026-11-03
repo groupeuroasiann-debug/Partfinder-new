@@ -372,3 +372,19 @@ export function MarketingFrame({ children }: { children: ReactNode }) {
     </div>
   )
 }
+
+/** Admin login/register — no marketing nav (URLs are typed directly). */
+export function AdminFrame({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    document.documentElement.classList.add('pf-site')
+    return () => {
+      document.documentElement.classList.remove('pf-site')
+    }
+  }, [])
+
+  return (
+    <div className="pf-marketing min-h-screen bg-background font-body-md text-on-surface">
+      {children}
+    </div>
+  )
+}

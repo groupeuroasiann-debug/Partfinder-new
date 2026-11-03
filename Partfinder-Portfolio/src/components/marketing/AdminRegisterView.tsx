@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon, MarketingFrame } from './SiteChrome'
+import { AdminFrame, Icon } from './SiteChrome'
 
 const fieldClass =
   'w-full h-11 px-3 bg-surface-container-lowest rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary border-0'
@@ -54,8 +54,8 @@ export function AdminRegisterView(props: AdminRegisterViewProps) {
   const isMatch = props.confirmPassword.length > 0 && props.password === props.confirmPassword
 
   return (
-    <MarketingFrame>
-      <main className="w-full pt-20 bg-background">
+    <AdminFrame>
+      <main className="w-full pt-space-xl bg-background">
         <div className="relative w-full overflow-hidden">
           <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[1100px] h-[480px] bg-gradient-to-b from-primary/10 via-secondary-container/10 to-transparent blur-3xl pointer-events-none -z-10" />
           <section className="max-w-[1360px] mx-auto px-gutter pt-space-lg pb-space-xl">
@@ -134,14 +134,9 @@ export function AdminRegisterView(props: AdminRegisterViewProps) {
                       <span>{props.isUnlocking ? 'Verifying...' : 'Unlock Registration'}</span>
                       <Icon name="arrow_forward" className="text-[18px]" />
                     </button>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Link to="/admin" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
-                        Back to Admin Login
-                      </Link>
-                      <Link to="/" className="font-label-md text-label-md text-primary font-bold">
-                        Public portfolio
-                      </Link>
-                    </div>
+                    <Link to="/admin/login" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
+                      Back to admin sign-in
+                    </Link>
                   </form>
                 </div>
               </div>
@@ -312,14 +307,9 @@ export function AdminRegisterView(props: AdminRegisterViewProps) {
                       <Icon name="person_add" className="text-[18px]" />
                       <span>{props.isSubmitting ? 'Registering Admin Account...' : 'Register as Admin'}</span>
                     </button>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Link to="/admin" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
-                        Already have an account? Sign In
-                      </Link>
-                      <Link to="/admin/dashboard" className="font-label-md text-label-md text-primary font-bold">
-                        Admin Dashboard
-                      </Link>
-                    </div>
+                    <Link to="/admin/login" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
+                      Already have an account? Sign in
+                    </Link>
                   </div>
                 </form>
               </div>
@@ -327,6 +317,6 @@ export function AdminRegisterView(props: AdminRegisterViewProps) {
           </section>
         </div>
       </main>
-    </MarketingFrame>
+    </AdminFrame>
   )
 }

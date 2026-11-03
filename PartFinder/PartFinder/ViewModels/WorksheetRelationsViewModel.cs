@@ -527,6 +527,26 @@ public partial class WorksheetRelationsViewModel : ViewModelBase
     // ────────────────────────────────────────────────────────────────────────
 }
 
+public sealed class LinkedTemplateBrowseItem
+{
+    public required string RelationId { get; init; }
+    public required string TemplateId { get; init; }
+    public required string TemplateName { get; init; }
+    public required WorksheetRelationDto Relation { get; init; }
+    public PartTemplateDefinition? LookupTemplate { get; init; }
+}
+
+public sealed class LinkedTemplatePreviewRow(IReadOnlyList<PreviewColumnCell> cells)
+{
+    public IReadOnlyList<PreviewColumnCell> Cells { get; } = cells;
+}
+
+public sealed class PreviewColumnCell(string header, string value)
+{
+    public string Header { get; } = header;
+    public string Value { get; } = value;
+}
+
 // ── NEW: chip item for the relations strip ───────────────────────────────────
 public sealed class RelationChipItem(
     string relationId,

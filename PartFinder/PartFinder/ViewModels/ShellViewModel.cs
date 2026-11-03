@@ -391,8 +391,17 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
             NavigationItems.Add(
                 new NavItemViewModel
                 {
+                    Label = "Linked Templates",
+                    IconGlyph = "\uE8A7",
+                    Page = AppPage.LinkedTemplates,
+                    IsEnabled = true,
+                });
+
+            NavigationItems.Add(
+                new NavItemViewModel
+                {
                     Label = "Link Templates",
-                    IconGlyph = "\uE71B",
+                    IconGlyph = "\uE72A",
                     Page = AppPage.WorksheetRelations,
                     IsEnabled = true,
                 });

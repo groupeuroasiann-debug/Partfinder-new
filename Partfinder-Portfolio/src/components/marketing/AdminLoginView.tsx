@@ -1,6 +1,5 @@
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { Icon, MarketingFrame } from './SiteChrome'
+import { AdminFrame, Icon } from './SiteChrome'
 
 const fieldClass =
   'w-full h-11 px-3 bg-surface-container-lowest rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary border-0'
@@ -10,7 +9,6 @@ type AdminLoginViewProps = {
   password: string
   error: string
   loginPending: boolean
-  isAuthenticated: boolean
   onEmailChange: (value: string) => void
   onPasswordChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
@@ -21,14 +19,13 @@ export function AdminLoginView({
   password,
   error,
   loginPending,
-  isAuthenticated,
   onEmailChange,
   onPasswordChange,
   onSubmit,
 }: AdminLoginViewProps) {
   return (
-    <MarketingFrame>
-      <main className="w-full pt-20 bg-background">
+    <AdminFrame>
+      <main className="w-full pt-space-xl bg-background">
         <div className="relative w-full overflow-hidden">
           <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[1100px] h-[480px] bg-gradient-to-b from-primary/10 via-secondary-container/10 to-transparent blur-3xl pointer-events-none -z-10" />
           <section className="max-w-[1360px] mx-auto px-gutter pt-space-lg pb-space-xl">
@@ -79,14 +76,6 @@ export function AdminLoginView({
                     </span>
                     <span className="font-mono-data text-mono-data text-primary font-bold">Secure</span>
                   </div>
-                  {isAuthenticated ? (
-                    <div className="flex items-center justify-between gap-3 bg-secondary-fixed text-on-secondary-fixed rounded-lg px-3 py-2 font-body-sm text-body-sm">
-                      <span>You have an active session.</span>
-                      <Link to="/admin/dashboard" className="font-label-md text-label-md text-on-secondary-fixed-variant font-bold whitespace-nowrap">
-                        Go to Dashboard
-                      </Link>
-                    </div>
-                  ) : null}
                   <div>
                     <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="admin-email">
                       Email ID
@@ -133,21 +122,15 @@ export function AdminLoginView({
                     <Icon name="lock" className="text-[16px] text-secondary" />
                     <span>Encrypted sign-in. Credentials are checked by the existing admin API.</span>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-space-xs">
-                    <Link to="/" className="font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
-                      Public portfolio
-                    </Link>
-                    <Link to="/admin/register" className="font-label-md text-label-md text-primary font-bold inline-flex items-center gap-1">
-                      <Icon name="lock" className="text-[16px]" />
-                      Register as Admin
-                    </Link>
-                  </div>
+                  <p className="font-caption text-caption text-outline m-0 pt-space-xs">
+                    Platform operator access only. Registration and sign-in URLs are not listed on the public site.
+                  </p>
                 </form>
               </div>
             </div>
           </section>
         </div>
       </main>
-    </MarketingFrame>
+    </AdminFrame>
   )
 }
