@@ -15,6 +15,12 @@ public interface IOrgUserDirectoryService
 {
     Task<IReadOnlyList<OrgAppUserSummary>> ListUsersAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Lists org_app_users from an explicit tenant Mongo URI (e.g. from setup status API).</summary>
+    Task<IReadOnlyList<OrgAppUserSummary>> ListUsersFromTenantUriAsync(
+        string tenantMongoUri,
+        string orgCode,
+        CancellationToken cancellationToken = default);
+
     Task<OrgAppUserSummary?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
 
     Task<InviteUserResult> InviteUserAsync(
@@ -23,6 +29,33 @@ public interface IOrgUserDirectoryService
         string role,
         bool partsAllTemplates,
         IReadOnlyList<string> allowedTemplateIds,
+        TemplatePermissionsDto? templatePermissions = null,
+        MasterDataPermissionsDto? masterDataPermissions = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ensures an invited user exists in tenant Mongo (no email). Used after API invite so Team Management can list locally.
+    /// </summary>
+    Task EnsureInvitedUserRecordAsync(
+        string name,
+        string email,
+        string role,
+        bool partsAllTemplates,
+        IReadOnlyList<string> allowedTemplateIds,
+        string temporaryPassword,
+        TemplatePermissionsDto? templatePermissions = null,
+        MasterDataPermissionsDto? masterDataPermissions = null,
+        CancellationToken cancellationToken = default);
+
+    Task EnsureInvitedUserRecordForTenantUriAsync(
+        string tenantMongoUri,
+        string orgCode,
+        string name,
+        string email,
+        string role,
+        bool partsAllTemplates,
+        IReadOnlyList<string> allowedTemplateIds,
+        string temporaryPassword,
         TemplatePermissionsDto? templatePermissions = null,
         MasterDataPermissionsDto? masterDataPermissions = null,
         CancellationToken cancellationToken = default);
