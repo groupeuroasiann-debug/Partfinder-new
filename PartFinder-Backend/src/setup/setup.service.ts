@@ -135,12 +135,26 @@ export class SetupService {
     let orgAdminStatus: 'yes' | 'no' | 'unknown' = 'no';
     let serverReachedDatabase: boolean | null = null;
 
+    let orgAppUsers: Array<{
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      partsAllTemplates: boolean;
+      allowedTemplateIds: string[];
+      invitedAtUtc: string | null;
+      templatePermissions: unknown;
+      masterDataPermissions: unknown;
+      status: string;
+    }> = [];
+
     if (hasOrgDatabase && uri) {
       try {
         await this.tenant.pingUri(uri);
         serverReachedDatabase = true;
         const has = await this.tenant.hasAnyOrgAdmin(uri);
         orgAdminStatus = has ? 'yes' : 'no';
+        orgAppUsers = await this.mapOrgAppUserDocuments(uri);
       } catch {
         serverReachedDatabase = false;
         orgAdminStatus = 'unknown';
@@ -164,11 +178,47 @@ export class SetupService {
       orgDatabaseUri: hasOrgDatabase ? uri : null,
       orgAdminStatus,
       serverReachedDatabase,
+      orgAppUsers,
       requiresInviteLogin: Boolean(
         org.firstAdminEmailNormalized && org.firstAdminTemporaryPasswordHash,
       ),
       firstAdminEmail: org.firstAdminEmailNormalized ?? null,
     };
+  }
+
+  private async mapOrgAppUserDocuments(uri: string) {
+    const docs = await this.tenant.listOrgAppUsers(uri);
+    return docs.map((doc) => {
+      const tempHash =
+        typeof doc.temporaryPasswordHash === 'string'
+          ? doc.temporaryPasswordHash.trim()
+          : '';
+      const status = tempHash ? 'Pending' : 'Active';
+      const invitedRaw = doc.invitedAtUtc;
+      let invitedAtUtc: string | null = null;
+      if (invitedRaw instanceof Date) {
+        invitedAtUtc = invitedRaw.toISOString();
+      } else if (invitedRaw) {
+        invitedAtUtc = new Date(invitedRaw as string | number).toISOString();
+      }
+
+      return {
+        id: doc._id?.toString?.() ?? '',
+        name: typeof doc.name === 'string' ? doc.name : '',
+        email: typeof doc.email === 'string' ? doc.email : '',
+        role: typeof doc.role === 'string' ? doc.role : 'Employee',
+        partsAllTemplates: doc.partsAllTemplates === true,
+        allowedTemplateIds: Array.isArray(doc.allowedTemplateIds)
+          ? doc.allowedTemplateIds.filter(
+              (x): x is string => typeof x === 'string',
+            )
+          : [],
+        invitedAtUtc,
+        templatePermissions: doc.templatePermissions ?? null,
+        masterDataPermissions: doc.masterDataPermissions ?? null,
+        status,
+      };
+    });
   }
 
   async provisionDefaultDatabase(orgCode: string) {
@@ -278,6 +328,23 @@ export class SetupService {
       ok: true as const,
       created: result.created,
       skipped: result.skipped,
+    };
+  }
+
+  async listOrgUsers(orgCode: string) {
+    await this.loadLicensedOrg(orgCode);
+    const org = await this.orgs.findByOrgCode(orgCode);
+    if (!org?.orgDatabaseUri?.trim()) {
+      throw new BadRequestException(
+        'Organization database is not configured yet.',
+      );
+    }
+
+    const uri = org.orgDatabaseUri.trim();
+
+    return {
+      ok: true as const,
+      users: await this.mapOrgAppUserDocuments(uri),
     };
   }
 

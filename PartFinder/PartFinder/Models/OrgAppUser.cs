@@ -51,6 +51,9 @@ public sealed class OrgAppUserSummary
     /// <summary>"Active" if password changed, "Pending" if still on temporary password.</summary>
     public string Status { get; init; } = "Pending";
 
+    public bool IsActiveStatus =>
+        string.Equals(Status, "Active", StringComparison.OrdinalIgnoreCase);
+
     public string PartsScopeDisplay =>
         string.Equals(Role, "Admin", StringComparison.OrdinalIgnoreCase)
             ? "Full access"

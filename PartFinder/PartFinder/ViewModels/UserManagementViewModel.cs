@@ -347,8 +347,53 @@ public partial class UserManagementViewModel : ViewModelBase
         StatusMessage = string.Empty;
         try
         {
-            var list = await _users.ListUsersAsync().ConfigureAwait(true);
-            _allUsers = list.ToList();
+            _setupContext.Refresh();
+            var orgCode = _setupContext.OrgCode?.Trim();
+            var merged = new Dictionary<string, OrgAppUserSummary>(StringComparer.OrdinalIgnoreCase);
+
+            void MergeUsers(IEnumerable<OrgAppUserSummary> users)
+            {
+                foreach (var user in users)
+                {
+                    if (string.IsNullOrWhiteSpace(user.Email))
+                    {
+                        continue;
+                    }
+
+                    merged[user.Email.Trim()] = user;
+                }
+            }
+
+            MergeUsers(await _users.ListUsersAsync().ConfigureAwait(true));
+
+            if (!string.IsNullOrWhiteSpace(orgCode))
+            {
+                var (status, _) = await SetupApiClient.StatusAsync(orgCode).ConfigureAwait(true);
+                if (status?.OrgAppUsers is { Count: > 0 })
+                {
+                    MergeUsers(SetupApiClient.MapOrgAppUserItems(status.OrgAppUsers));
+                }
+
+                var tenantUri = status?.OrgDatabaseUri?.Trim();
+                if (!string.IsNullOrWhiteSpace(tenantUri))
+                {
+                    MergeUsers(await _users.ListUsersFromTenantUriAsync(tenantUri, orgCode)
+                        .ConfigureAwait(true));
+                }
+
+                var (ok, apiErr, apiUsers) = await SetupApiClient.ListOrgUsersAsync(orgCode)
+                    .ConfigureAwait(true);
+                if (ok && apiUsers is not null)
+                {
+                    MergeUsers(apiUsers);
+                }
+                else if (!ok && !IsListUsersEndpointUnavailable(apiErr))
+                {
+                    StatusMessage = apiErr ?? string.Empty;
+                }
+            }
+
+            _allUsers = merged.Values.OrderByDescending(u => u.InvitedAtUtc).ToList();
             NotifyKpiChanges();
             ApplyFilter();
         }
@@ -360,6 +405,19 @@ public partial class UserManagementViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    private static bool IsListUsersEndpointUnavailable(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return true;
+        }
+
+        return error.Contains("list-users", StringComparison.OrdinalIgnoreCase)
+               || error.Contains("Cannot POST", StringComparison.OrdinalIgnoreCase)
+               || error.Contains("404", StringComparison.OrdinalIgnoreCase)
+               || error.Contains("Not Found", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task PrepareInviteDialogAsync(CancellationToken cancellationToken = default)
@@ -491,6 +549,51 @@ public partial class UserManagementViewModel : ViewModelBase
         if (!ok || result is null)
         {
             return (err ?? "Could not invite user.", null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.TemporaryPassword))
+        {
+            try
+            {
+                var org = _setupContext.OrgCode?.Trim();
+                string? tenantUri = null;
+                if (!string.IsNullOrWhiteSpace(org))
+                {
+                    var (status, _) = await SetupApiClient.StatusAsync(org).ConfigureAwait(true);
+                    tenantUri = status?.OrgDatabaseUri?.Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(tenantUri) && !string.IsNullOrWhiteSpace(org))
+                {
+                    await _users.EnsureInvitedUserRecordForTenantUriAsync(
+                        tenantUri,
+                        org,
+                        name,
+                        email,
+                        role,
+                        partsAll,
+                        allowed,
+                        result.TemporaryPassword,
+                        templatePerms,
+                        masterPerms).ConfigureAwait(true);
+                }
+                else
+                {
+                    await _users.EnsureInvitedUserRecordAsync(
+                        name,
+                        email,
+                        role,
+                        partsAll,
+                        allowed,
+                        result.TemporaryPassword,
+                        templatePerms,
+                        masterPerms).ConfigureAwait(true);
+                }
+            }
+            catch
+            {
+                // Duplicate or sync failures are non-fatal; list loads from tenant URI.
+            }
         }
 
         await LoadUsersAsync().ConfigureAwait(true);
