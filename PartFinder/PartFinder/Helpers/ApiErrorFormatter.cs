@@ -48,16 +48,17 @@ internal static class ApiErrorFormatter
             return "Session expired. Sign out and sign in again.";
         }
 
-        return trimmed.Length > 120 ? trimmed[..120] + "…" : trimmed;
+        return BritishEnglish.ForDisplay(trimmed.Length > 120 ? trimmed[..120] + "…" : trimmed);
     }
 
     private static string NormalizeMessage(string text)
     {
-        if (text.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase))
+        if (text.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("Unauthorised", StringComparison.OrdinalIgnoreCase))
         {
             return "Session expired. Sign out and sign in again.";
         }
 
-        return text;
+        return BritishEnglish.ForDisplay(text);
     }
 }

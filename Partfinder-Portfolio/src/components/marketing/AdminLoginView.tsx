@@ -49,7 +49,7 @@ export function AdminLoginView({
                     <div className="flex items-center gap-2">
                       <Icon name="check_circle" className="text-primary text-[20px]" />
                       <span className="font-body-sm text-body-sm text-on-surface font-semibold">
-                        Organizations, releases, and database clusters
+                        Organisations, releases, and database clusters
                       </span>
                     </div>
                     <div className="flex items-center gap-2">

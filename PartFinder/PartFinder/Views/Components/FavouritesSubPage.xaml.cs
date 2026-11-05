@@ -295,12 +295,12 @@ public sealed partial class FavouritesSubPage : UserControl
         mainGrid.Children.Add(topSection);
 
         // ── Row 1: Unified table — headers + data in one Grid ──
-        var fieldsSection = new StackPanel
+        var fieldsSection = new Grid
         {
             Name = "FieldsSection",
-            Spacing = 0,
             Margin = new Thickness(16, 16, 16, 0),
-            VerticalAlignment = VerticalAlignment.Top,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Visibility = Visibility.Collapsed,
         };
 
@@ -318,6 +318,7 @@ public sealed partial class FavouritesSubPage : UserControl
         {
             Name = "HeadersClip",
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
         headersClip.SizeChanged += (s, _) =>
         {
@@ -325,7 +326,7 @@ public sealed partial class FavouritesSubPage : UserControl
                 b.Clip = new RectangleGeometry
                     { Rect = new Windows.Foundation.Rect(0, 0, b.ActualWidth, b.ActualHeight + 4) };
         };
-        headersClip.Child = tableGrid;
+        headersClip.Child = WrapUnifiedTableScroll(tableGrid);
         fieldsSection.Children.Add(headersClip);
 
         Grid.SetRow(fieldsSection, 1);
@@ -615,15 +616,7 @@ public sealed partial class FavouritesSubPage : UserControl
                 });
             }
 
-            colStack.Children.Add(new ScrollViewer
-            {
-                Content = dataStack,
-                VerticalScrollMode            = ScrollMode.Auto,
-                VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
-                HorizontalScrollMode          = ScrollMode.Disabled,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 245,
-            });
+            colStack.Children.Add(dataStack);
 
             colBorder.Child = colStack;
             Grid.SetColumn(colBorder, fi);
@@ -632,6 +625,18 @@ public sealed partial class FavouritesSubPage : UserControl
 
         return grid;
     }
+
+    private static ScrollViewer WrapUnifiedTableScroll(Grid tableGrid) =>
+        new()
+        {
+            Content = tableGrid,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
 
     /// <summary>
     /// Slides the column headers left or right with animation, then updates data rows.
@@ -659,7 +664,7 @@ public sealed partial class FavouritesSubPage : UserControl
         nextBtn.IsEnabled = newOffset + 4 < fields.Count;
 
         // Build new unified table (headers + data)
-        var newGrid = BuildTableGrid(fields, newOffset, accent, records, maxRows);
+        var newGrid = WrapUnifiedTableScroll(BuildTableGrid(fields, newOffset, accent, records, maxRows));
 
         double clipWidth = headersClip.ActualWidth > 0 ? headersClip.ActualWidth : 300;
         double slideFrom = direction > 0 ? clipWidth : -clipWidth;

@@ -20,6 +20,7 @@ public sealed class BulkTemplateImportService
         string sourcePath,
         bool canAddTemplate,
         bool canAddMasterData,
+        IProgress<BulkImportProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -35,9 +36,12 @@ public sealed class BulkTemplateImportService
         List<BulkTemplateDraft> drafts;
         try
         {
-            drafts = IsCsvPath(sourcePath)
-                ? ParseCsvFile(sourcePath)
-                : ParseWorkbook(sourcePath);
+            drafts = await Task.Run(
+                    () => IsCsvPath(sourcePath)
+                        ? ParseCsvFile(sourcePath)
+                        : ParseWorkbook(sourcePath),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -69,6 +73,12 @@ public sealed class BulkTemplateImportService
         var skipped = 0;
         var importedRows = 0;
         var errors = new List<string>();
+        var totalRows = drafts.Sum(d => d.DataRows.Count);
+        var countingRows = totalRows > 0;
+        var totalUnits = countingRows ? totalRows : drafts.Count;
+        var completed = 0;
+
+        progress?.Report(new BulkImportProgress(completed, totalUnits, "Starting upload…"));
 
         foreach (var draft in drafts)
         {
@@ -90,6 +100,7 @@ public sealed class BulkTemplateImportService
 
             var name = draft.Name.Trim();
             PartTemplateDefinition? template;
+            progress?.Report(new BulkImportProgress(completed, totalUnits, $"Preparing \"{name}\"…"));
 
             if (existingByName.TryGetValue(name, out var existingTemplate))
             {
@@ -139,6 +150,12 @@ public sealed class BulkTemplateImportService
                 }
             }
 
+            if (!countingRows)
+            {
+                completed++;
+                progress?.Report(new BulkImportProgress(completed, totalUnits, $"{name}"));
+            }
+
             if (draft.DataRows.Count == 0)
             {
                 continue;
@@ -151,22 +168,37 @@ public sealed class BulkTemplateImportService
                 continue;
             }
 
+            var importedThisTemplate = 0;
             try
             {
-                importedRows += await ImportDataRowsAsync(template, draft.DataRows, cancellationToken)
+                var batchProgress = new SyncProgress<int>(inserted =>
+                {
+                    importedThisTemplate = inserted;
+                    progress?.Report(
+                        new BulkImportProgress(completed + inserted, totalUnits, $"Uploading \"{name}\""));
+                });
+                var imported = await ImportDataRowsAsync(template, draft.DataRows, batchProgress, cancellationToken)
                     .ConfigureAwait(false);
+                importedRows += imported;
+                completed += imported;
             }
             catch (Exception ex)
             {
+                importedRows += importedThisTemplate;
+                completed += importedThisTemplate;
                 errors.Add($"Failed to import rows for \"{name}\": {ex.Message}");
             }
         }
+
+        progress?.Report(new BulkImportProgress(completed, totalUnits, "Finishing upload…"));
 
         return new BulkTemplateImportResult
         {
             CreatedCount = created,
             SkippedCount = skipped,
             ImportedRowCount = importedRows,
+            TotalCount = totalUnits,
+            UploadedCount = completed,
             Errors = errors,
         };
     }
@@ -174,12 +206,10 @@ public sealed class BulkTemplateImportService
     private async Task<int> ImportDataRowsAsync(
         PartTemplateDefinition template,
         IReadOnlyList<IReadOnlyDictionary<string, string>> rowsByLabel,
+        IProgress<int>? insertedCount,
         CancellationToken cancellationToken)
     {
-        var existingRows = await _records.GetRowsAsync(template.Id, cancellationToken).ConfigureAwait(false);
-        var startOrder = existingRows.Count;
-        var imported = 0;
-
+        var prepared = new List<Dictionary<string, string>>(rowsByLabel.Count);
         foreach (var source in rowsByLabel)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -207,14 +237,20 @@ public sealed class BulkTemplateImportService
                 continue;
             }
 
-            await _records
-                .UpsertRowAsync(template.Id, null, startOrder + imported, values, cancellationToken)
-                .ConfigureAwait(false);
-            imported++;
+            prepared.Add(values);
         }
 
-        return imported;
+        if (prepared.Count == 0)
+        {
+            return 0;
+        }
+
+        return await _records
+            .AppendRowsAsync(template.Id, prepared, insertedCount, cancellationToken)
+            .ConfigureAwait(false);
     }
+
+    private const int MaxConsecutiveBlankRows = 250;
 
     private static bool IsCsvPath(string path) =>
         path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
@@ -343,14 +379,23 @@ public sealed class BulkTemplateImportService
 
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;
         var groups = new Dictionary<string, List<IReadOnlyDictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
+        var blankStreak = 0;
 
         for (var r = 2; r <= lastRow; r++)
         {
             var templateName = sheet.Cell(r, templateNameIdx + 1).GetString().Trim();
             if (string.IsNullOrWhiteSpace(templateName))
             {
+                blankStreak++;
+                if (blankStreak >= MaxConsecutiveBlankRows)
+                {
+                    break;
+                }
+
                 continue;
             }
+
+            blankStreak = 0;
 
             var rowMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             for (var c = 0; c < headerCells.Count; c++)
@@ -396,6 +441,7 @@ public sealed class BulkTemplateImportService
 
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;
         var rows = new List<IReadOnlyDictionary<string, string>>();
+        var blankStreak = 0;
 
         for (var r = startRow; r <= lastRow; r++)
         {
@@ -407,9 +453,16 @@ public sealed class BulkTemplateImportService
 
             if (rowMap.Values.All(string.IsNullOrWhiteSpace))
             {
+                blankStreak++;
+                if (blankStreak >= MaxConsecutiveBlankRows)
+                {
+                    break;
+                }
+
                 continue;
             }
 
+            blankStreak = 0;
             rows.Add(rowMap);
         }
 
@@ -648,6 +701,18 @@ public sealed class BulkTemplateImportService
         List<string> ColumnLabels,
         List<IReadOnlyDictionary<string, string>> DataRows);
 
+    private sealed class SyncProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _report;
+
+        public SyncProgress(Action<T> report)
+        {
+            _report = report;
+        }
+
+        public void Report(T value) => _report(value);
+    }
+
     private static class CsvTable
     {
         public static List<List<string>> Read(string path)
@@ -713,11 +778,23 @@ public sealed class BulkTemplateImportService
     }
 }
 
+public sealed record BulkImportProgress(int Completed, int Total, string Detail)
+{
+    public int Percent => Total <= 0
+        ? 0
+        : (int)Math.Clamp(
+            Math.Round(Completed * 100.0 / Total, MidpointRounding.AwayFromZero),
+            0,
+            100);
+}
+
 public sealed class BulkTemplateImportResult
 {
     public int CreatedCount { get; init; }
     public int SkippedCount { get; init; }
     public int ImportedRowCount { get; init; }
+    public int TotalCount { get; init; }
+    public int UploadedCount { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 
     public bool HasWork => CreatedCount > 0 || ImportedRowCount > 0;

@@ -106,7 +106,7 @@ export const ORG_TIERS: OrgTier[] = [
   {
     id: 'standard',
     name: 'Standard',
-    summary: 'Single location / smaller catalog footprint.',
+    summary: 'Single location / smaller catalogue footprint.',
   },
   {
     id: 'premium',

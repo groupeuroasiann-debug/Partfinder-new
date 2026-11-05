@@ -189,7 +189,7 @@ export function SolutionsPage() {
                       </div>
                     </div>
                     <p className="font-body-md text-body-md text-on-surface-variant mb-space-md m-0">
-                      Synchronize marine shipping lines, offshore exploration rigs, and drydock repair sequences with strict automated IMPA and ISSA catalog matching and bonded bunker delivery routes.
+                      Synchronise marine shipping lines, offshore exploration rigs, and drydock repair sequences with strict automated IMPA and ISSA catalogue matching and bonded bunker delivery routes.
                     </p>
                     <div className="flex flex-wrap gap-1.5 mb-space-md">
                       <Pill>IMPA / ISSA Codes</Pill>
@@ -209,7 +209,7 @@ export function SolutionsPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-2 pt-1 text-center">
                         <div className="bg-surface-container-lowest p-2 rounded shadow-sm">
-                          <span className="font-caption text-caption text-outline block font-semibold uppercase">Catalog</span>
+                          <span className="font-caption text-caption text-outline block font-semibold uppercase">Catalogue</span>
                           <span className="font-mono-data text-mono-data font-bold text-on-surface">75-VALVES</span>
                         </div>
                         <div className="bg-surface-container-lowest p-2 rounded shadow-sm">
@@ -356,7 +356,7 @@ export function SolutionsPage() {
                       </div>
                       <div className="bg-surface-container-low px-space-sm py-1.5 rounded-lg text-right flex-shrink-0 shadow-sm">
                         <span className="font-caption text-caption text-outline block uppercase tracking-wider font-semibold">
-                          Cost Optimization
+                          Cost Optimisation
                         </span>
                         <span className="font-headline-sm text-headline-sm text-primary font-extrabold tracking-tight block">
                           18.5% Net
@@ -408,7 +408,7 @@ export function SolutionsPage() {
                     </div>
                     <div className="pt-space-md mt-space-md flex items-center justify-between gap-3 flex-wrap">
                       <span className="font-mono-data text-caption text-outline flex items-center gap-1">
-                        <Icon name="api" className="text-[15px]" /> PunchOut Catalog L2 • cXML Native
+                        <Icon name="api" className="text-[15px]" /> PunchOut Catalogue L2 • cXML Native
                       </span>
                       <ExploreLink />
                     </div>
@@ -503,7 +503,7 @@ export function SolutionsPage() {
                             </span>
                           </div>
                           <h3 className="font-headline-md text-headline-md text-on-surface font-extrabold tracking-tight m-0">
-                            Multi-Organization Governance
+                            Multi-Organisation Governance
                           </h3>
                         </div>
                       </div>
@@ -678,7 +678,7 @@ export function SolutionsPage() {
                         </span>
                       </div>
                       <p className="font-caption text-caption text-outline-variant m-0">
-                        From technical RFQ creation to authorized dockside/plant gate receipt.
+                        From technical RFQ creation to authorised dockside/plant gate receipt.
                       </p>
                     </div>
                     <div className="bg-surface-variant/10 rounded-xl p-space-md backdrop-blur-md flex flex-col justify-between">
@@ -763,7 +763,7 @@ export function SolutionsPage() {
                       Consult with our Industry Solutions Architects
                     </h2>
                     <p className="font-body-md text-body-md text-on-surface-variant m-0">
-                      Every enterprise deployment receives a dedicated Lead Systems Engineer. We analyze your ERP configuration, active parts taxonomy, and operational risk factors to draft an accelerated transition blueprint.
+                      Every enterprise deployment receives a dedicated Lead Systems Engineer. We analyse your ERP configuration, active parts taxonomy, and operational risk factors to draft an accelerated transition blueprint.
                     </p>
                     <div className="flex flex-col gap-2 mt-space-sm">
                       <div className="flex items-center gap-2">

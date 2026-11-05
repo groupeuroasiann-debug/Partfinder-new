@@ -23,6 +23,12 @@ public interface IOrgUserDirectoryService
 
     Task<OrgAppUserSummary?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
 
+    /// <summary>When the user is the org creator (not in org_app_users), returns createdAt from org_admin_users.</summary>
+    Task<DateTime?> GetOrgAdminCreatedAtUtcAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>Tenant bootstrap timestamp from <c>_partfinder_setup</c> when admin/user dates are unavailable.</summary>
+    Task<DateTime?> GetTenantBootstrapDateUtcAsync(CancellationToken cancellationToken = default);
+
     Task<InviteUserResult> InviteUserAsync(
         string name,
         string email,
@@ -76,4 +82,15 @@ public interface IOrgUserDirectoryService
         CancellationToken cancellationToken = default);
 
     Task<bool> DeleteUserAsync(string id, CancellationToken cancellationToken = default);
+
+    /// <summary>Clears temporary password and stores permanent hash after first-time password setup.</summary>
+    Task<bool> CompleteInvitedUserActivationAsync(
+        string email,
+        string newPasswordPlain,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Clears invite pending flag when the user signed in without a forced password change.</summary>
+    Task<bool> MarkInvitedUserActiveAfterLoginAsync(
+        string email,
+        CancellationToken cancellationToken = default);
 }

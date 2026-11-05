@@ -35,7 +35,6 @@ public sealed partial class AllTemplatesCarousel : UserControl
     /// <summary>Data cells in the all-templates preview table (ID, BRAND, etc.).</summary>
     private const double DataRowMinHeight = 46;
     private const double DataRowFontSize = 13;
-    private const double TableDataAreaMaxHeight = 420;
     /// <summary>Minimum column width before the preview switches to horizontal scrolling.</summary>
     private const double PreviewColumnMinWidth = 88;
 
@@ -163,7 +162,7 @@ public sealed partial class AllTemplatesCarousel : UserControl
 
         foreach (var child in mainGrid.Children)
         {
-            if (child is StackPanel sp && sp.Name == "FieldsSection")
+            if (child is Panel sp && sp.Name == "FieldsSection")
             {
                 sp.Children.Clear();
 
@@ -181,10 +180,11 @@ public sealed partial class AllTemplatesCarousel : UserControl
             Name = "TableScroll",
             Content = tableGrid,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalScrollMode = ScrollMode.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollMode = ScrollMode.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             ZoomMode = ZoomMode.Disabled,
         };
         scroll.Loaded += (_, _) => ApplyPreviewTableLayout(scroll, tableGrid);
@@ -387,7 +387,7 @@ public sealed partial class AllTemplatesCarousel : UserControl
 
         foreach (var child in mainGrid.Children)
         {
-            if (child is not StackPanel { Name: "FieldsSection" } fieldsSection)
+            if (child is not Panel { Name: "FieldsSection" } fieldsSection)
             {
                 continue;
             }
@@ -665,11 +665,12 @@ public sealed partial class AllTemplatesCarousel : UserControl
         mainGrid.Children.Add(topSection);
 
         // Row 1: Unified table — headers + data in one Grid
-        var fieldsSection = new StackPanel
+        var fieldsSection = new Grid
         {
-            Name = "FieldsSection", Spacing = 0,
+            Name = "FieldsSection",
             Margin = new Thickness(16, 16, 16, 0),
-            VerticalAlignment = VerticalAlignment.Top,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
         var fieldList   = template.Fields.OrderBy(f => f.DisplayOrder).ToList();
@@ -850,15 +851,7 @@ public sealed partial class AllTemplatesCarousel : UserControl
                 });
             }
 
-            colStack.Children.Add(new ScrollViewer
-            {
-                Content = dataStack,
-                VerticalScrollMode            = ScrollMode.Auto,
-                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
-                HorizontalScrollMode          = ScrollMode.Disabled,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = TableDataAreaMaxHeight,
-            });
+            colStack.Children.Add(dataStack);
 
             colBorder.Child = colStack;
             Grid.SetColumn(colBorder, fi);

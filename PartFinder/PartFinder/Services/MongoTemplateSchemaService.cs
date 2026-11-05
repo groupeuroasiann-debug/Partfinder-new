@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
@@ -21,6 +22,8 @@ public sealed class MongoTemplateSchemaService : ITemplateSchemaService
     public static bool IsExplorerTemplateName(string? name) =>
         ExplorerTemplateNames.IsExplorerTemplateName(name);
 
+    private static readonly ConcurrentDictionary<string, MongoClient> ClientCache = new();
+
     private readonly ILocalSetupContext _setupContext;
 
     public MongoTemplateSchemaService(ILocalSetupContext setupContext)
@@ -38,7 +41,7 @@ public sealed class MongoTemplateSchemaService : ITemplateSchemaService
             }
 
             var cs = MongoConnectionStringUtil.Prepare(raw, _setupContext.OrgCode);
-            var client = new MongoClient(cs);
+            var client = ClientCache.GetOrAdd(cs, static connectionString => new MongoClient(connectionString));
             var db = MongoConnectionStringUtil.GetTenantDatabase(client, cs, _setupContext.OrgCode);
             if (string.Equals(db.DatabaseNamespace.DatabaseName, "admin", StringComparison.OrdinalIgnoreCase))
             {

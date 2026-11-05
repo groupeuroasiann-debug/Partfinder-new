@@ -3,7 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ResourceDictionary.ThemeDictionaries>
-        <ResourceDictionary x:Key="Default">
+        <ResourceDictionary x:Key="Dark">
             <!-- Backgrounds -->
             <Color x:Key="PageBackgroundColor">#50070C14</Color>
             <Color x:Key="CardBackgroundColor">#B8141D2A</Color>
@@ -130,58 +130,58 @@
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
-    <!-- Global Brushes referencing ThemeResources -->
-    <SolidColorBrush x:Key="PageBackgroundBrush" Color="{ThemeResource PageBackgroundColor}" />
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource CardBackgroundColor}" />
-    <SolidColorBrush x:Key="ElevatedCardBackgroundBrush" Color="{ThemeResource ElevatedCardBackgroundColor}" />
-    <SolidColorBrush x:Key="InputBackgroundBrush" Color="{ThemeResource InputBackgroundColor}" />
-    <SolidColorBrush x:Key="GridHeaderBackgroundBrush" Color="{ThemeResource GridHeaderBackgroundColor}" />
-    <SolidColorBrush x:Key="GridRowAltBackgroundBrush" Color="{ThemeResource GridRowAltBackgroundColor}" />
-    <SolidColorBrush x:Key="ShellSurfaceBrush" Color="{ThemeResource ShellSurfaceColor}" />
-    <SolidColorBrush x:Key="ShellSidebarBrush" Color="{ThemeResource ShellSidebarColor}" />
-    <SolidColorBrush x:Key="GlassStrokeBrush" Color="{ThemeResource GlassStrokeColor}" />
-    <SolidColorBrush x:Key="GlassStrongStrokeBrush" Color="{ThemeResource GlassStrongStrokeColor}" />
-    <SolidColorBrush x:Key="GlassHighlightBrush" Color="{ThemeResource GlassHighlightColor}" />
-    <SolidColorBrush x:Key="RowHoverBackgroundBrush" Color="{ThemeResource RowHoverBackgroundColor}" />
-    <SolidColorBrush x:Key="RowSelectedBackgroundBrush" Color="{ThemeResource RowSelectedBackgroundColor}" />
-    <SolidColorBrush x:Key="RowSelectedBorderBrush" Color="{ThemeResource RowSelectedBorderColor}" />
-    <SolidColorBrush x:Key="AccentPrimaryBrush" Color="{ThemeResource AccentPrimaryColor}" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="{ThemeResource AccentHoverColor}" />
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="{ThemeResource AccentPressedColor}" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{ThemeResource TextPrimaryColor}" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{ThemeResource TextSecondaryColor}" />
-    <SolidColorBrush x:Key="TextTertiaryBrush" Color="{ThemeResource TextTertiaryColor}" />
-    <SolidColorBrush x:Key="TextOnAccentBrush" Color="{ThemeResource TextOnAccentColor}" />
-    <SolidColorBrush x:Key="BorderDefaultBrush" Color="{ThemeResource BorderDefaultColor}" />
-    <SolidColorBrush x:Key="BorderHoverBrush" Color="{ThemeResource BorderHoverColor}" />
-    <SolidColorBrush x:Key="BorderFocusBrush" Color="{ThemeResource BorderFocusColor}" />
-    <SolidColorBrush x:Key="SuccessBrush" Color="{ThemeResource SuccessColor}" />
-    <SolidColorBrush x:Key="WarningBrush" Color="{ThemeResource WarningColor}" />
-    <SolidColorBrush x:Key="DangerBrush" Color="{ThemeResource DangerColor}" />
-    <SolidColorBrush x:Key="InfoBrush" Color="{ThemeResource InfoColor}" />
-    <SolidColorBrush x:Key="NavBackgroundBrush" Color="{ThemeResource NavBackgroundColor}" />
-    <SolidColorBrush x:Key="NavItemHoverBrush" Color="{ThemeResource NavItemHoverColor}" />
-    <SolidColorBrush x:Key="NavItemSelectedBrush" Color="{ThemeResource NavItemSelectedColor}" />
-    <SolidColorBrush x:Key="NavItemSelectedBorderBrush" Color="{ThemeResource NavItemSelectedBorderColor}" />
-    <SolidColorBrush x:Key="HeaderBarBackgroundBrush" Color="{ThemeResource HeaderBarBackgroundColor}" />
-    <SolidColorBrush x:Key="ChartSurfaceBackgroundBrush" Color="{ThemeResource ChartSurfaceBackgroundColor}" />
-    <SolidColorBrush x:Key="ContentShellBackgroundBrush" Color="{ThemeResource ContentShellBackgroundColor}" />
-    <SolidColorBrush x:Key="AmbientBlueBrush" Color="{ThemeResource AmbientBlueColor}" />
-    <SolidColorBrush x:Key="AmbientPurpleBrush" Color="{ThemeResource AmbientPurpleColor}" />
-    <SolidColorBrush x:Key="AmbientPinkBrush" Color="{ThemeResource AmbientPinkColor}" />
+    <!-- Brushes are painted by ThemeService for the active theme. Defaults match dark mode. -->
+    <SolidColorBrush x:Key="PageBackgroundBrush" Color="#50070C14" />
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#B8141D2A" />
+    <SolidColorBrush x:Key="ElevatedCardBackgroundBrush" Color="#D81A2637" />
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#96111A27" />
+    <SolidColorBrush x:Key="GridHeaderBackgroundBrush" Color="#B21C2C40" />
+    <SolidColorBrush x:Key="GridRowAltBackgroundBrush" Color="#660E1520" />
+    <SolidColorBrush x:Key="ShellSurfaceBrush" Color="#A1162130" />
+    <SolidColorBrush x:Key="ShellSidebarBrush" Color="#8C0B1220" />
+    <SolidColorBrush x:Key="GlassStrokeBrush" Color="#4CF4F8FF" />
+    <SolidColorBrush x:Key="GlassStrongStrokeBrush" Color="#66B8D3FF" />
+    <SolidColorBrush x:Key="GlassHighlightBrush" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="RowHoverBackgroundBrush" Color="#7A213047" />
+    <SolidColorBrush x:Key="RowSelectedBackgroundBrush" Color="#A01D456C" />
+    <SolidColorBrush x:Key="RowSelectedBorderBrush" Color="#7DB8FF" />
+    <SolidColorBrush x:Key="AccentPrimaryBrush" Color="#5EA2FF" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#7CB7FF" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#2F75D6" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F4F8FF" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#C4D0DF" />
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#93A6C0" />
+    <SolidColorBrush x:Key="TextOnAccentBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="BorderDefaultBrush" Color="#406884A8" />
+    <SolidColorBrush x:Key="BorderHoverBrush" Color="#7A9CC2E8" />
+    <SolidColorBrush x:Key="BorderFocusBrush" Color="#BDD8FF" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#38D6A4" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#FFC98D" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FFB4C7" />
+    <SolidColorBrush x:Key="InfoBrush" Color="#B8D6FF" />
+    <SolidColorBrush x:Key="NavBackgroundBrush" Color="#8C0B1220" />
+    <SolidColorBrush x:Key="NavItemHoverBrush" Color="#29243A57" />
+    <SolidColorBrush x:Key="NavItemSelectedBrush" Color="#664A95E8" />
+    <SolidColorBrush x:Key="NavItemSelectedBorderBrush" Color="#995EA2FF" />
+    <SolidColorBrush x:Key="HeaderBarBackgroundBrush" Color="#CC111A27" />
+    <SolidColorBrush x:Key="ChartSurfaceBackgroundBrush" Color="#141D2A" />
+    <SolidColorBrush x:Key="ContentShellBackgroundBrush" Color="#96111A27" />
+    <SolidColorBrush x:Key="AmbientBlueBrush" Color="#332F7FD2" />
+    <SolidColorBrush x:Key="AmbientPurpleBrush" Color="#2E8B5CF6" />
+    <SolidColorBrush x:Key="AmbientPinkBrush" Color="#26F472B6" />
 
     <LinearGradientBrush x:Key="AccentHeroBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="{ThemeResource AccentHoverColor}" Offset="0" />
-        <GradientStop Color="{ThemeResource AccentPrimaryColor}" Offset="0.55" />
+        <GradientStop Color="#7CB7FF" Offset="0" />
+        <GradientStop Color="#5EA2FF" Offset="0.55" />
         <GradientStop Color="#8B5CF6" Offset="1" />
     </LinearGradientBrush>
 
-    <!-- Backward-compatible aliases -->
-    <SolidColorBrush x:Key="AppBackgroundBrush" Color="{ThemeResource AppBackgroundColor}" />
-    <SolidColorBrush x:Key="AppSidebarBrush" Color="{ThemeResource ShellSidebarColor}" />
-    <SolidColorBrush x:Key="AppSurfaceBrush" Color="{ThemeResource ShellSurfaceColor}" />
-    <SolidColorBrush x:Key="AppBorderBrush" Color="{ThemeResource AppBorderColor}" />
-    <SolidColorBrush x:Key="AppSubtleTextBrush" Color="{ThemeResource AppSubtleTextColor}" />
-    <SolidColorBrush x:Key="AppSuccessBrush" Color="{ThemeResource SuccessColor}" />
-    <SolidColorBrush x:Key="AppSkeletonBrush" Color="{ThemeResource AppSkeletonColor}" />
+    <!-- Backward-compatible aliases. ThemeService repaints these with the active theme. -->
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#50070C14" />
+    <SolidColorBrush x:Key="AppSidebarBrush" Color="#8C0B1220" />
+    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#A1162130" />
+    <SolidColorBrush x:Key="AppBorderBrush" Color="#406884A8" />
+    <SolidColorBrush x:Key="AppSubtleTextBrush" Color="#C4D0DF" />
+    <SolidColorBrush x:Key="AppSuccessBrush" Color="#38D6A4" />
+    <SolidColorBrush x:Key="AppSkeletonBrush" Color="#26FFFFFF" />
 </ResourceDictionary>

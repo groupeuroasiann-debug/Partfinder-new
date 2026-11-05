@@ -227,7 +227,7 @@ export function AdminRegisterPage() {
           navigate('/admin/dashboard', { replace: true })
         }, 1800)
       } else {
-        setRegError('Unable to finalize admin session. Please try logging in directly.')
+        setRegError('Unable to finalise admin session. Please try logging in directly.')
       }
     } catch (err: unknown) {
       setRegError(err instanceof Error ? err.message : 'Server connection error.')

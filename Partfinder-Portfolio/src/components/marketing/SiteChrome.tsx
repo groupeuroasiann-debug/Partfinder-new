@@ -289,7 +289,7 @@ export function SiteFooter() {
             links={[
               { label: 'Fleet & Vessel', href: '/#solutions' },
               { label: 'Maintenance & MRO', href: '/#solutions' },
-              { label: 'Procurement Optimization', href: '/#solutions' },
+              { label: 'Procurement Optimisation', href: '/#solutions' },
               { label: 'OEM & Aftermarket', href: '/#solutions' },
             ]}
           />

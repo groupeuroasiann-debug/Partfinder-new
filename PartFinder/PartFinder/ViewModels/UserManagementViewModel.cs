@@ -396,6 +396,24 @@ public partial class UserManagementViewModel : ViewModelBase
             _allUsers = merged.Values.OrderByDescending(u => u.InvitedAtUtc).ToList();
             NotifyKpiChanges();
             ApplyFilter();
+            if (_allUsers.Count == 0)
+            {
+                _setupContext.Refresh();
+                if (string.IsNullOrWhiteSpace(_setupContext.OrgCode))
+                {
+                    StatusMessage =
+                        "Organisation is not configured on this device. Complete setup with your organisation code.";
+                }
+                else
+                {
+                    StatusMessage =
+                        "No users found yet. Invite someone from Invite User, or check internet connection and LicenseApi:BaseUrl.";
+                }
+            }
+            else
+            {
+                StatusMessage = string.Empty;
+            }
         }
         catch (Exception ex)
         {
@@ -501,7 +519,7 @@ public partial class UserManagementViewModel : ViewModelBase
         _setupContext.Refresh();
         if (string.IsNullOrWhiteSpace(_setupContext.OrgCode))
         {
-            return ("Organization code is not available in local setup.", null);
+            return ("Organisation code is not available in local setup.", null);
         }
 
         var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
@@ -608,6 +626,11 @@ public partial class UserManagementViewModel : ViewModelBase
             return "No user selected for editing.";
         }
 
+        if (_editUserId.StartsWith(MongoOrgUserDirectoryService.OrgAdminDirectoryIdPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Organisation admin accounts cannot be edited here.";
+        }
+
         var name = InviteName.Trim();
         if (string.IsNullOrEmpty(name))
         {
@@ -675,6 +698,11 @@ public partial class UserManagementViewModel : ViewModelBase
 
     public async Task<string?> DeleteUserAsync(OrgAppUserSummary user)
     {
+        if (user.IsOrgAdminDirectoryEntry)
+        {
+            return "Organisation admin accounts cannot be removed here.";
+        }
+
         var ok = await _users.DeleteUserAsync(user.Id).ConfigureAwait(true);
         if (!ok)
         {

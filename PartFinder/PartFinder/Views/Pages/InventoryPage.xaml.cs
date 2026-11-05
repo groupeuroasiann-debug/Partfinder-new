@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PartFinder.Services;
 using PartFinder.ViewModels;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace PartFinder.Views.Pages;
 
@@ -13,6 +15,12 @@ public sealed partial class InventoryPage : Page
     private readonly MongoInventoryService _inventoryService;
     private readonly MongoAuditService _auditService;
     private readonly AdminSessionStore _session;
+    private readonly ActivityLogger _activity;
+
+    private bool _bulkUploadRunning;
+    private bool _acceptBulkProgress;
+    private int _bulkUploaded;
+    private int _bulkUploadTotal;
 
     public InventoryPage()
     {
@@ -20,6 +28,7 @@ public sealed partial class InventoryPage : Page
         _inventoryService = App.Services.GetRequiredService<MongoInventoryService>();
         _auditService = App.Services.GetRequiredService<MongoAuditService>();
         _session = App.Services.GetRequiredService<AdminSessionStore>();
+        _activity = App.Services.GetRequiredService<ActivityLogger>();
         InitializeComponent();
         Loaded += OnPageLoaded;
     }
@@ -172,5 +181,268 @@ public sealed partial class InventoryPage : Page
         {
             ViewModel.FormStatusMessage = $"Failed to update: {ex.Message}";
         }
+    }
+
+    private async void OnBulkUploadClick(object sender, RoutedEventArgs e)
+    {
+        if (_bulkUploadRunning || XamlRoot is null || App.MainAppWindow is null)
+        {
+            return;
+        }
+
+        _bulkUploadRunning = true;
+        BulkUploadButton.IsEnabled = false;
+        _acceptBulkProgress = false;
+        _bulkUploaded = 0;
+        _bulkUploadTotal = 0;
+
+        var picker = new FileOpenPicker();
+        picker.FileTypeFilter.Add(".xlsx");
+        picker.FileTypeFilter.Add(".xlsm");
+        picker.FileTypeFilter.Add(".csv");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainAppWindow));
+
+        string? tempPath = null;
+        try
+        {
+            var file = await picker.PickSingleFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            SetImportStatus("Reading file…", file.Name, isActive: true);
+            var path = await ResolvePickerFilePathAsync(file).ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                SetImportStatus("Import failed.", "Could not access the selected file.", isActive: false);
+                await ShowBulkImportDialogAsync("Could not access the selected file.", XamlRoot).ConfigureAwait(true);
+                return;
+            }
+
+            tempPath = path != file.Path ? path : null;
+            _acceptBulkProgress = true;
+            var progress = new Progress<BulkImportProgress>(ApplyBulkUploadProgress);
+            var result = await ViewModel.ImportBulkFromFileAsync(path, progress).ConfigureAwait(true);
+            _acceptBulkProgress = false;
+
+            var uploaded = result.TotalCount > 0 ? result.UploadedCount : _bulkUploaded;
+            var total = result.TotalCount > 0 ? result.TotalCount : _bulkUploadTotal;
+            var percent = total <= 0
+                ? 0
+                : (int)Math.Clamp(Math.Round(uploaded * 100.0 / total, MidpointRounding.AwayFromZero), 0, 100);
+
+            var summaryParts = new List<string>();
+            if (total > 0)
+            {
+                summaryParts.Add($"{uploaded}/{total} is uploaded ({percent}%).");
+            }
+
+            if (result.InsertedCount > 0)
+            {
+                summaryParts.Add($"Added {result.InsertedCount} new item(s).");
+            }
+
+            if (result.UpdatedCount > 0)
+            {
+                summaryParts.Add($"Updated {result.UpdatedCount} existing item(s).");
+            }
+
+            if (result.SkippedCount > 0)
+            {
+                summaryParts.Add($"Skipped {result.SkippedCount} row(s).");
+            }
+
+            var summary = summaryParts.Count > 0
+                ? string.Join(" ", summaryParts)
+                : "No inventory rows were imported.";
+
+            if (result.Errors.Count > 0)
+            {
+                var detail = string.Join("\n", result.Errors.Take(8));
+                if (result.Errors.Count > 8)
+                {
+                    detail += $"\n…and {result.Errors.Count - 8} more.";
+                }
+
+                SetImportStatus(
+                    "Import finished with notes.",
+                    summary,
+                    isActive: false,
+                    completed: total > 0 ? uploaded : null,
+                    total: total > 0 ? total : null);
+                await ShowBulkImportDialogAsync($"{summary}\n\n{detail}", XamlRoot).ConfigureAwait(true);
+            }
+            else
+            {
+                SetImportStatus(
+                    "Import complete.",
+                    summary,
+                    isActive: false,
+                    completed: total > 0 ? uploaded : null,
+                    total: total > 0 ? total : null);
+                await ShowBulkImportDialogAsync(summary, XamlRoot).ConfigureAwait(true);
+            }
+
+            if (result.HasWork)
+            {
+                _activity.LogUserAction(
+                    "Inventory Bulk Upload",
+                    summary);
+                await ViewModel.LoadInventoryAsync().ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetImportStatus(
+                "Import failed.",
+                ex.Message,
+                isActive: false,
+                completed: _bulkUploadTotal > 0 ? _bulkUploaded : null,
+                total: _bulkUploadTotal > 0 ? _bulkUploadTotal : null);
+            await ShowBulkImportDialogAsync($"Import failed:\n{ex.Message}", XamlRoot).ConfigureAwait(true);
+        }
+        finally
+        {
+            _acceptBulkProgress = false;
+            SetImportStatus(null);
+            BulkUploadButton.ClearValue(Control.IsEnabledProperty);
+            _bulkUploadRunning = false;
+            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Best-effort temp cleanup.
+                }
+            }
+        }
+    }
+
+    private void ApplyBulkUploadProgress(BulkImportProgress progress)
+    {
+        void Apply()
+        {
+            if (!_acceptBulkProgress)
+            {
+                return;
+            }
+
+            _bulkUploaded = progress.Completed;
+            _bulkUploadTotal = progress.Total;
+            var headline = progress.Total > 0 ? $"Uploading… {progress.Percent}%" : "Uploading…";
+            SetImportStatus(headline, progress.Detail, isActive: true, completed: progress.Completed, total: progress.Total);
+        }
+
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            Apply();
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(Apply);
+    }
+
+    private static async Task ShowBulkImportDialogAsync(string message, XamlRoot xamlRoot)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Bulk upload",
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.WrapWholeWords },
+            CloseButtonText = "OK",
+            XamlRoot = xamlRoot,
+        };
+        _ = await dialog.ShowAsync();
+    }
+
+    private static async Task<string?> ResolvePickerFilePathAsync(Windows.Storage.StorageFile file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.Path) && File.Exists(file.Path))
+        {
+            return file.Path;
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "PartFinderBulkImport");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = Path.Combine(tempDir, $"{Guid.NewGuid():N}_{file.Name}");
+        using (var source = await file.OpenStreamForReadAsync().ConfigureAwait(true))
+        await using (var dest = File.Create(tempPath))
+        {
+            await source.CopyToAsync(dest).ConfigureAwait(true);
+        }
+
+        return tempPath;
+    }
+
+    private void SetImportStatus(
+        string? headline,
+        string? detail = null,
+        bool isActive = false,
+        int? completed = null,
+        int? total = null)
+    {
+        if (ImportStatusPanel is null || ImportProgressRing is null || ImportStatusText is null || ImportStatusDetailText is null
+            || ImportProgressBar is null || ImportPercentText is null || ImportCountText is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(headline))
+        {
+            ImportStatusPanel.Visibility = Visibility.Collapsed;
+            ImportProgressRing.IsActive = false;
+            ImportProgressRing.Visibility = Visibility.Collapsed;
+            ImportProgressBar.Visibility = Visibility.Collapsed;
+            ImportProgressBar.IsIndeterminate = false;
+            ImportProgressBar.Value = 0;
+            ImportPercentText.Visibility = Visibility.Collapsed;
+            ImportPercentText.Text = string.Empty;
+            ImportCountText.Visibility = Visibility.Collapsed;
+            ImportCountText.Text = string.Empty;
+            ImportStatusText.Text = string.Empty;
+            ImportStatusDetailText.Text = string.Empty;
+            return;
+        }
+
+        var hasCount = completed is int && total is int overall && overall > 0;
+        var percent = hasCount ? FormatUploadPercent(completed!.Value, total!.Value) : 0;
+
+        ImportStatusPanel.Visibility = Visibility.Visible;
+        ImportStatusText.Text = headline;
+        ImportStatusDetailText.Text = detail ?? string.Empty;
+
+        if (hasCount)
+        {
+            ImportProgressRing.IsActive = false;
+            ImportProgressRing.Visibility = Visibility.Collapsed;
+            ImportProgressBar.Visibility = Visibility.Visible;
+            ImportProgressBar.IsIndeterminate = false;
+            ImportProgressBar.Value = percent;
+            ImportPercentText.Visibility = Visibility.Visible;
+            ImportPercentText.Text = $"{percent}%";
+            ImportCountText.Visibility = Visibility.Visible;
+            ImportCountText.Text = $"{completed}/{total} is uploaded";
+            return;
+        }
+
+        ImportProgressBar.Visibility = Visibility.Collapsed;
+        ImportProgressBar.Value = 0;
+        ImportPercentText.Visibility = Visibility.Collapsed;
+        ImportCountText.Visibility = Visibility.Collapsed;
+        ImportProgressRing.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
+        ImportProgressRing.IsActive = isActive;
+    }
+
+    private static int FormatUploadPercent(int completed, int total)
+    {
+        if (total <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Clamp(Math.Round(completed * 100.0 / total, MidpointRounding.AwayFromZero), 0, 100);
     }
 }

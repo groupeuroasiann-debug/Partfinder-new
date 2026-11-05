@@ -72,12 +72,12 @@ public static class InviteEmailClient
             Body =
                 $"Hello {recipientName}," + Environment.NewLine + Environment.NewLine +
                 "You have been invited to PartFinder." + Environment.NewLine +
-                $"Organization code: {orgCode}" + Environment.NewLine +
+                $"Organisation code: {orgCode}" + Environment.NewLine +
                 $"Email: {toEmail}" + Environment.NewLine +
                 $"Temporary password: {temporaryPassword}" + Environment.NewLine +
                 $"Role: {role}" + Environment.NewLine + Environment.NewLine +
                 $"Download app: {Config.DownloadLink}" + Environment.NewLine + Environment.NewLine +
-                "After installing, enter your organization code, then sign in with your invited email and temporary password." + Environment.NewLine +
+                "After installing, enter your organisation code, then sign in with your invited email and temporary password." + Environment.NewLine +
                 "You can change your password after first sign-in.",
         };
 

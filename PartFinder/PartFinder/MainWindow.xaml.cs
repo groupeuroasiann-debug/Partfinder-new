@@ -293,7 +293,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(orgCode))
         {
             ShowSubscriptionBlocked(
-                "No organization code was found in local setup. Use \"Re-enter organization code\" or complete setup again.");
+                "No organisation code was found in local setup. Use \"Re-enter organisation code\" or complete setup again.");
             return;
         }
 
@@ -301,7 +301,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(dbUri))
         {
             ShowSubscriptionBlocked(
-                "No database URI in local setup. Use \"Re-enter organization code\" to run setup again.");
+                "No database URI in local setup. Use \"Re-enter organisation code\" to run setup again.");
             return;
         }
 
@@ -319,7 +319,7 @@ public sealed partial class MainWindow : Window
         {
             ShowSubscriptionBlocked(
                 string.IsNullOrWhiteSpace(status.Message)
-                    ? "This organization is not licensed to use PartFinder right now."
+                    ? "This organisation is not licenced to use PartFinder right now."
                     : status.Message);
             return;
         }
@@ -327,7 +327,7 @@ public sealed partial class MainWindow : Window
         if (!await MongoConnectionTester.TryPingAsync(dbUri, orgCode))
         {
             ShowSubscriptionBlocked(
-                "Cannot reach your organization MongoDB from this PC. Check the network or MongoDB URI.");
+                "Cannot reach your organisation MongoDB from this PC. Check the network or MongoDB URI.");
             return;
         }
 
@@ -335,7 +335,7 @@ public sealed partial class MainWindow : Window
         if (verify is null)
         {
             ShowSubscriptionBlocked(
-                "Active internet is required to verify your license. Connect to the internet, then restart the app or use \"Re-enter organization code\" to try again.");
+                "Active internet is required to verify your licence. Connect to the internet, then restart the app or use \"Re-enter organisation code\" to try again.");
             return;
         }
 
@@ -350,7 +350,7 @@ public sealed partial class MainWindow : Window
 
             ShowSubscriptionBlocked(
                 string.IsNullOrWhiteSpace(verify.Message)
-                    ? "License check failed. Is PartFinder-Backend running?"
+                    ? "Licence check failed. Is PartFinder-Backend running?"
                     : verify.Message);
             return;
         }
@@ -501,7 +501,7 @@ public sealed partial class MainWindow : Window
         if (verify is null)
         {
             ShowSubscriptionBlocked(
-                "Active internet is required to verify your license after maintenance. Connect to the internet and try again.");
+                "Active internet is required to verify your licence after maintenance. Connect to the internet and try again.");
             return;
         }
 
@@ -511,14 +511,14 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(dbUri))
             {
                 ShowSubscriptionBlocked(
-                    "No database URI in local setup. Use \"Re-enter organization code\" to run setup again.");
+                    "No database URI in local setup. Use \"Re-enter organisation code\" to run setup again.");
                 return;
             }
 
             if (!await MongoConnectionTester.TryPingAsync(dbUri, code))
             {
                 ShowSubscriptionBlocked(
-                    "Cannot reach your organization MongoDB from this PC. Check the network or MongoDB URI.");
+                    "Cannot reach your organisation MongoDB from this PC. Check the network or MongoDB URI.");
                 return;
             }
 
@@ -537,7 +537,7 @@ public sealed partial class MainWindow : Window
 
         ShowSubscriptionBlocked(
             string.IsNullOrWhiteSpace(verify.Message)
-                ? "License check failed after maintenance."
+                ? "Licence check failed after maintenance."
                 : verify.Message);
     }
 
@@ -615,7 +615,7 @@ public sealed partial class MainWindow : Window
     private void UpdateLicenseSummary(SetupStatusResult s)
     {
         LicenseSummaryPanel.Visibility = Visibility.Visible;
-        LicenseOrgNameText.Text = $"Organization: {s.OrganizationName ?? "—"}";
+        LicenseOrgNameText.Text = $"Organisation: {s.OrganizationName ?? "—"}";
         LicenseCodeText.Text = $"Code: {s.OrgCode ?? "—"}";
         LicenseStatusText.Text = $"Status: {s.Status ?? "—"}";
         LicenseExpiryText.Text = string.IsNullOrWhiteSpace(s.ValidUntil)
@@ -703,7 +703,7 @@ public sealed partial class MainWindow : Window
 
         st.dbUri = storedUri;
         st.databaseMode = mode;
-        st.adminName = "Organization Admin";
+        st.adminName = "Organisation Admin";
         st.adminEmail = string.IsNullOrWhiteSpace(_resolvedSignedInEmail)
             ? InviteLoginEmailBox.Text.Trim()
             : _resolvedSignedInEmail;
@@ -902,14 +902,14 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(OrgCodeBox.Text))
             {
-                ShowValidationMessage("Please enter organization code.");
+                ShowValidationMessage("Please enter organisation code.");
                 return;
             }
 
             var trimmed = OrgCodeBox.Text.Trim();
             if (trimmed.Length != 6 || !trimmed.All(char.IsDigit))
             {
-                ShowValidationMessage("Organization code must be exactly 6 digits.");
+                ShowValidationMessage("Organisation code must be exactly 6 digits.");
                 return;
             }
 
@@ -937,7 +937,7 @@ public sealed partial class MainWindow : Window
                 if (!status.Valid)
                 {
                     ShowValidationMessage(string.IsNullOrWhiteSpace(status.Message)
-                        ? "This organization code is not valid for PartFinder."
+                        ? "This organisation code is not valid for PartFinder."
                         : status.Message);
                     return;
                 }
@@ -962,7 +962,7 @@ public sealed partial class MainWindow : Window
                         if (string.IsNullOrWhiteSpace(invitedEmail) || string.IsNullOrWhiteSpace(tempPassword))
                         {
                             ShowValidationMessage(
-                                "This organization is already configured. Enter invited Email ID and temporary password.");
+                                "This organisation is already configured. Enter invited Email ID and temporary password.");
                             return;
                         }
 
@@ -991,6 +991,16 @@ public sealed partial class MainWindow : Window
                             var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
                             adminSession.Save(inviteLoginResponse.AccessToken, invitedEmail);
                         }
+
+                        if (!_mustChangePassword)
+                        {
+                            var directory = App.Services.GetService<IOrgUserDirectoryService>();
+                            if (directory is not null)
+                            {
+                                _ = await directory.MarkInvitedUserActiveAfterLoginAsync(invitedEmail)
+                                    .ConfigureAwait(true);
+                            }
+                        }
                     }
                 }
 
@@ -1006,7 +1016,7 @@ public sealed partial class MainWindow : Window
                     if (string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
                     {
                         ShowValidationMessage(
-                            "This organization requires sign-in. Enter your email and password.");
+                            "This organisation requires sign-in. Enter your email and password.");
                         _step = 1;
                         UpdateStepUi();
                         return;
@@ -1043,7 +1053,7 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(_workingOrgCode))
             {
-                ValidationText.Text = "Organization code is missing. Go back to step 1.";
+                ValidationText.Text = "Organisation code is missing. Go back to step 1.";
                 return;
             }
 
@@ -1145,7 +1155,7 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(_workingOrgCode))
             {
-                ValidationText.Text = "Organization code is missing. Go back to step 1.";
+                ValidationText.Text = "Organisation code is missing. Go back to step 1.";
                 return;
             }
 
@@ -1181,8 +1191,45 @@ public sealed partial class MainWindow : Window
                 // Invited employees use ChangePassword; first org admin uses CreateOrgAdmin.
                 bool ok;
                 string? err;
+                var isFirstAdminTempChange =
+                    _mustChangePassword &&
+                    _lastStatus?.RequiresInviteLogin == true &&
+                    !string.IsNullOrWhiteSpace(_lastStatus.FirstAdminEmail) &&
+                    string.Equals(_resolvedSignedInEmail, _lastStatus.FirstAdminEmail, StringComparison.OrdinalIgnoreCase);
 
-                if (_mustChangePassword && !string.Equals(_lastStatus?.OrgAdminStatus, "no", StringComparison.OrdinalIgnoreCase))
+                if (isFirstAdminTempChange)
+                {
+                    var (loginOk, loginErr, _) = await SetupApiClient
+                        .ValidateInviteLoginAsync(_workingOrgCode, _resolvedSignedInEmail!, CurrentPasswordBox.Password)
+                        .ConfigureAwait(true);
+                    if (!loginOk)
+                    {
+                        ValidationText.Text = loginErr ?? "Current temporary password is invalid.";
+                        return;
+                    }
+
+                    var uri = !string.IsNullOrWhiteSpace(_cachedOrgDatabaseUri)
+                        ? _cachedOrgDatabaseUri
+                        : _lastStatus?.OrgDatabaseUri;
+                    if (string.IsNullOrWhiteSpace(uri) ||
+                        !await MongoTenantBootstrap.TrySetOrgAdminPasswordAsync(
+                            uri,
+                            _resolvedSignedInEmail!,
+                            NewPasswordBox.Password).ConfigureAwait(true))
+                    {
+                        ValidationText.Text = "Could not save the new password. Check the organisation database connection.";
+                        return;
+                    }
+
+                    var (adminOk, adminErr, _) = await SetupApiClient.CreateOrgAdminAsync(
+                        _workingOrgCode,
+                        _resolvedSignedInEmail!,
+                        CurrentPasswordBox.Password,
+                        NewPasswordBox.Password).ConfigureAwait(true);
+                    ok = true;
+                    err = adminOk ? null : adminErr;
+                }
+                else if (_mustChangePassword && !string.Equals(_lastStatus?.OrgAdminStatus, "no", StringComparison.OrdinalIgnoreCase))
                 {
                     // Invited user (employee or returning admin) — use change-password endpoint
                     (ok, err) = await SetupApiClient.ChangePasswordAsync(
@@ -1204,7 +1251,7 @@ public sealed partial class MainWindow : Window
 
                     if (body?.Skipped == true)
                     {
-                        ValidationText.Text = "An admin already exists for this organization. Continuing.";
+                        ValidationText.Text = "An admin already exists for this organisation. Continuing.";
                     }
                 }
 
@@ -1212,6 +1259,17 @@ public sealed partial class MainWindow : Window
                 {
                     ValidationText.Text = err ?? "Could not change password.";
                     return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
+                {
+                    var directory = App.Services.GetService<IOrgUserDirectoryService>();
+                    if (directory is not null)
+                    {
+                        _ = await directory.CompleteInvitedUserActivationAsync(
+                            _resolvedSignedInEmail,
+                            NewPasswordBox.Password).ConfigureAwait(true);
+                    }
                 }
 
                 _signedInThisSession = true;
@@ -1377,7 +1435,7 @@ public sealed partial class MainWindow : Window
 
         StepTitle.Text = _step switch
         {
-            1 => "Step 1 of 4: Organization",
+            1 => "Step 1 of 4: Organisation",
             2 => "Step 2 of 4: Database",
             3 => "Step 3 of 4: Change Password",
             _ => "Step 4 of 4: Completed",

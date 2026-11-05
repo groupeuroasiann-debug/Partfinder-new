@@ -62,9 +62,9 @@ const FEATURES: Feature[] = [
     name: 'Master Data explorer',
     category: 'Data & templates',
     summary:
-      'Spreadsheet-style master data grid with add/edit/copy/delete permissions per role — the canonical worksheet for your org catalog.',
+      'Spreadsheet-style master data grid with add/edit/copy/delete permissions per role — the canonical worksheet for your org catalogue.',
     icon: 'table',
-    tags: ['master data', 'grid', 'worksheet', 'catalog'],
+    tags: ['master data', 'grid', 'worksheet', 'catalogue'],
     inApp: true,
     inBackend: true,
   },
@@ -117,7 +117,7 @@ const FEATURES: Feature[] = [
     name: 'Link Templates (relations)',
     category: 'Data & templates',
     summary:
-      'Define worksheet relations between templates so match keys connect rows across catalogs (Bill of materials, cross-reference sheets).',
+      'Define worksheet relations between templates so match keys connect rows across catalogues (Bill of materials, cross-reference sheets).',
     icon: 'link',
     tags: ['relations', 'link templates', 'match keys', 'bom'],
     inApp: true,

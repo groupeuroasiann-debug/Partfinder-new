@@ -79,7 +79,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <FontIcon Glyph="&#xE73E;" FontSize="14" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Top" />
                     <TextBlock
-                        Text="This admin will automatically receive full permissions and access to all templates across the organization."
+                        Text="This admin will automatically receive full permissions and access to all templates across the organisation."
                         FontSize="11"
                         Foreground="{StaticResource TextSecondaryBrush}"
                         TextWrapping="WrapWholeWords" />

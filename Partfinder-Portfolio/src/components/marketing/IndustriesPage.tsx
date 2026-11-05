@@ -28,7 +28,7 @@ export const INDUSTRIES: Industry[] = [
     name: 'Marine',
     headline: 'Fleet, vessel, and drydock operations',
     summary:
-      'Align shore-side procurement with IMPA and ISSA catalog standards, voyage manifests, and bonded logistics for global shipping and offshore fleets.',
+      'Align shore-side procurement with IMPA and ISSA catalogue standards, voyage manifests, and bonded logistics for global shipping and offshore fleets.',
     icon: 'directions_boat',
     tags: ['impa', 'issa', 'fleet', 'vessel', 'drydock', 'shipping', 'offshore'],
     highlights: [
@@ -44,25 +44,25 @@ export const INDUSTRIES: Industry[] = [
     name: 'Automotive',
     headline: 'OEM, aftermarket, and multi-site parts networks',
     summary:
-      'Unify part numbers, supersessions, and supplier RFQs across plants and distributors — built for high-volume catalogs and tiered supply chains.',
+      'Unify part numbers, supersessions, and supplier RFQs across plants and distributors — built for high-volume catalogues and tiered supply chains.',
     icon: 'directions_car',
     tags: ['oem', 'aftermarket', 'vin', 'supersession', 'tier-1', 'distributor'],
     highlights: [
       'OEM traceability and certified alternate matching',
-      'Multi-organization governance for regional subsidiaries',
-      'Enterprise org tier for distributor-scale catalogs (platform admin)',
+      'Multi-organisation governance for regional subsidiaries',
+      'Enterprise org tier for distributor-scale catalogues (platform admin)',
     ],
-    relatedSolutions: ['OEM & Aftermarket Support', 'Multi-Organization Governance'],
+    relatedSolutions: ['OEM & Aftermarket Support', 'Multi-Organisation Governance'],
     relatedProductIds: ['technical-specs', 'supplier-network', 'windows-app'],
   },
   {
     id: 'aviation',
     name: 'Aviation',
-    headline: 'Aviation and defense reliability programs',
+    headline: 'Aviation and defence reliability programmes',
     summary:
       'Support conformity, traceability, and counterfeit screening workflows for rotable components and regulated maintenance environments.',
     icon: 'flight',
-    tags: ['aviation', 'defense', 'faa', 'easa', '8130-3', 'nsn', 'itar'],
+    tags: ['aviation', 'defence', 'faa', 'easa', '8130-3', 'nsn', 'itar'],
     highlights: [
       'FAA / EASA conformity and Form 8130-3 tagging patterns',
       'Crypto-signed certificate of conformance tracking',

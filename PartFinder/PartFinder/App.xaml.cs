@@ -81,6 +81,7 @@ namespace PartFinder
             services.AddSingleton<ICurrentUserAccessService, CurrentUserAccessService>();
             services.AddSingleton<ITemplateSchemaService, MongoTemplateSchemaService>();
             services.AddSingleton<BulkTemplateImportService>();
+            services.AddSingleton<BulkInventoryImportService>();
             services.AddSingleton<IMasterDataRecordsService, MongoMasterDataRecordsService>();
             services.AddSingleton<IContextActionsService, MongoContextActionsService>();
             services.AddSingleton<IPartsDataService, MongoPartsDataService>();

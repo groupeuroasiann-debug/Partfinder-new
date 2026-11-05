@@ -26,6 +26,10 @@ public sealed partial class TemplatesPage : Page
     private Windows.Foundation.Point _canvasPanLastPoint;
     private double _canvasBaseTranslateX;
     private double _canvasBaseTranslateY;
+    private bool _bulkUploadRunning;
+    private bool _acceptBulkProgress;
+    private int _bulkUploaded;
+    private int _bulkUploadTotal;
 
     public TemplatesPage()
     {
@@ -120,25 +124,32 @@ public sealed partial class TemplatesPage : Page
 
     private async void OnBulkUploadClick(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not TemplatesViewModel vm || XamlRoot is null || App.MainAppWindow is null)
+        if (_bulkUploadRunning || DataContext is not TemplatesViewModel vm || XamlRoot is null || App.MainAppWindow is null)
         {
             return;
         }
+
+        _bulkUploadRunning = true;
+        BulkUploadButton.IsEnabled = false;
+        _acceptBulkProgress = false;
+        _bulkUploaded = 0;
+        _bulkUploadTotal = 0;
 
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add(".xlsx");
         picker.FileTypeFilter.Add(".xlsm");
         picker.FileTypeFilter.Add(".csv");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainAppWindow));
-        var file = await picker.PickSingleFileAsync();
-        if (file is null)
-        {
-            return;
-        }
 
         string? tempPath = null;
         try
         {
+            var file = await picker.PickSingleFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
             SetImportStatus("Reading file…", file.Name, isActive: true);
             var path = await ResolvePickerFilePathAsync(file).ConfigureAwait(true);
             if (string.IsNullOrWhiteSpace(path))
@@ -149,11 +160,23 @@ public sealed partial class TemplatesPage : Page
             }
 
             tempPath = path != file.Path ? path : null;
-            SetImportStatus("Importing templates…", "Creating templates and loading rows.", isActive: true);
+            _acceptBulkProgress = true;
+            var progress = new Progress<BulkImportProgress>(ApplyBulkUploadProgress);
+            var result = await vm.ImportBulkTemplatesFromFileAsync(path, progress).ConfigureAwait(true);
+            _acceptBulkProgress = false;
 
-            var result = await vm.ImportBulkTemplatesFromFileAsync(path).ConfigureAwait(true);
+            var uploaded = result.TotalCount > 0 ? result.UploadedCount : _bulkUploaded;
+            var total = result.TotalCount > 0 ? result.TotalCount : _bulkUploadTotal;
+            var percent = total <= 0
+                ? 0
+                : (int)Math.Clamp(Math.Round(uploaded * 100.0 / total, MidpointRounding.AwayFromZero), 0, 100);
 
             var summaryParts = new List<string>();
+            if (total > 0)
+            {
+                summaryParts.Add($"{uploaded}/{total} is uploaded ({percent}%).");
+            }
+
             if (result.CreatedCount > 0)
             {
                 summaryParts.Add($"Created {result.CreatedCount} template(s).");
@@ -181,12 +204,22 @@ public sealed partial class TemplatesPage : Page
                     detail += $"\n…and {result.Errors.Count - 8} more.";
                 }
 
-                SetImportStatus("Import finished with notes.", summary, isActive: false);
+                SetImportStatus(
+                    "Import finished with notes.",
+                    summary,
+                    isActive: false,
+                    completed: total > 0 ? uploaded : null,
+                    total: total > 0 ? total : null);
                 await ShowBulkImportDialogAsync($"{summary}\n\n{detail}", XamlRoot).ConfigureAwait(true);
             }
             else
             {
-                SetImportStatus("Import complete.", summary, isActive: false);
+                SetImportStatus(
+                    "Import complete.",
+                    summary,
+                    isActive: false,
+                    completed: total > 0 ? uploaded : null,
+                    total: total > 0 ? total : null);
                 await ShowBulkImportDialogAsync(summary, XamlRoot).ConfigureAwait(true);
             }
 
@@ -197,12 +230,15 @@ public sealed partial class TemplatesPage : Page
         }
         catch (Exception ex)
         {
-            SetImportStatus("Import failed.", ex.Message, isActive: false);
+            SetImportStatus("Import failed.", ex.Message, isActive: false, completed: _bulkUploadTotal > 0 ? _bulkUploaded : null, total: _bulkUploadTotal > 0 ? _bulkUploadTotal : null);
             await ShowBulkImportDialogAsync($"Import failed:\n{ex.Message}", XamlRoot).ConfigureAwait(true);
         }
         finally
         {
+            _acceptBulkProgress = false;
             SetImportStatus(null);
+            BulkUploadButton.ClearValue(Control.IsEnabledProperty);
+            _bulkUploadRunning = false;
             if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
             {
                 try
@@ -215,6 +251,30 @@ public sealed partial class TemplatesPage : Page
                 }
             }
         }
+    }
+
+    private void ApplyBulkUploadProgress(BulkImportProgress progress)
+    {
+        void Apply()
+        {
+            if (!_acceptBulkProgress)
+            {
+                return;
+            }
+
+            _bulkUploaded = progress.Completed;
+            _bulkUploadTotal = progress.Total;
+            var headline = progress.Total > 0 ? $"Uploading… {progress.Percent}%" : "Uploading…";
+            SetImportStatus(headline, progress.Detail, isActive: true, completed: progress.Completed, total: progress.Total);
+        }
+
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            Apply();
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(Apply);
     }
 
     private async void OnShowFavouritesInlineClick(object sender, RoutedEventArgs e)
@@ -1502,7 +1562,12 @@ public sealed partial class TemplatesPage : Page
         var finalHeadline = string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase)
             ? "Import completed."
             : "Import finished with issues.";
-        SetImportStatus(finalHeadline, $"Processed {status.ProcessedRows}/{status.TotalRows}, failed {status.FailedRows}.", isActive: false);
+        SetImportStatus(
+            finalHeadline,
+            $"Processed {status.ProcessedRows}/{status.TotalRows}, failed {status.FailedRows}.",
+            isActive: false,
+            completed: status.ProcessedRows,
+            total: status.TotalRows);
         await ShowSimpleDialogAsync(summary, XamlRoot).ConfigureAwait(true);
     }
 
@@ -1610,9 +1675,11 @@ public sealed partial class TemplatesPage : Page
             }
 
             SetImportStatus(
-                $"Import {status.Status}...",
+                $"Import {status.Status}... {FormatUploadPercent(status.ProcessedRows, status.TotalRows)}%",
                 $"Processed {status.ProcessedRows}/{status.TotalRows}, failed {status.FailedRows}.",
-                isActive: true);
+                isActive: true,
+                completed: status.ProcessedRows,
+                total: status.TotalRows);
 
             if (string.Equals(status.Status, "completed", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(status.Status, "failed", StringComparison.OrdinalIgnoreCase))
@@ -1624,9 +1691,15 @@ public sealed partial class TemplatesPage : Page
         return null;
     }
 
-    private void SetImportStatus(string? headline, string? detail = null, bool isActive = false)
+    private void SetImportStatus(
+        string? headline,
+        string? detail = null,
+        bool isActive = false,
+        int? completed = null,
+        int? total = null)
     {
-        if (ImportStatusPanel is null || ImportProgressRing is null || ImportStatusText is null || ImportStatusDetailText is null)
+        if (ImportStatusPanel is null || ImportProgressRing is null || ImportStatusText is null || ImportStatusDetailText is null
+            || ImportProgressBar is null || ImportPercentText is null || ImportCountText is null)
         {
             return;
         }
@@ -1635,15 +1708,55 @@ public sealed partial class TemplatesPage : Page
         {
             ImportStatusPanel.Visibility = Visibility.Collapsed;
             ImportProgressRing.IsActive = false;
+            ImportProgressRing.Visibility = Visibility.Collapsed;
+            ImportProgressBar.Visibility = Visibility.Collapsed;
+            ImportProgressBar.IsIndeterminate = false;
+            ImportProgressBar.Value = 0;
+            ImportPercentText.Visibility = Visibility.Collapsed;
+            ImportPercentText.Text = string.Empty;
+            ImportCountText.Visibility = Visibility.Collapsed;
+            ImportCountText.Text = string.Empty;
             ImportStatusText.Text = string.Empty;
             ImportStatusDetailText.Text = string.Empty;
             return;
         }
 
+        var hasCount = completed is int && total is int overall && overall > 0;
+        var percent = hasCount ? FormatUploadPercent(completed!.Value, total!.Value) : 0;
+
         ImportStatusPanel.Visibility = Visibility.Visible;
-        ImportProgressRing.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
-        ImportProgressRing.IsActive = isActive;
         ImportStatusText.Text = headline;
         ImportStatusDetailText.Text = detail ?? string.Empty;
+
+        if (hasCount)
+        {
+            ImportProgressRing.IsActive = false;
+            ImportProgressRing.Visibility = Visibility.Collapsed;
+            ImportProgressBar.Visibility = Visibility.Visible;
+            ImportProgressBar.IsIndeterminate = false;
+            ImportProgressBar.Value = percent;
+            ImportPercentText.Visibility = Visibility.Visible;
+            ImportPercentText.Text = $"{percent}%";
+            ImportCountText.Visibility = Visibility.Visible;
+            ImportCountText.Text = $"{completed}/{total} is uploaded";
+            return;
+        }
+
+        ImportProgressBar.Visibility = Visibility.Collapsed;
+        ImportProgressBar.Value = 0;
+        ImportPercentText.Visibility = Visibility.Collapsed;
+        ImportCountText.Visibility = Visibility.Collapsed;
+        ImportProgressRing.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
+        ImportProgressRing.IsActive = isActive;
+    }
+
+    private static int FormatUploadPercent(int completed, int total)
+    {
+        if (total <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Clamp(Math.Round(completed * 100.0 / total, MidpointRounding.AwayFromZero), 0, 100);
     }
 }

@@ -61,17 +61,21 @@
             <StackPanel
                 Grid.Column="2"
                 Orientation="Horizontal"
-                Spacing="6"
+                Spacing="8"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"
                 Visibility="{Binding IsEditMode, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
                 <Button
-                    Style="{StaticResource ToolbarSegmentButtonStyle}"
-                    Foreground="{StaticResource AccentPrimaryBrush}"
+                    Style="{StaticResource OutlinedButtonStyle}"
+                    Padding="14,8"
+                    MinHeight="40"
                     IsEnabled="{Binding CanEditMasterData}"
                     Click="OnToggleEditModeClicked"
-                    ToolTipService.ToolTip="Edit master data">
-                    <SymbolIcon Symbol="Edit" />
+                    ToolTipService.ToolTip="Edit rows and columns">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE70F;" FontSize="14" Foreground="{StaticResource AccentPrimaryBrush}" />
+                        <TextBlock Text="Edit data" FontSize="13" FontWeight="SemiBold" />
+                    </StackPanel>
                 </Button>
 
                 <Button
@@ -91,23 +95,31 @@
             </StackPanel>
 
             <StackPanel
+                Grid.Column="2"
                 Orientation="Horizontal"
-                Spacing="6"
+                Spacing="8"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"
                 Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Button
-                    Style="{StaticResource ToolbarConfirmButtonStyle}"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Padding="16,8"
+                    MinHeight="40"
                     Click="OnSaveGridClicked"
-                    ToolTipService.ToolTip="Save changes">
-                    <SymbolIcon Symbol="Accept" />
+                    ToolTipService.ToolTip="Save grid data">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE74E;" FontSize="13" />
+                        <TextBlock Text="Save" FontSize="13" FontWeight="SemiBold" />
+                    </StackPanel>
                 </Button>
 
                 <Button
-                    Style="{StaticResource ToolbarSegmentButtonStyle}"
+                    Style="{StaticResource GhostButtonStyle}"
+                    Padding="14,8"
+                    MinHeight="40"
                     Click="OnCancelEditClicked"
-                    ToolTipService.ToolTip="Cancel editing">
-                    <SymbolIcon Symbol="Cancel" />
+                    ToolTipService.ToolTip="Discard changes and exit edit mode">
+                    <TextBlock Text="Cancel" FontSize="13" />
                 </Button>
             </StackPanel>
         </Grid>
@@ -134,21 +146,66 @@
                 <TextBlock
                     Foreground="{StaticResource TextSecondaryBrush}"
                     FontSize="11"
-                    Text="Edit mode enabled. Use the top-right tick to save or the cancel button to discard."
+                    Text="Edit mode: update cells, add columns above, remove with × on headers, then Save."
                     Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock
-                    Foreground="{StaticResource TextSecondaryBrush}"
-                    FontSize="11"
-                    Text="Create and save a Master Data template under Templates to see columns here."
-                    TextWrapping="Wrap"
-                    Visibility="{Binding ShowNoTemplateHint, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock
-                    Foreground="{StaticResource TextSecondaryBrush}"
-                    FontSize="11"
-                    Text="No tenant database is configured. Complete setup with a valid organization and database connection."
-                    TextWrapping="Wrap"
-                    Visibility="{Binding ShowNoDatabaseHint, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
+
+            <!-- Add column (edit mode only) -->
+            <Border
+                Margin="0,4,0,0"
+                Padding="12,10"
+                CornerRadius="12"
+                Background="{StaticResource ElevatedCardBackgroundBrush}"
+                BorderBrush="{StaticResource GlassStrokeBrush}"
+                BorderThickness="1"
+                Visibility="{Binding CanManageColumns, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="280" />
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="NewColumnNameBox"
+                        Style="{StaticResource StandardTextBoxStyle}"
+                        PlaceholderText="New column name"
+                        IsEnabled="{Binding CanManageColumns}"
+                        KeyDown="OnNewColumnNameKeyDown" />
+                    <ComboBox
+                        x:Name="InsertAfterColumnCombo"
+                        Grid.Column="1"
+                        VerticalAlignment="Stretch"
+                        FontSize="12"
+                        DisplayMemberPath="Label"
+                        IsEnabled="{Binding CanManageColumns}"
+                        PlaceholderText="Insert position" />
+                    <Button
+                        Grid.Column="2"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Padding="16,8"
+                        IsEnabled="{Binding CanManageColumns}"
+                        Click="OnAddColumnClick"
+                        ToolTipService.ToolTip="Add column">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE710;" FontSize="12" />
+                            <TextBlock Text="Add column" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <TextBlock
+                Foreground="{StaticResource TextSecondaryBrush}"
+                FontSize="11"
+                Text="Create and save a Master Data template under Templates to see columns here."
+                TextWrapping="Wrap"
+                Visibility="{Binding ShowNoTemplateHint, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <TextBlock
+                Foreground="{StaticResource TextSecondaryBrush}"
+                FontSize="11"
+                Text="No tenant database is configured. Complete setup with a valid organisation and database connection."
+                TextWrapping="Wrap"
+                Visibility="{Binding ShowNoDatabaseHint, Converter={StaticResource BoolToVisibilityConverter}}" />
         </StackPanel>
 
         <!-- Spreadsheet + optional detail column (no modal overlay) -->
@@ -181,19 +238,48 @@
                         HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch" />
                 </Border>
-                <Button
-                    Grid.Row="1"
-                    Margin="0,10,0,0"
-                    HorizontalAlignment="Left"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    Padding="16,8"
-                    Command="{Binding AddRowCommand}"
-                    Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon Glyph="&#xE710;" FontSize="12" />
-                        <TextBlock Text="Add row" FontSize="13" />
+                <Grid Grid.Row="1" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Padding="16,8"
+                        Command="{Binding AddRowCommand}"
+                        Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE710;" FontSize="12" />
+                            <TextBlock Text="Add row" FontSize="13" />
+                        </StackPanel>
+                    </Button>
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                        <Button
+                            x:Name="MasterDataPrevPageButton"
+                            Content="Previous"
+                            IsEnabled="False"
+                            Style="{StaticResource OutlinedButtonStyle}"
+                            Click="OnMasterDataPrevPageClick" />
+                        <TextBlock
+                            x:Name="MasterDataPageStatusText"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            FontSize="12"
+                            Text="No rows" />
+                        <Button
+                            x:Name="MasterDataNextPageButton"
+                            Content="Next"
+                            IsEnabled="False"
+                            Style="{StaticResource OutlinedButtonStyle}"
+                            Click="OnMasterDataNextPageClick" />
                     </StackPanel>
-                </Button>
+                </Grid>
             </Grid>
 
             <Border

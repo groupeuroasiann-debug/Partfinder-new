@@ -143,6 +143,8 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(EditModeButtonText));
         OnPropertyChanged(nameof(CanAddRows));
+        OnPropertyChanged(nameof(CanManageColumns));
+        OnPropertyChanged(nameof(CanRemoveColumns));
         AddRowCommand.NotifyCanExecuteChanged();
     }
 
@@ -219,17 +221,25 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
     }
 
-    public async Task LoadForTemplateAsync(string templateId, CancellationToken cancellationToken = default)
+    public async Task LoadForTemplateAsync(
+        string templateId,
+        CancellationToken cancellationToken = default,
+        bool restoreEditModeAfterLoad = false)
     {
         _templateLoadCts?.Cancel();
         _templateLoadCts?.Dispose();
         _templateLoadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var loadCt = _templateLoadCts.Token;
         var loadForId = templateId;
+        var preserveEditMode = restoreEditModeAfterLoad && IsEditMode;
 
         IsLoading = true;
         StatusMessage = null;
         ShowNoTemplateHint = false;
+        if (!preserveEditMode)
+        {
+            IsEditMode = false;
+        }
         Columns.Clear();
         Rows.Clear();
         _loadedContextActions = Array.Empty<TemplateContextAction>();
@@ -286,8 +296,14 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             }
 
             var persisted = await _records
-                .GetRowsAsync(template.Id, loadCt)
+                .GetStoredRowsAsync(template.Id, loadCt)
                 .ConfigureAwait(true);
+            if (persisted.Count == 0)
+            {
+                persisted = await _records
+                    .GetRowsAsync(template.Id, loadCt)
+                    .ConfigureAwait(true);
+            }
 
             loadCt.ThrowIfCancellationRequested();
             if (!IsLoadStillCurrent(loadForId))
@@ -301,9 +317,20 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             }
             else
             {
+                var added = 0;
                 foreach (var rec in persisted)
                 {
+                    if (loadCt.IsCancellationRequested || !IsLoadStillCurrent(loadForId))
+                    {
+                        return;
+                    }
+
                     Rows.Add(MapRecordToRow(rec));
+                    added++;
+                    if (added % 250 == 0)
+                    {
+                        await Task.Yield();
+                    }
                 }
             }
 
@@ -332,7 +359,14 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             if (IsLoadStillCurrent(loadForId))
             {
                 IsLoading = false;
+                if (preserveEditMode)
+                {
+                    IsEditMode = true;
+                }
+
                 OnPropertyChanged(nameof(CanAddRows));
+                OnPropertyChanged(nameof(CanManageColumns));
+                OnPropertyChanged(nameof(CanRemoveColumns));
                 AddRowCommand.NotifyCanExecuteChanged();
             }
         }
@@ -424,8 +458,20 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         Rows.Insert(clamped, CreateEmptyRow());
     }
 
+    public bool CanManageColumns =>
+        IsEditMode && Columns.Count > 0 && (CanEditMasterData || CanAddMasterData);
+
+    public bool CanRemoveColumns =>
+        IsEditMode && CanEditMasterData && Columns.Count > 1;
+
     public async Task<bool> InsertColumnAtAsync(int index, string columnName, CancellationToken cancellationToken = default)
     {
+        if (!CanManageColumns)
+        {
+            StatusMessage = "You do not have permission to add columns.";
+            return false;
+        }
+
         if (SelectedDataTemplate is null)
         {
             StatusMessage = "No template selected.";
@@ -435,7 +481,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         var trimmed = (columnName ?? string.Empty).Trim();
         if (trimmed.Length == 0)
         {
-            StatusMessage = "Column name cannot be empty.";
+            StatusMessage = "Enter a column name in the add-column bar above the table.";
             return false;
         }
 
@@ -487,6 +533,86 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             StatusMessage = $"Column \"{trimmed}\" added.";
             _activityLogger.LogUserAction("Column Added",
                 $"Column \"{trimmed}\" added to template \"{SelectedDataTemplate.Name}\"");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Error: " + ex.Message;
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveColumnAtAsync(int index, CancellationToken cancellationToken = default)
+    {
+        if (!IsEditMode || !CanEditMasterData)
+        {
+            StatusMessage = "You do not have permission to remove columns.";
+            return false;
+        }
+
+        if (SelectedDataTemplate is null)
+        {
+            return false;
+        }
+
+        if (index < 0 || index >= Columns.Count)
+        {
+            StatusMessage = "Column is no longer on the grid. Try again.";
+            return false;
+        }
+
+        var fieldKey = Columns[index].Key;
+        var fields = SelectedDataTemplate.Fields.OrderBy(f => f.DisplayOrder).ToList();
+        var fieldIndex = fields.FindIndex(
+            f => string.Equals(f.Key, fieldKey, StringComparison.OrdinalIgnoreCase));
+        if (fieldIndex < 0)
+        {
+            StatusMessage = "Column could not be found on the template.";
+            return false;
+        }
+
+        if (fields.Count <= 1)
+        {
+            StatusMessage = "At least one column is required.";
+            return false;
+        }
+
+        var removed = fields[fieldIndex].Label;
+        fields.RemoveAt(fieldIndex);
+        var remapped = fields
+            .Select((f, i) => new TemplateFieldDefinition
+            {
+                Key = f.Key,
+                Label = f.Label,
+                Type = f.Type,
+                IsRequired = f.IsRequired,
+                DisplayOrder = i,
+                ValidationPattern = f.ValidationPattern,
+                Options = f.Options,
+                LinkedTemplateId = f.LinkedTemplateId,
+                LinkedDisplayFieldKey = f.LinkedDisplayFieldKey,
+            })
+            .ToList();
+
+        var patched = new PartTemplateDefinition
+        {
+            Id = SelectedDataTemplate.Id,
+            Name = SelectedDataTemplate.Name,
+            Version = SelectedDataTemplate.Version + 1,
+            IsPublished = true,
+            Fields = remapped,
+        };
+
+        try
+        {
+            await _templateSchema.SaveTemplateAsync(patched, cancellationToken).ConfigureAwait(true);
+            await LoadForTemplateAsync(
+                SelectedDataTemplate.Id,
+                cancellationToken,
+                restoreEditModeAfterLoad: true).ConfigureAwait(true);
+            StatusMessage = $"Column \"{removed}\" removed.";
+            _activityLogger.LogUserAction("Column Removed",
+                $"Column \"{removed}\" removed from template \"{SelectedDataTemplate.Name}\"");
             return true;
         }
         catch (Exception ex)
@@ -554,8 +680,8 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         IsEditMode = !IsEditMode;
         StatusMessage = IsEditMode
-            ? "Edit mode enabled. Add rows below the table, then click Save (✓)."
-            : "View mode enabled.";
+            ? "Edit mode: add columns above the grid, remove with × on column headers, then Save."
+            : "View mode: browse data only.";
     }
 
     private MasterDataRowViewModel CreateEmptyRow()

@@ -21,6 +21,9 @@ public sealed partial class MasterDataPage : Page
     private const double GridCellTextWidth = 160d;
     private const double GridCellHorizontalPadding = 10d;
     private const double ActionPanelWidth = 360;
+    private const int MasterDataPageSize = 50;
+    private int _gridPageIndex;
+    private bool _rebuildSpreadsheetScheduled;
     private MasterDataViewModel? _viewModel;
     private readonly IExcelTemplateService _excelTemplateService;
     private readonly ActivityLogger _activity;
@@ -50,7 +53,12 @@ public sealed partial class MasterDataPage : Page
         vm.Rows.CollectionChanged += OnGridStructureChanged;
         vm.Columns.CollectionChanged += OnGridStructureChanged;
         vm.PropertyChanged += OnViewModelPropertyChanged;
-        vm.ColumnFiltersChanged += OnColumnFiltersChanged;
+        var theme = App.Services.GetService<IThemeService>();
+        if (theme is not null)
+        {
+            theme.ThemeChanged += OnAppThemeChanged;
+        }
+
         await vm.LoadAsync().ConfigureAwait(true);
         RebuildSpreadsheet();
     }
@@ -63,16 +71,33 @@ public sealed partial class MasterDataPage : Page
             _viewModel.Rows.CollectionChanged -= OnGridStructureChanged;
             _viewModel.Columns.CollectionChanged -= OnGridStructureChanged;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            _viewModel.ColumnFiltersChanged -= OnColumnFiltersChanged;
             _viewModel = null;
+        }
+
+        var theme = App.Services.GetService<IThemeService>();
+        if (theme is not null)
+        {
+            theme.ThemeChanged -= OnAppThemeChanged;
         }
     }
 
-    private void OnColumnFiltersChanged(object? sender, EventArgs e) => ApplyRowFilters();
+    private void OnAppThemeChanged(object? sender, EventArgs e) => RebuildSpreadsheet();
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MasterDataViewModel.IsEditMode))
+        {
+            if (_viewModel is { IsEditMode: false } && NewColumnNameBox is not null)
+            {
+                NewColumnNameBox.Text = string.Empty;
+            }
+
+            RebuildSpreadsheet();
+            return;
+        }
+
+        if (e.PropertyName == nameof(MasterDataViewModel.IsLoading)
+            && _viewModel is { IsLoading: false })
         {
             RebuildSpreadsheet();
         }
@@ -80,37 +105,72 @@ public sealed partial class MasterDataPage : Page
 
     private void OnGridStructureChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_viewModel is { IsLoading: true })
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                _gridPageIndex = 0;
+            }
+
+            return;
+        }
+
+        if (e.Action == NotifyCollectionChangedAction.Add
+            && _viewModel is not null
+            && e.NewItems is { Count: > 0 }
+            && e.NewItems[e.NewItems.Count - 1] is MasterDataRowViewModel addedRow)
+        {
+            var visibleIndex = 0;
+            foreach (var row in _viewModel.Rows)
+            {
+                if (!_viewModel.IsRowVisible(row))
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(row, addedRow))
+                {
+                    _gridPageIndex = visibleIndex / MasterDataPageSize;
+                    break;
+                }
+
+                visibleIndex++;
+            }
+        }
+
+        ScheduleRebuildSpreadsheet();
+    }
+
+    private void OnMasterDataPrevPageClick(object sender, RoutedEventArgs e)
+    {
+        if (_gridPageIndex <= 0)
+        {
+            return;
+        }
+
+        _gridPageIndex--;
         RebuildSpreadsheet();
     }
 
-    private void OnColumnFilterTextChanged(object sender, TextChangedEventArgs e)
+    private void OnMasterDataNextPageClick(object sender, RoutedEventArgs e)
     {
-        if (_viewModel is null || sender is not TextBox box || box.Tag is not string fieldKey)
-        {
-            return;
-        }
-
-        _viewModel.SetColumnFilter(fieldKey, box.Text);
+        _gridPageIndex++;
+        RebuildSpreadsheet();
     }
 
-    private void ApplyRowFilters()
+    private void ScheduleRebuildSpreadsheet()
     {
-        if (_viewModel is null || _sheetGrid is null)
+        if (_rebuildSpreadsheetScheduled)
         {
             return;
         }
 
-        foreach (var child in _sheetGrid.Children)
+        _rebuildSpreadsheetScheduled = true;
+        _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
-            if (child is not FrameworkElement element || element.Tag is not MasterDataRowViewModel rowVm)
-            {
-                continue;
-            }
-
-            element.Visibility = _viewModel.IsRowVisible(rowVm)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        }
+            _rebuildSpreadsheetScheduled = false;
+            RebuildSpreadsheet();
+        });
     }
 
     private async void OnToggleEditModeClicked(object sender, RoutedEventArgs e)
@@ -315,12 +375,16 @@ public sealed partial class MasterDataPage : Page
         {
             SpreadsheetHost.Content = null;
             _sheetGrid = null;
+            UpdatePager(0);
             return;
         }
 
-        var allRows = _viewModel.Rows.ToList();
+        var visibleRows = _viewModel.Rows.Where(_viewModel.IsRowVisible).ToList();
+        UpdatePager(visibleRows.Count);
+        var pageStart = _gridPageIndex * MasterDataPageSize;
+        var pageRows = visibleRows.Skip(pageStart).Take(MasterDataPageSize).ToList();
         var colCount = _viewModel.Columns.Count;
-        var rowCount = allRows.Count;
+        var rowCount = pageRows.Count;
 
         var scroll = new ScrollViewer
         {
@@ -385,81 +449,75 @@ public sealed partial class MasterDataPage : Page
             Grid.SetRow(headerBorder, 0);
             Grid.SetColumn(headerBorder, c);
 
-            var headerGrid = new Grid();
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var filterBox = new TextBox
+            var headerHost = new Grid
             {
-                PlaceholderText = headerLabel,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
-                Style = (Style)Application.Current.Resources["GridFilterTextBoxStyle"],
-                Tag = field.Key,
+                MinHeight = 32,
+                ColumnSpacing = 4,
             };
-            if (_viewModel.TryGetColumnFilter(field.Key, out var savedFilter))
+            headerHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (_viewModel.CanRemoveColumns)
             {
-                filterBox.Text = savedFilter;
+                headerHost.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             }
 
-            ToolTipService.SetToolTip(filterBox, $"Search in {field.Label}");
-            filterBox.TextChanged += OnColumnFilterTextChanged;
-
-            Grid.SetColumn(filterBox, 0);
-            headerGrid.Children.Add(filterBox);
-
-            if (_viewModel.IsEditMode)
+            var titleBlock = new TextBlock
             {
-                var addColumnBtn = new Button
+                Text = headerLabel,
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(titleBlock, 0);
+            headerHost.Children.Add(titleBlock);
+
+            if (_viewModel.CanRemoveColumns)
+            {
+                var columnIndex = c;
+                var columnLabel = field.Label;
+                var removeBtn = new Button
                 {
-                    Content = "+",
-                    Width = 24,
-                    Height = 24,
-                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Width = 18,
+                    Height = 18,
+                    MinWidth = 18,
+                    MinHeight = 18,
+                    Padding = new Thickness(0),
+                    HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
-                    Visibility = Visibility.Visible,
-                    Opacity = 0,
-                    IsHitTestVisible = false,
-                    Tag = c + 1,
+                    Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x22, 0xE0, 0x52, 0x52)),
+                    BorderBrush = (Brush)Application.Current.Resources["DangerBrush"],
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(9),
                 };
-                ToolTipService.SetToolTip(addColumnBtn, "Insert column after this header");
-                addColumnBtn.Click += OnInsertColumnFromHeaderClick;
-                Grid.SetColumn(addColumnBtn, 1);
-                headerGrid.Children.Add(addColumnBtn);
+                ToolTipService.SetToolTip(removeBtn, $"Remove column \"{columnLabel}\"");
+                removeBtn.Content = new FontIcon
+                {
+                    Glyph = "\uE711",
+                    FontSize = 8,
+                    Foreground = (Brush)Application.Current.Resources["DangerBrush"],
+                };
+                Grid.SetColumn(removeBtn, 1);
+                removeBtn.Click += (_, _) =>
+                {
+                    if (_viewModel is null || !_viewModel.CanRemoveColumns)
+                    {
+                        return;
+                    }
 
-                headerBorder.PointerEntered += (_, _) => AffordanceAnimationHelper.Fade(addColumnBtn, show: true, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
-                headerBorder.PointerExited += (_, _) => AffordanceAnimationHelper.Fade(addColumnBtn, show: false, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
+                    _ = ConfirmAndRemoveColumnAsync(columnIndex, columnLabel);
+                };
+                headerHost.Children.Add(removeBtn);
             }
 
-            headerBorder.Child = headerGrid;
+            headerBorder.Child = headerHost;
 
             grid.Children.Add(headerBorder);
         }
 
-        if (_viewModel.IsEditMode && colCount > 0)
-        {
-            var addFirstHeader = new Button
-            {
-                Content = "+",
-                Width = 24,
-                Height = 24,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(6, 0, 0, 0),
-                Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
-                Tag = 0,
-            };
-            ToolTipService.SetToolTip(addFirstHeader, "Insert column before the first header");
-            addFirstHeader.Click += OnInsertColumnFromHeaderClick;
-            Grid.SetRow(addFirstHeader, 0);
-            Grid.SetColumn(addFirstHeader, 0);
-            grid.Children.Add(addFirstHeader);
-        }
-
         for (var r = 0; r < rowCount; r++)
         {
-            var rowVm = allRows[r];
+            var rowVm = pageRows[r];
             var rowVisible = _viewModel.IsRowVisible(rowVm);
             for (var c = 0; c < colCount; c++)
             {
@@ -510,7 +568,7 @@ public sealed partial class MasterDataPage : Page
                     Opacity = 0,
                     IsHitTestVisible = false,
                 };
-                addRowButton.Click += (_, _) => _viewModel.InsertRowAt(insertionIndex);
+                addRowButton.Click += (_, _) => InsertRowFromPage(insertionIndex);
 
                 var addRowHost = new Border
                 {
@@ -533,33 +591,171 @@ public sealed partial class MasterDataPage : Page
         scroll.Content = grid;
         SpreadsheetHost.Content = scroll;
         _sheetGrid = grid;
+        RefreshColumnManagementCombos();
         FitGridToViewport(null, EventArgs.Empty);
     }
 
-    private async void OnInsertColumnFromHeaderClick(object sender, RoutedEventArgs e)
+    private sealed class ColumnInsertOption
     {
-        if (_viewModel is null || XamlRoot is null || sender is not Button { Tag: int insertAt })
+        public required string Label { get; init; }
+        public int InsertIndex { get; init; }
+    }
+
+    private void RefreshColumnManagementCombos()
+    {
+        if (_viewModel is null || InsertAfterColumnCombo is null)
         {
             return;
         }
 
-        var input = new TextBox { PlaceholderText = "Column name" };
-        var dialog = new ContentDialog
+        if (!_viewModel.CanManageColumns)
         {
-            XamlRoot = XamlRoot,
-            Title = "Add column",
-            Content = input,
-            PrimaryButtonText = "Add",
+            return;
+        }
+
+        InsertAfterColumnCombo.Items.Clear();
+        InsertAfterColumnCombo.Items.Add(new ColumnInsertOption { Label = "At end of table", InsertIndex = _viewModel.Columns.Count });
+        for (var i = 0; i < _viewModel.Columns.Count; i++)
+        {
+            var col = _viewModel.Columns[i];
+            InsertAfterColumnCombo.Items.Add(new ColumnInsertOption
+            {
+                Label = $"After \"{col.Label}\"",
+                InsertIndex = i + 1,
+            });
+        }
+
+        InsertAfterColumnCombo.SelectedIndex = 0;
+    }
+
+    private void InsertRowFromPage(int pageLocalIndex)
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        var visible = _viewModel.Rows.Where(_viewModel.IsRowVisible).ToList();
+        var absolute = _gridPageIndex * MasterDataPageSize + pageLocalIndex;
+        int rowsIndex;
+        if (absolute >= visible.Count || visible.Count == 0)
+        {
+            rowsIndex = _viewModel.Rows.Count;
+        }
+        else
+        {
+            var index = _viewModel.Rows.IndexOf(visible[absolute]);
+            rowsIndex = index < 0 ? _viewModel.Rows.Count : index;
+        }
+
+        _viewModel.InsertRowAt(rowsIndex);
+    }
+
+    private void UpdatePager(int visibleCount)
+    {
+        if (MasterDataPageStatusText is null || MasterDataPrevPageButton is null || MasterDataNextPageButton is null)
+        {
+            return;
+        }
+
+        var pageCount = Math.Max(1, (visibleCount + MasterDataPageSize - 1) / MasterDataPageSize);
+        if (_gridPageIndex >= pageCount)
+        {
+            _gridPageIndex = pageCount - 1;
+        }
+
+        if (_gridPageIndex < 0)
+        {
+            _gridPageIndex = 0;
+        }
+
+        if (visibleCount == 0)
+        {
+            MasterDataPageStatusText.Text = "No rows";
+        }
+        else
+        {
+            var start = _gridPageIndex * MasterDataPageSize + 1;
+            var end = Math.Min(visibleCount, (_gridPageIndex + 1) * MasterDataPageSize);
+            MasterDataPageStatusText.Text = $"Showing {start}–{end} of {visibleCount}";
+        }
+
+        MasterDataPrevPageButton.IsEnabled = _gridPageIndex > 0;
+        MasterDataNextPageButton.IsEnabled = visibleCount > 0 && _gridPageIndex < pageCount - 1;
+    }
+
+    private async Task ConfirmAndRemoveColumnAsync(int columnIndex, string columnLabel)
+    {
+        if (_viewModel is null || XamlRoot is null || !_viewModel.CanRemoveColumns)
+        {
+            return;
+        }
+
+        var dlg = new ContentDialog
+        {
+            Title = "Remove column?",
+            Content = $"Do you confirm deleting the column \"{columnLabel}\"? This removes it from the template for everyone.",
+            PrimaryButtonText = "Delete column",
             CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
         };
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
+
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary)
         {
             return;
         }
 
-        _ = await _viewModel.InsertColumnAtAsync(insertAt, input.Text).ConfigureAwait(true);
+        var ok = await _viewModel.RemoveColumnAtAsync(columnIndex).ConfigureAwait(true);
+        if (!ok && string.IsNullOrWhiteSpace(_viewModel.StatusMessage))
+        {
+            _viewModel.StatusMessage = "Could not remove that column.";
+        }
+
+        RebuildSpreadsheet();
+    }
+
+    private string? GetNewColumnNameFromBar()
+    {
+        var name = NewColumnNameBox?.Text?.Trim();
+        return string.IsNullOrEmpty(name) ? null : name;
+    }
+
+    private async void OnAddColumnClick(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.CanManageColumns)
+        {
+            return;
+        }
+
+        var name = GetNewColumnNameFromBar();
+        if (name is null)
+        {
+            _viewModel.StatusMessage = "Enter a column name, then click Add column.";
+            NewColumnNameBox?.Focus(FocusState.Programmatic);
+            return;
+        }
+
+        var insertAt = _viewModel.Columns.Count;
+        if (InsertAfterColumnCombo?.SelectedItem is ColumnInsertOption opt)
+        {
+            insertAt = opt.InsertIndex;
+        }
+
+        if (await _viewModel.InsertColumnAtAsync(insertAt, name).ConfigureAwait(true)
+            && NewColumnNameBox is not null)
+        {
+            NewColumnNameBox.Text = string.Empty;
+        }
+    }
+
+    private void OnNewColumnNameKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter && _viewModel?.CanManageColumns == true)
+        {
+            e.Handled = true;
+            OnAddColumnClick(sender, e);
+        }
     }
 
     private TextBox BuildTextCell(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)

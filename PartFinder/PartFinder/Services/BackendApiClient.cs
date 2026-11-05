@@ -64,7 +64,7 @@ public sealed class BackendApiClient
         var orgId = _setup.OrgCode?.Trim();
         if (string.IsNullOrWhiteSpace(orgId))
         {
-            return (false, "Missing organization context. Please complete setup.", null);
+            return (false, "Missing organisation context. Please complete setup.", null);
         }
 
         var baseUrl = LicenseApiClient.GetBaseUrl().TrimEnd('/');
@@ -185,10 +185,10 @@ public sealed class BackendApiClient
         var orgId = _setup.OrgCode?.Trim();
         var token = _session.AccessToken?.Trim();
         if (string.IsNullOrWhiteSpace(orgId))
-            return (false, "Missing organization context. Please complete setup.");
+            return (false, "Missing organisation context. Please complete setup.");
 
         if (!IsValidOrgCode(orgId))
-            return (false, "Invalid organization context.");
+            return (false, "Invalid organisation context.");
 
         var baseUrl = LicenseApiClient.GetBaseUrl().TrimEnd('/');
         using var req = new HttpRequestMessage(HttpMethod.Delete, $"{baseUrl}/api/relations/{relationId}");
@@ -226,13 +226,13 @@ public sealed class BackendApiClient
 
         if (string.IsNullOrWhiteSpace(orgId))
         {
-            return (false, "Missing organization context. Please complete setup.", default);
+            return (false, "Missing organisation context. Please complete setup.", default);
         }
 
         // Security: validate orgId to prevent header injection (only alphanum + hyphen/underscore)
         if (!IsValidOrgCode(orgId))
         {
-            return (false, "Invalid organization context.", default);
+            return (false, "Invalid organisation context.", default);
         }
 
         var baseUrl = LicenseApiClient.GetBaseUrl().TrimEnd('/');
@@ -283,13 +283,13 @@ public sealed class BackendApiClient
 
         if (string.IsNullOrWhiteSpace(orgId))
         {
-            return (false, "Missing organization context. Please complete setup.", default);
+            return (false, "Missing organisation context. Please complete setup.", default);
         }
 
         // Security: validate orgId to prevent header injection
         if (!IsValidOrgCode(orgId))
         {
-            return (false, "Invalid organization context.", default);
+            return (false, "Invalid organisation context.", default);
         }
 
         var baseUrl = LicenseApiClient.GetBaseUrl().TrimEnd('/');

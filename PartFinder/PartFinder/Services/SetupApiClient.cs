@@ -35,22 +35,29 @@ public sealed class SetupInviteUserResponse
     public string? EmailError { get; set; }
 }
 
-public sealed class SetupInviteLoginResponse
-{
-    public bool Ok { get; set; }
-    public string? Message { get; set; }
-    public string? Email { get; set; }
-    public string? Role { get; set; }
-    public bool MustChangePassword { get; set; }
-    public string? AccessToken { get; set; }
-}
-
 public sealed class SetupListOrgUsersResponse
 {
     public bool Ok { get; set; }
-    public List<SetupListOrgUserItem>? Users { get; set; }
+    public string? OrgDatabaseUri { get; set; }
+    public List<SetupOrgUserListItem>? Users { get; set; }
 }
 
+public sealed class SetupOrgUserListItem
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public bool PartsAllTemplates { get; set; }
+    public List<string>? AllowedTemplateIds { get; set; }
+    public DateTime InvitedAtUtc { get; set; }
+    public TemplatePermissionsDto? TemplatePermissions { get; set; }
+    public MasterDataPermissionsDto? MasterDataPermissions { get; set; }
+    public string? Status { get; set; }
+    public bool IsOrgAdminDirectoryEntry { get; set; }
+}
+
+/// <summary>User row embedded in setup status (ISO date strings).</summary>
 public sealed class SetupListOrgUserItem
 {
     public string? Id { get; set; }
@@ -63,6 +70,16 @@ public sealed class SetupListOrgUserItem
     public TemplatePermissionsDto? TemplatePermissions { get; set; }
     public MasterDataPermissionsDto? MasterDataPermissions { get; set; }
     public string? Status { get; set; }
+}
+
+public sealed class SetupInviteLoginResponse
+{
+    public bool Ok { get; set; }
+    public string? Message { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public bool MustChangePassword { get; set; }
+    public string? AccessToken { get; set; }
 }
 
 public static class SetupApiClient
@@ -307,17 +324,17 @@ public static class SetupApiClient
     {
         if (string.IsNullOrWhiteSpace(orgCode))
         {
-            return (false, "Organization code is missing.", null);
+            return (false, "Organisation code is required.", null);
         }
 
         var (success, err, text) = await RawPostAsync(
-            "/api/public/setup/list-users",
-            new { orgCode },
+            "/api/public/setup/list-org-users",
+            new { orgCode = orgCode.Trim() },
             ct).ConfigureAwait(true);
 
         if (!success || string.IsNullOrWhiteSpace(text))
         {
-            return (false, err ?? "Request failed.", null);
+            return (false, err ?? "Could not load users from the server.", null);
         }
 
         try
@@ -328,15 +345,34 @@ public static class SetupApiClient
                 return (false, err ?? ParseApiError(text), null);
             }
 
+            if (!string.IsNullOrWhiteSpace(o.OrgDatabaseUri))
+            {
+                SetupStatePersistence.TryWriteDbUri(o.OrgDatabaseUri.Trim(), orgCode.Trim());
+            }
+
             var mapped = o.Users
-                .Select(MapListOrgUserItem)
-                .Where(u => !string.IsNullOrWhiteSpace(u.Id))
+                .Where(u => !string.IsNullOrWhiteSpace(u.Id) && !string.IsNullOrWhiteSpace(u.Email))
+                .Select(u => new OrgAppUserSummary
+                {
+                    Id = u.Id!,
+                    Name = string.IsNullOrWhiteSpace(u.Name) ? u.Email! : u.Name!,
+                    Email = u.Email!,
+                    Role = string.IsNullOrWhiteSpace(u.Role) ? "Employee" : u.Role!,
+                    PartsAllTemplates = u.PartsAllTemplates,
+                    AllowedTemplateIds = u.AllowedTemplateIds ?? [],
+                    InvitedAtUtc = u.InvitedAtUtc == default ? DateTime.UtcNow : u.InvitedAtUtc,
+                    TemplatePermissions = u.TemplatePermissions,
+                    MasterDataPermissions = u.MasterDataPermissions,
+                    Status = string.IsNullOrWhiteSpace(u.Status) ? "Pending" : u.Status!,
+                    IsOrgAdminDirectoryEntry = u.IsOrgAdminDirectoryEntry,
+                })
                 .ToList();
+
             return (true, null, mapped);
         }
         catch
         {
-            return (false, "Server returned data that could not be read.", null);
+            return (false, "Server returned user data that could not be read.", null);
         }
     }
 

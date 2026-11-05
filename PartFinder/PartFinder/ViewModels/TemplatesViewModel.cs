@@ -92,7 +92,9 @@ public partial class TemplatesViewModel : ViewModelBase
 
     public bool IsAllTemplatesGalleryEmpty => Templates.Count == 0;
 
-    public async Task<BulkTemplateImportResult> ImportBulkTemplatesFromFileAsync(string filePath)
+    public async Task<BulkTemplateImportResult> ImportBulkTemplatesFromFileAsync(
+        string filePath,
+        IProgress<BulkImportProgress>? progress = null)
     {
         var caps = _access.Capabilities;
         if (!caps.CanAddTemplate && !caps.CanAddMasterData)
@@ -104,7 +106,7 @@ public partial class TemplatesViewModel : ViewModelBase
         }
 
         var result = await _bulkImport
-            .ImportFromFileAsync(filePath, caps.CanAddTemplate, caps.CanAddMasterData)
+            .ImportFromFileAsync(filePath, caps.CanAddTemplate, caps.CanAddMasterData, progress)
             .ConfigureAwait(true);
 
         if (result.HasWork)

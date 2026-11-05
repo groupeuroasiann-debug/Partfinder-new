@@ -135,10 +135,65 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private bool _appLockEnabled;
 
+    private bool _syncingAppLockFromStore;
+
+    public string AppLockStatusDisplay =>
+        AppLockEnabled ? "Required when the app opens" : "Not enabled";
+
     partial void OnAppLockEnabledChanged(bool value)
     {
+        if (_syncingAppLockFromStore)
+        {
+            return;
+        }
+
         _security.SetAppLockEnabled(value);
         _activityLogger.LogUserAction("App Lock", value ? "Windows Hello lock enabled" : "Windows Hello lock disabled");
+        OnPropertyChanged(nameof(AppLockStatusDisplay));
+    }
+
+    private string _baselineProfileName = string.Empty;
+    private string _baselineProfileDepartment = string.Empty;
+    private string _baselineProfileDesignation = string.Empty;
+    private string _baselineProfileBio = string.Empty;
+
+    public bool HasProfileChanges =>
+        NormalizeProfileField(ProfileName) != _baselineProfileName
+        || NormalizeProfileField(ProfileDepartment) != _baselineProfileDepartment
+        || NormalizeProfileField(ProfileDesignation) != _baselineProfileDesignation
+        || NormalizeProfileField(ProfileBio) != _baselineProfileBio;
+
+    public bool CanSaveProfile => HasProfileChanges;
+
+    public bool CanUpdatePassword =>
+        !string.IsNullOrWhiteSpace(ChangeCurrentPassword)
+        && !string.IsNullOrWhiteSpace(ChangeNewPassword)
+        && string.Equals(ChangeNewPassword, ChangeConfirmPassword, StringComparison.Ordinal)
+        && IsStrongPassword(ChangeNewPassword);
+
+    private static string NormalizeProfileField(string? value) => value?.Trim() ?? string.Empty;
+
+    private void CaptureProfileBaseline()
+    {
+        _baselineProfileName = NormalizeProfileField(ProfileName);
+        _baselineProfileDepartment = NormalizeProfileField(ProfileDepartment);
+        _baselineProfileDesignation = NormalizeProfileField(ProfileDesignation);
+        _baselineProfileBio = NormalizeProfileField(ProfileBio);
+        NotifyProfileDirtyState();
+    }
+
+    private void NotifyProfileDirtyState()
+    {
+        OnPropertyChanged(nameof(HasProfileChanges));
+        OnPropertyChanged(nameof(CanSaveProfile));
+        SaveProfileCommand.NotifyCanExecuteChanged();
+        DiscardProfileChangesCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyPasswordFormState()
+    {
+        OnPropertyChanged(nameof(CanUpdatePassword));
+        ChangePasswordCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty]
@@ -208,7 +263,7 @@ public partial class SettingsViewModel : ViewModelBase
     private string _profileMasterDataPermissionsDisplay = "—";
 
     [ObservableProperty]
-    private string _profileMemberSinceDisplay = "—";
+    private string _profileMemberSinceDisplay = "Not available";
 
     [ObservableProperty]
     private ImageSource? _avatarImageSource;
@@ -236,6 +291,10 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private string _changePasswordMessage = string.Empty;
 
+    partial void OnChangeCurrentPasswordChanged(string value) => NotifyPasswordFormState();
+
+    partial void OnChangeConfirmPasswordChanged(string value) => NotifyPasswordFormState();
+
     partial void OnChangeNewPasswordChanged(string value)
     {
         OnPropertyChanged(nameof(PasswordStrengthScore));
@@ -245,6 +304,7 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(PasswordStrengthBar2));
         OnPropertyChanged(nameof(PasswordStrengthBar3));
         OnPropertyChanged(nameof(PasswordStrengthBar4));
+        NotifyPasswordFormState();
     }
 
     public int PasswordStrengthScore => GetPasswordStrengthScore(ChangeNewPassword);
@@ -308,7 +368,14 @@ public partial class SettingsViewModel : ViewModelBase
     partial void OnProfileNameChanged(string value)
     {
         OnPropertyChanged(nameof(AvatarInitial));
+        NotifyProfileDirtyState();
     }
+
+    partial void OnProfileDepartmentChanged(string value) => NotifyProfileDirtyState();
+
+    partial void OnProfileDesignationChanged(string value) => NotifyProfileDirtyState();
+
+    partial void OnProfileBioChanged(string value) => NotifyProfileDirtyState();
 
     partial void OnAvatarImageSourceChanged(ImageSource? value)
     {
@@ -396,7 +463,10 @@ public partial class SettingsViewModel : ViewModelBase
         _session.Load();
         _profile.Load();
         PasscodeIsConfigured = _security.PasscodeIsSet;
+        _syncingAppLockFromStore = true;
         AppLockEnabled = _security.AppLockEnabled;
+        _syncingAppLockFromStore = false;
+        OnPropertyChanged(nameof(AppLockStatusDisplay));
         ShowAppLockEditor = false;
         TwoFactorEnabled = _security.TwoFactorEnabled;
         TwoFactorSetupVisible = false;
@@ -433,8 +503,10 @@ public partial class SettingsViewModel : ViewModelBase
         }
 
         _ = LoadAvatarAsync(_profile.AvatarPath);
+        CaptureProfileBaseline();
         OnPropertyChanged(nameof(IsStartTwoFactorEnabled));
         OnPropertyChanged(nameof(TwoFactorStatusText));
+        NotifyPasswordFormState();
     }
 
     [RelayCommand]
@@ -448,7 +520,7 @@ public partial class SettingsViewModel : ViewModelBase
         ChangePasswordMessage = string.Empty;
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSaveProfile))]
     private void SaveProfile()
     {
         ProfileMessage = string.Empty;
@@ -481,13 +553,32 @@ public partial class SettingsViewModel : ViewModelBase
         ProfileBio = _profile.Bio ?? string.Empty;
         ProfileMessage = "Profile updated.";
         _activityLogger.LogUserAction("Profile Updated", $"Profile saved for \"{SessionEmailDisplay}\"");
+        CaptureProfileBaseline();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSaveProfile))]
+    private void DiscardProfileChanges()
+    {
+        ProfileMessage = string.Empty;
+        _profile.Load();
+
+        if (CanEditProfileName)
+        {
+            ProfileName = _profile.DisplayName ?? string.Empty;
+        }
+
+        ProfileDepartment = _profile.Department ?? string.Empty;
+        ProfileDesignation = _profile.Designation ?? string.Empty;
+        ProfileBio = _profile.Bio ?? string.Empty;
+        CaptureProfileBaseline();
     }
 
     private async Task LoadProfileFromDirectoryAsync(string email)
     {
+        OrgAppUserSummary? record = null;
         try
         {
-            var record = await _users.FindByEmailAsync(email).ConfigureAwait(true);
+            record = await _users.FindByEmailAsync(email).ConfigureAwait(true);
             if (record is not null)
             {
                 await ApplyOrgUserToProfileAsync(record).ConfigureAwait(true);
@@ -506,7 +597,34 @@ public partial class SettingsViewModel : ViewModelBase
             ApplyCapabilitiesOnlyProfile();
         }
 
+        await ApplyMemberSinceDisplayAsync(email, record).ConfigureAwait(true);
         OnPropertyChanged(nameof(AvatarInitial));
+        CaptureProfileBaseline();
+    }
+
+    private async Task ApplyMemberSinceDisplayAsync(string email, OrgAppUserSummary? record)
+    {
+        if (record is not null && record.InvitedAtUtc != default)
+        {
+            ProfileMemberSinceDisplay = FormatMemberSinceDisplay(record.InvitedAtUtc);
+            return;
+        }
+
+        var adminSince = await _users.GetOrgAdminCreatedAtUtcAsync(email).ConfigureAwait(true);
+        if (adminSince is { } adminUtc && adminUtc != default)
+        {
+            ProfileMemberSinceDisplay = FormatMemberSinceDisplay(adminUtc);
+            return;
+        }
+
+        var bootstrap = await _users.GetTenantBootstrapDateUtcAsync().ConfigureAwait(true);
+        if (bootstrap is { } bootUtc && bootUtc != default)
+        {
+            ProfileMemberSinceDisplay = FormatMemberSinceDisplay(bootUtc);
+            return;
+        }
+
+        ProfileMemberSinceDisplay = "Not available";
     }
 
     private void ApplyCapabilitiesOnlyProfile()
@@ -521,7 +639,6 @@ public partial class SettingsViewModel : ViewModelBase
                 : "—";
         ProfileTemplatePermissionsDisplay = FormatTemplatePermissions(caps);
         ProfileMasterDataPermissionsDisplay = FormatMasterDataPermissions(caps);
-        ProfileMemberSinceDisplay = "—";
     }
 
     private async Task ApplyOrgUserToProfileAsync(OrgAppUserSummary record)
@@ -533,7 +650,6 @@ public partial class SettingsViewModel : ViewModelBase
 
         ProfileRoleDisplay = record.Role;
         ProfileStatusDisplay = record.Status;
-        ProfileMemberSinceDisplay = record.InvitedAtDisplay;
         ProfileTemplatePermissionsDisplay = FormatTemplatePermissions(record.TemplatePermissions);
         ProfileMasterDataPermissionsDisplay = FormatMasterDataPermissions(record.MasterDataPermissions);
 
@@ -565,6 +681,9 @@ public partial class SettingsViewModel : ViewModelBase
             }
         }
     }
+
+    private static string FormatMemberSinceDisplay(DateTime utc) =>
+        utc == default ? "Not available" : utc.ToLocalTime().ToString("dd MMM yyyy");
 
     private static string FormatTemplatePermissions(TemplatePermissionsDto? p)
     {
@@ -993,7 +1112,7 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUpdatePassword))]
     private async Task ChangePasswordAsync(CancellationToken ct)
     {
         ChangePasswordMessage = string.Empty;
@@ -1034,7 +1153,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         if (string.IsNullOrWhiteSpace(orgCode) || string.IsNullOrWhiteSpace(email))
         {
-            ChangePasswordMessage = "Organization details are missing. Please complete setup first.";
+            ChangePasswordMessage = "Organisation details are missing. Please complete setup first.";
             return;
         }
 
@@ -1057,6 +1176,7 @@ public partial class SettingsViewModel : ViewModelBase
         ChangeConfirmPassword = string.Empty;
         ChangePasswordMessage = "Password updated. If 2FA is enabled, use your authenticator app for any reset flows.";
         _activityLogger.LogUserAction("Password Changed", "Account password was changed");
+        NotifyPasswordFormState();
     }
 
     /// <summary>

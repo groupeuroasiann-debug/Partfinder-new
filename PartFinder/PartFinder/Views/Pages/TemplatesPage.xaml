@@ -75,6 +75,7 @@
                     </StackPanel>
                 </Button>
                 <Button
+                    x:Name="BulkUploadButton"
                     Style="{StaticResource ModernOutlineButtonStyle}"
                     Height="40"
                     Padding="14,0"
@@ -156,29 +157,54 @@
             Background="{StaticResource ElevatedCardBackgroundBrush}"
             BorderBrush="{StaticResource GlassStrokeBrush}"
             BorderThickness="1">
-            <Grid ColumnSpacing="12">
+            <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <ProgressRing
                     x:Name="ImportProgressRing"
-                    Width="22"
-                    Height="22"
+                    Width="28"
+                    Height="28"
                     VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
                     <TextBlock
                         x:Name="ImportStatusText"
                         FontSize="13"
                         FontWeight="SemiBold"
                         Foreground="{StaticResource TextPrimaryBrush}"
                         TextWrapping="WrapWholeWords" />
+                    <ProgressBar
+                        x:Name="ImportProgressBar"
+                        Height="10"
+                        Minimum="0"
+                        Maximum="100"
+                        Visibility="Collapsed"
+                        Foreground="{StaticResource AccentPrimaryBrush}" />
+                    <TextBlock
+                        x:Name="ImportCountText"
+                        FontSize="13"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Visibility="Collapsed" />
                     <TextBlock
                         x:Name="ImportStatusDetailText"
                         FontSize="12"
                         Foreground="{StaticResource TextSecondaryBrush}"
                         TextWrapping="WrapWholeWords" />
                 </StackPanel>
+                <TextBlock
+                    x:Name="ImportPercentText"
+                    Grid.Column="2"
+                    MinWidth="72"
+                    FontSize="28"
+                    FontWeight="Bold"
+                    FontFamily="Consolas"
+                    Foreground="{StaticResource AccentPrimaryBrush}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right"
+                    Visibility="Collapsed" />
             </Grid>
         </Border>
 

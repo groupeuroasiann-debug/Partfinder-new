@@ -8,6 +8,7 @@
 
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:InvertedBoolToVisibilityConverter x:Key="InvertedBoolToVisibilityConverter" />
 
         <!-- ═══════════════════════════════════════════════════════════════
              PAGE ENTRANCE  — fade + slide up (macOS-style, 300ms)
@@ -240,10 +241,42 @@
             </StackPanel>
         </Border>
 
+        <!-- Single-template org: linking unavailable -->
+        <Border
+            Grid.Row="2"
+            Visibility="{Binding CanCreateTemplateLinks, Converter={StaticResource InvertedBoolToVisibilityConverter}}"
+            Background="{StaticResource CardBackgroundBrush}"
+            BorderBrush="{StaticResource BorderDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Padding="28,32"
+            Translation="0,0,24">
+            <Border.Shadow><ThemeShadow/></Border.Shadow>
+            <StackPanel Spacing="10" HorizontalAlignment="Center" MaxWidth="520">
+                <FontIcon Glyph="&#xE8FD;" FontSize="32" Foreground="{StaticResource TextTertiaryBrush}" HorizontalAlignment="Center" />
+                <TextBlock
+                    Text="No templates to link"
+                    FontSize="16"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource TextPrimaryBrush}"
+                    HorizontalAlignment="Center" />
+                <TextBlock
+                    Text="{Binding NoTemplatesToLinkMessage}"
+                    FontSize="12"
+                    Foreground="{StaticResource TextSecondaryBrush}"
+                    TextWrapping="WrapWholeWords"
+                    TextAlignment="Center"
+                    HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 2 — TWO-PANEL LINKER
         ════════════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="2" ColumnSpacing="14">
+        <Grid
+            Grid.Row="2"
+            ColumnSpacing="14"
+            Visibility="{Binding CanCreateTemplateLinks, Converter={StaticResource BoolToVisibilityConverter}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -440,7 +473,7 @@
                         FontSize="13"
                         MinHeight="40"
                         DisplayMemberPath="Name"
-                        ItemsSource="{Binding Templates}"
+                        ItemsSource="{Binding LookupTemplateChoices}"
                         SelectedItem="{Binding LookupTemplate, Mode=TwoWay}" />
 
                     <!-- DISPLAY indicator hint -->
@@ -525,6 +558,7 @@
         ════════════════════════════════════════════════════════════════ -->
         <Border
             Grid.Row="3"
+            Visibility="{Binding CanCreateTemplateLinks, Converter={StaticResource BoolToVisibilityConverter}}"
             Background="{StaticResource CardBackgroundBrush}"
             BorderBrush="{StaticResource BorderDefaultBrush}"
             BorderThickness="1"

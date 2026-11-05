@@ -18,9 +18,9 @@ const PRODUCTS: Product[] = [
     name: 'AI Smart Search',
     category: 'Platform',
     summary:
-      'Natural-language and part-number search across OEM catalogs, cross-references, and your org inventory with ranked relevance.',
+      'Natural-language and part-number search across OEM catalogues, cross-references, and your org inventory with ranked relevance.',
     icon: 'manage_search',
-    tags: ['search', 'oem', 'cross-reference', 'nlp', 'catalog'],
+    tags: ['search', 'oem', 'cross-reference', 'nlp', 'catalogue'],
     bestFor: 'Procurement teams needing fast part identification',
   },
   {
@@ -68,7 +68,7 @@ const PRODUCTS: Product[] = [
     name: 'PartFinder Windows App',
     category: 'Client',
     summary:
-      'Licensed desktop client for daily search, worksheets, master data, and org setup — the primary workspace for operators.',
+      'Licenced desktop client for daily search, worksheets, master data, and org setup — the primary workspace for operators.',
     icon: 'desktop_windows',
     tags: ['windows', 'desktop', 'app', 'client', 'download'],
     bestFor: 'Day-to-day users in the plant, yard, or office',
@@ -95,12 +95,12 @@ const PRODUCTS: Product[] = [
   },
   {
     id: 'procurement-optimization',
-    name: 'Procurement Optimization',
+    name: 'Procurement Optimisation',
     category: 'Solution module',
     summary:
       'Shorten RFQ cycles with automated sourcing rules, preferred vendors, and spend visibility across categories.',
     icon: 'shopping_cart',
-    tags: ['procurement', 'rfq', 'sourcing', 'cost', 'optimization'],
+    tags: ['procurement', 'rfq', 'sourcing', 'cost', 'optimisation'],
     bestFor: 'Central procurement and shared services',
   },
 ]

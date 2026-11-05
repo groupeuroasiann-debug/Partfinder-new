@@ -43,8 +43,8 @@ export class SetupController {
     return this.setupService.inviteOrgUser(dto);
   }
 
-  @Post('list-users')
-  listUsers(@Body() dto: SetupOrgCodeDto) {
+  @Post(['list-users', 'list-org-users'])
+  listOrgUsers(@Body() dto: SetupOrgCodeDto) {
     return this.setupService.listOrgUsers(dto.orgCode);
   }
 

@@ -51,7 +51,7 @@ const RESOURCES: ResourceLink[] = [
   },
   {
     id: 'features',
-    title: 'Feature catalog',
+    title: 'Feature catalogue',
     description: 'Windows app modules and backend APIs that ship today (templates, parts search, setup, RBAC).',
     icon: 'apps',
     category: 'Guides',
@@ -100,7 +100,7 @@ const RESOURCES: ResourceLink[] = [
   },
   {
     id: 'standard-columns',
-    title: 'Standard column catalog',
+    title: 'Standard column catalogue',
     description:
       'Built-in column labels (Brand, Model, Part No, Vendor, etc.) from PartFinder.Core ColumnCatalog for templates.',
     icon: 'view_column',
@@ -350,7 +350,7 @@ export function ResourcesPage() {
 
             <div id="standard-columns" className="scroll-mt-28 bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
               <h2 className="font-headline-sm text-headline-sm text-on-surface font-extrabold m-0">
-                Standard column catalog
+                Standard column catalogue
               </h2>
               <p className="font-body-sm text-body-sm text-on-surface-variant mt-2 m-0">
                 Add standard columns from Templates in the app — labels below come from{' '}

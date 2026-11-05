@@ -11,6 +11,7 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:InvertedBoolToVisibilityConverter x:Key="InvertedBoolToVisibilityConverter" />
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
         <!-- Row hover style -->
         <Style x:Key="UserRowItemStyle" TargetType="ListViewItem">
             <Setter Property="Padding" Value="0" />
@@ -172,23 +173,26 @@
                     </Border>
                 </Grid>
 
-                <!-- â”€â”€ Search + Filters â”€â”€ -->
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="140" />
-                        <ColumnDefinition Width="140" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border
-                        Grid.Column="0"
-                        CornerRadius="8"
-                        Background="{StaticResource CardBackgroundBrush}"
-                        BorderBrush="{StaticResource BorderDefaultBrush}"
-                        BorderThickness="1"
-                        Padding="8,0" Translation="0,0,32">
-                            <Border.Shadow><ThemeShadow/></Border.Shadow>
-                            <Grid ColumnSpacing="6" VerticalAlignment="Stretch">
+                <!-- Search, filters, and user table (single card — no gap between search and grid) -->
+                <Border
+                    Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource BorderDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Translation="0,0,32">
+                    <Border.Shadow><ThemeShadow /></Border.Shadow>
+                    <StackPanel Spacing="0">
+                        <Grid
+                            Padding="12,10"
+                            ColumnSpacing="8"
+                            BorderBrush="{StaticResource BorderDefaultBrush}"
+                            BorderThickness="0,0,0,1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MinWidth="160" />
+                                <ColumnDefinition Width="128" />
+                                <ColumnDefinition Width="128" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0" ColumnSpacing="6" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
@@ -200,89 +204,80 @@
                                     Background="Transparent"
                                     PlaceholderText="Search users..."
                                     FontSize="12"
-                                    VerticalAlignment="Stretch"
                                     VerticalContentAlignment="Center"
-                                    HorizontalAlignment="Stretch"
                                     Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
-                    </Border>
+                            <ComboBox
+                                Grid.Column="1"
+                                HorizontalAlignment="Stretch"
+                                FontSize="12"
+                                ItemsSource="{Binding RoleFilters}"
+                                SelectedItem="{Binding SelectedRoleFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <ComboBox
+                                Grid.Column="2"
+                                HorizontalAlignment="Stretch"
+                                FontSize="12"
+                                ItemsSource="{Binding StatusFilters}"
+                                SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
 
-                    <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" FontSize="12"
-                              ItemsSource="{Binding RoleFilters}"
-                              SelectedItem="{Binding SelectedRoleFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock
+                            Padding="12,6"
+                            Foreground="{StaticResource DangerBrush}"
+                            Text="{Binding StatusMessage}"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords"
+                            Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}" />
 
-                    <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" FontSize="12"
-                              ItemsSource="{Binding StatusFilters}"
-                              SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
-
-                <!-- â”€â”€ Status + Loading â”€â”€ -->
-                <TextBlock
-                    Foreground="{StaticResource DangerBrush}"
-                    Text="{Binding StatusMessage}"
-                    FontSize="12"
-                    TextWrapping="WrapWholeWords" />
-                <ProgressRing
-                    Width="24" Height="24"
-                    HorizontalAlignment="Left"
-                    IsActive="{Binding IsBusy}" />
-
-                <!-- â”€â”€ Users Table â”€â”€ -->
-                <Border
-                    Background="{StaticResource CardBackgroundBrush}"
-                    BorderBrush="{StaticResource BorderDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="4" Translation="0,0,32">
-                            <Border.Shadow><ThemeShadow/></Border.Shadow>
-                            <StackPanel>
-
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <StackPanel Spacing="0" MinWidth="820">
                         <!-- Table Header -->
                         <Grid
-                            Padding="14,10"
-                            ColumnSpacing="10"
+                            Padding="12,8"
+                            ColumnSpacing="6"
                             Background="{StaticResource GridHeaderBackgroundBrush}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="2.5*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="1.5*" />
-                                <ColumnDefinition Width="88" />
+                                <ColumnDefinition Width="36" />
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="*" MinWidth="140" />
                                 <ColumnDefinition Width="92" />
+                                <ColumnDefinition Width="72" />
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Width="28" />
                             <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="2" Text="EMAIL" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="3" Text="ROLE" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="4" Text="ACCESS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="5" Text="INVITATIONS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="6" Text="ACTIONS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Left" />
-                            <TextBlock Grid.Column="7" Text="STATUS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Column="4" Text="STATUS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="ACCESS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="6" Text="INVITED" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="7" Text="ACTIONS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
                         </Grid>
 
                         <!-- Table Rows -->
                         <ListView
+                            Padding="0"
                             ItemsSource="{Binding Users}"
                             SelectionMode="None"
                             ItemContainerStyle="{StaticResource UserRowItemStyle}">
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid
-                                        Padding="14,10"
-                                        ColumnSpacing="10"
-                                        MinHeight="48"
+                                        Padding="12,8"
+                                        ColumnSpacing="6"
+                                        MinHeight="44"
                                         BorderBrush="{StaticResource BorderDefaultBrush}"
                                         BorderThickness="0,0,0,1">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="2.5*" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="1.5*" />
-                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="36" />
+                                            <ColumnDefinition Width="130" />
+                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="84" />
+                                            <ColumnDefinition Width="84" />
+                                            <ColumnDefinition Width="*" MinWidth="140" />
                                             <ColumnDefinition Width="92" />
+                                            <ColumnDefinition Width="72" />
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Avatar -->
@@ -335,9 +330,29 @@
                                                 Foreground="{StaticResource AccentPrimaryBrush}" />
                                         </Border>
 
+                                        <!-- Status -->
+                                        <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                                            <Border
+                                                HorizontalAlignment="Left"
+                                                CornerRadius="6"
+                                                Padding="6,2"
+                                                Background="#1A38D6A4"
+                                                Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                <TextBlock Text="Active" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                                            </Border>
+                                            <Border
+                                                HorizontalAlignment="Left"
+                                                CornerRadius="6"
+                                                Padding="6,2"
+                                                Background="#33FFC98D"
+                                                Visibility="{Binding IsActive, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+                                                <TextBlock Text="Pending" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}" />
+                                            </Border>
+                                        </StackPanel>
+
                                         <!-- Access -->
                                         <TextBlock
-                                            Grid.Column="4"
+                                            Grid.Column="5"
                                             Text="{Binding PartsScopeDisplay}"
                                             FontSize="11"
                                             Foreground="{StaticResource TextSecondaryBrush}"
@@ -346,70 +361,36 @@
 
                                         <!-- Invited date -->
                                         <TextBlock
-                                            Grid.Column="5"
+                                            Grid.Column="6"
                                             Text="{Binding InvitedAtDisplay}"
                                             FontSize="10"
                                             Foreground="{StaticResource TextTertiaryBrush}"
                                             VerticalAlignment="Center" />
 
                                         <!-- Actions -->
-                                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnEditUserClicked" ToolTipService.ToolTip="Edit User">
+                                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnEditUserClicked" IsEnabled="{Binding CanEditInUserManagement}" ToolTipService.ToolTip="Edit User">
                                                 <FontIcon Glyph="&#xE70F;" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
                                             </Button>
-                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnDeleteUserClicked" ToolTipService.ToolTip="Delete User">
+                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnDeleteUserClicked" IsEnabled="{Binding CanEditInUserManagement}" ToolTipService.ToolTip="Delete User">
                                                 <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{StaticResource DangerBrush}" />
                                             </Button>
-                                        </StackPanel>
-
-                                        <!-- Status: Active -->
-                                        <StackPanel
-                                            Grid.Column="7"
-                                            Orientation="Horizontal"
-                                            Spacing="6"
-                                            VerticalAlignment="Center"
-                                            Visibility="{Binding IsActiveStatus, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <Ellipse Width="7" Height="7" Fill="{StaticResource SuccessBrush}" VerticalAlignment="Center" />
-                                            <TextBlock
-                                                Text="Active"
-                                                FontSize="11"
-                                                FontWeight="SemiBold"
-                                                Foreground="{StaticResource SuccessBrush}"
-                                                VerticalAlignment="Center" />
-                                        </StackPanel>
-
-                                        <!-- Status: Pending -->
-                                        <StackPanel
-                                            Grid.Column="7"
-                                            Orientation="Horizontal"
-                                            Spacing="6"
-                                            VerticalAlignment="Center"
-                                            Visibility="{Binding IsActiveStatus, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
-                                            <Ellipse Width="7" Height="7" Fill="{StaticResource InfoBrush}" VerticalAlignment="Center" />
-                                            <TextBlock
-                                                Text="Pending"
-                                                FontSize="11"
-                                                FontWeight="SemiBold"
-                                                Foreground="{StaticResource TextSecondaryBrush}"
-                                                VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
 
-                        <!-- Empty state -->
-                        <Border Padding="20" Visibility="{Binding IsBusy}">
-                            <StackPanel HorizontalAlignment="Center" Spacing="6">
-                                <ProgressRing Width="20" Height="20" IsActive="True" />
-                                <TextBlock
-                                    Text="Loading users..."
-                                    FontSize="12"
-                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                    HorizontalAlignment="Center" />
+                        <!-- Loading -->
+                        <Border Padding="16,12" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                <ProgressRing Width="18" Height="18" IsActive="True" />
+                                <TextBlock Text="Loading users..." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
 
+                            </StackPanel>
+                        </ScrollViewer>
                     </StackPanel>
                 </Border>
 

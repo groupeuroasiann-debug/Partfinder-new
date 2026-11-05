@@ -15,11 +15,16 @@ public enum InventoryFormMode
 public partial class InventoryViewModel : ViewModelBase
 {
     private readonly MongoInventoryService _inventoryService;
+    private readonly BulkInventoryImportService _bulkImport;
     private readonly ActivityLogger _activityLogger;
 
-    public InventoryViewModel(MongoInventoryService inventoryService, ActivityLogger activityLogger)
+    public InventoryViewModel(
+        MongoInventoryService inventoryService,
+        BulkInventoryImportService bulkImport,
+        ActivityLogger activityLogger)
     {
         _inventoryService = inventoryService;
+        _bulkImport = bulkImport;
         _activityLogger = activityLogger;
     }
 
@@ -199,6 +204,16 @@ public partial class InventoryViewModel : ViewModelBase
 
     [RelayCommand]
     private async Task RefreshAsync() => await LoadInventoryAsync();
+
+    public async Task<BulkInventoryImportResult> ImportBulkFromFileAsync(
+        string filePath,
+        IProgress<BulkImportProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await _bulkImport
+            .ImportFromFileAsync(filePath, progress, cancellationToken)
+            .ConfigureAwait(true);
+    }
 }
 
 public sealed partial class InventoryItem : ObservableObject
