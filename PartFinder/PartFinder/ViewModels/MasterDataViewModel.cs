@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MongoDB.Bson;
-using PartFinder.Core;
 using PartFinder.Models;
 using PartFinder.Services;
 
@@ -18,69 +17,32 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     private bool _suppressTemplateSelectionChange;
     private IReadOnlyList<PartTemplateDefinition> _cachedTemplates = Array.Empty<PartTemplateDefinition>();
     private IReadOnlyList<TemplateContextAction> _loadedContextActions = Array.Empty<TemplateContextAction>();
+    private CancellationTokenSource? _templateLoadCts;
+    private readonly Dictionary<string, string> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ICurrentUserAccessService _access;
-    private readonly BackendApiClient _api;
-    private readonly ExplorerNavigationCoordinator _explorerNav;
-    private readonly INavigationService _navigation;
-    private readonly ShellViewModel _shell;
-    private Dictionary<string, EnrichedRowDto> _enrichedByRowId = new(StringComparer.Ordinal);
-    private HashSet<string> _matchKeyColumnLabels = new(StringComparer.OrdinalIgnoreCase);
-    private IReadOnlyList<WorksheetRelationDto> _worksheetRelations = [];
 
-    public event Action? GridFilterChanged;
+    public event EventHandler? ColumnFiltersChanged;
 
     public MasterDataViewModel(
         ITemplateSchemaService templateSchema,
         IMasterDataRecordsService records,
         IContextActionsService contextActions,
         ActivityLogger activityLogger,
-        ICurrentUserAccessService access,
-        BackendApiClient api,
-        ExplorerNavigationCoordinator explorerNav,
-        INavigationService navigation,
-        ShellViewModel shell)
+        ICurrentUserAccessService access)
     {
         _templateSchema = templateSchema;
         _records = records;
         _contextActions = contextActions;
         _activityLogger = activityLogger;
         _access = access;
-        _api = api;
-        _explorerNav = explorerNav;
-        _navigation = navigation;
-        _shell = shell;
     }
 
     public ObservableCollection<PartTemplateDefinition> DataTemplates { get; } = new();
 
-    public ObservableCollection<PartTemplateDefinition> FilteredDataTemplates { get; } = new();
-
     public ObservableCollection<TemplateFieldDefinition> Columns { get; } = new();
 
     public ObservableCollection<MasterDataRowViewModel> Rows { get; } = new();
-
-    public ObservableCollection<RelationDetailSection> LinkedRelationSections { get; } = new();
-
-    public ObservableCollection<DisplayPair> LinkedPrimaryDetails { get; } = new();
-
-    [ObservableProperty]
-    private bool showLinkedInfoPanel;
-
-    [ObservableProperty]
-    private string linkedPanelTitle = "Linked information";
-
-    [ObservableProperty]
-    private MasterDataRowViewModel? selectedGridRow;
-
-    [ObservableProperty]
-    private MasterDataCellViewModel? selectedGridCell;
-
-    [ObservableProperty]
-    private string selectedCellSummary = string.Empty;
-
-    [ObservableProperty]
-    private string editModeBannerText = string.Empty;
 
     [ObservableProperty]
     private PartTemplateDefinition? selectedDataTemplate;
@@ -103,357 +65,91 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     [ObservableProperty]
     private bool isEditMode;
 
-    [ObservableProperty]
-    private string templatePickerText = string.Empty;
-
-    [ObservableProperty]
-    private string gridSearchText = string.Empty;
-
-    // Per-column filters: key = field.Key, value = filter text
-    private readonly Dictionary<string, string> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
-
-    public void SetColumnFilter(string fieldKey, string filterText)
-    {
-        if (string.IsNullOrWhiteSpace(filterText))
-            _columnFilters.Remove(fieldKey);
-        else
-            _columnFilters[fieldKey] = filterText.Trim();
-
-        GridFilterChanged?.Invoke();
-    }
-
-    public string GetColumnFilter(string fieldKey)
-    {
-        return _columnFilters.TryGetValue(fieldKey, out var val) ? val : string.Empty;
-    }
-
-    /// <summary>Get unique suggestions for a column based on typed text (3+ chars).</summary>
-    public IReadOnlyList<string> GetColumnSuggestions(string fieldKey, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query) || query.Length < 3)
-            return Array.Empty<string>();
-
-        var lowerQuery = query.ToLowerInvariant();
-        return Rows
-            .Select(row => row.Cells.FirstOrDefault(c => c.FieldKey == fieldKey)?.Text ?? string.Empty)
-            .Where(val => !string.IsNullOrWhiteSpace(val) && val.ToLowerInvariant().Contains(lowerQuery))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToList();
-    }
-
-    [ObservableProperty]
-    private ExplorerRowMatchFilter rowMatchFilter = ExplorerRowMatchFilter.All;
-
-    [ObservableProperty]
-    private string relationHealthSummary = string.Empty;
-
-    [ObservableProperty]
-    private bool isDrawerPinned;
-
-    [ObservableProperty]
-    private string toastMessage = string.Empty;
-
-    public ObservableCollection<ExplorerColumnVisibilityItem> ColumnVisibility { get; } = new();
-
-    public IReadOnlyList<ExplorerRowMatchFilter> RowMatchFilterOptions { get; } =
-        Enum.GetValues<ExplorerRowMatchFilter>();
-
-    private bool _suppressTemplatePickerTextSync;
-
     public string EditModeButtonText => IsEditMode ? "Stop Editing" : "Edit Data";
-
-    public string FilteredRowCountText
-    {
-        get
-        {
-            var visible = GetVisibleRows().Count;
-            var total = Rows.Count;
-            return visible == total ? $"{total} rows" : $"{visible} of {total} rows";
-        }
-    }
 
     public bool CanEditMasterData => _access.Capabilities.CanEditMasterData;
     public bool CanAddMasterData => _access.Capabilities.CanAddMasterData;
     public bool CanCopyMasterData => _access.Capabilities.CanCopyMasterData;
-    public bool CanExportMasterData => _access.Capabilities.CanViewMasterData || _access.Capabilities.CanCopyMasterData;
-    public bool CanImportMasterData => _access.Capabilities.CanAddMasterData;
-    public bool ShowEditButton => CanEditMasterData && !IsEditMode;
     public bool CanDeleteMasterData => _access.Capabilities.CanDeleteMasterData;
 
-    public IReadOnlyList<MasterDataRowViewModel> GetVisibleRows()
+    public IReadOnlyList<MasterDataRowViewModel> GetVisibleRows() =>
+        Rows.Where(IsRowVisible).ToList();
+
+    public bool IsRowVisible(MasterDataRowViewModel row) =>
+        _columnFilters.Count == 0 || RowMatchesColumnFilters(row);
+
+    public bool TryGetColumnFilter(string fieldKey, out string filterText) =>
+        _columnFilters.TryGetValue(fieldKey, out filterText!);
+
+    public void SetColumnFilter(string fieldKey, string? filterValue)
     {
-        var hasRelations = _worksheetRelations.Count > 0;
-        var search = GridSearchText.Trim();
-        return Rows
-            .Where(row => RowMatchesSearch(row, search))
-            .Where(row => RowMatchesColumnFilters(row))
-            .Where(row =>
+        if (string.IsNullOrWhiteSpace(fieldKey))
+        {
+            return;
+        }
+
+        var normalized = filterValue?.Trim();
+        if (string.IsNullOrEmpty(normalized))
+        {
+            if (!_columnFilters.Remove(fieldKey))
             {
-                var matched = GetRowMatchBadge(row.RowId) == ExplorerCellMatchBadge.Matched;
-                return ExplorerGridFilter.RowMatchesLinkFilter(RowMatchFilter, hasRelations, matched);
-            })
-            .ToList();
+                return;
+            }
+        }
+        else if (_columnFilters.TryGetValue(fieldKey, out var existing)
+                 && string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        else
+        {
+            _columnFilters[fieldKey] = normalized;
+        }
+
+        ColumnFiltersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ClearColumnFilters()
+    {
+        if (_columnFilters.Count == 0)
+        {
+            return;
+        }
+
+        _columnFilters.Clear();
+        ColumnFiltersChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private bool RowMatchesColumnFilters(MasterDataRowViewModel row)
     {
-        if (_columnFilters.Count == 0) return true;
-
-        foreach (var (fieldKey, filterText) in _columnFilters)
+        foreach (var filter in _columnFilters)
         {
-            var cell = row.Cells.FirstOrDefault(c => c.FieldKey == fieldKey);
-            var cellText = cell?.Text ?? string.Empty;
-            if (!cellText.Contains(filterText, StringComparison.OrdinalIgnoreCase))
+            var cell = row.Cells.FirstOrDefault(
+                c => string.Equals(c.FieldKey, filter.Key, StringComparison.OrdinalIgnoreCase));
+            var text = cell?.Text ?? string.Empty;
+            if (!text.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))
+            {
                 return false;
+            }
         }
+
         return true;
     }
 
-    /// <summary>Public check for a single row against all active filters — used for row
-    /// visibility toggling (no visual tree mutation = no flicker/dim).</summary>
-    public bool RowPassesAllFilters(MasterDataRowViewModel row)
-    {
-        var hasRelations = _worksheetRelations.Count > 0;
-        if (!RowMatchesSearch(row, GridSearchText.Trim())) return false;
-        if (!RowMatchesColumnFilters(row)) return false;
-        var matched = GetRowMatchBadge(row.RowId) == ExplorerCellMatchBadge.Matched;
-        return ExplorerGridFilter.RowMatchesLinkFilter(RowMatchFilter, hasRelations, matched);
-    }
-
-    public IReadOnlyList<TemplateFieldDefinition> GetVisibleColumns()
-    {
-        var hidden = ColumnVisibility
-            .Where(c => !c.IsVisible)
-            .Select(c => c.Key)
-            .ToHashSet(StringComparer.Ordinal);
-        return Columns.Where(c => !hidden.Contains(c.Key)).ToList();
-    }
-
-    public IReadOnlyList<IReadOnlyDictionary<string, string>> GetExportRows()
-    {
-        var result = new List<IReadOnlyDictionary<string, string>>();
-        foreach (var row in Rows)
-        {
-            var dict = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var cell in row.Cells)
-            {
-                dict[cell.FieldKey] = cell.Text ?? string.Empty;
-            }
-            result.Add(dict);
-        }
-        return result;
-    }
-
-    partial void OnGridSearchTextChanged(string value)
-    {
-        OnPropertyChanged(nameof(FilteredRowCountText));
-        GridFilterChanged?.Invoke();
-    }
-
-    partial void OnRowMatchFilterChanged(ExplorerRowMatchFilter value)
-    {
-        OnPropertyChanged(nameof(FilteredRowCountText));
-        GridFilterChanged?.Invoke();
-    }
-
-    partial void OnTemplatePickerTextChanged(string value) => RefreshFilteredDataTemplates();
-
-    public void ShowToast(string message)
-    {
-        ToastMessage = message;
-        OnPropertyChanged(nameof(ToastMessage));
-    }
-
-    [RelayCommand]
-    private void ClearGridFilters()
-    {
-        GridSearchText = string.Empty;
-        _columnFilters.Clear();
-        RowMatchFilter = ExplorerRowMatchFilter.All;
-        OnPropertyChanged(nameof(FilteredRowCountText));
-        GridFilterChanged?.Invoke();
-    }
-
-    [RelayCommand]
-    private void ToggleDrawerPin() => IsDrawerPinned = !IsDrawerPinned;
-
-    [RelayCommand]
-    private void OpenLookupTemplate(RelationDetailSection? section)
-    {
-        if (section is null || string.IsNullOrWhiteSpace(section.LookupTemplateId))
-        {
-            return;
-        }
-
-        _navigation.Navigate(AppPage.MasterData);
-        _shell.NavigateToPage(AppPage.MasterData);
-        _explorerNav.RequestOpenTemplate(section.LookupTemplateId);
-        ShowToast($"Opening {section.LookupTemplateName}…");
-    }
-
-    public void OpenTemplateById(string templateId)
-    {
-        var template = DataTemplates.FirstOrDefault(
-            t => string.Equals(t.Id, templateId, StringComparison.Ordinal));
-        if (template is not null)
-        {
-            SelectTemplateFromPicker(template);
-        }
-    }
-
-    public bool TryMoveSelection(int rowDelta, int colDelta)
-    {
-        var rows = GetVisibleRows();
-        var cols = GetVisibleColumns();
-        if (rows.Count == 0 || cols.Count == 0)
-        {
-            return false;
-        }
-
-        var rowIndex = 0;
-        if (SelectedGridRow is not null)
-        {
-            for (var i = 0; i < rows.Count; i++)
-            {
-                if (ReferenceEquals(rows[i], SelectedGridRow))
-                {
-                    rowIndex = i;
-                    break;
-                }
-            }
-        }
-
-        var colIndex = 0;
-        if (SelectedGridCell is not null)
-        {
-            for (var i = 0; i < cols.Count; i++)
-            {
-                if (string.Equals(cols[i].Key, SelectedGridCell.FieldKey, StringComparison.Ordinal))
-                {
-                    colIndex = i;
-                    break;
-                }
-            }
-        }
-
-        rowIndex = Math.Clamp(rowIndex + rowDelta, 0, rows.Count - 1);
-        colIndex = Math.Clamp(colIndex + colDelta, 0, cols.Count - 1);
-
-        var row = rows[rowIndex];
-        var field = cols[colIndex];
-        var cell = row.Cells.FirstOrDefault(c => c.FieldKey == field.Key);
-        SelectGridCell(row, cell);
-        return true;
-    }
-
-    private static bool RowMatchesSearch(MasterDataRowViewModel row, string search)
-    {
-        if (string.IsNullOrWhiteSpace(search))
-        {
-            return true;
-        }
-
-        var cells = row.Cells.ToDictionary(c => c.FieldKey, c => c.Text, StringComparer.OrdinalIgnoreCase);
-        return ExplorerGridFilter.RowMatchesSearch(cells, search);
-    }
-
-    private void RebuildColumnVisibility()
-    {
-        ColumnVisibility.Clear();
-        foreach (var col in Columns)
-        {
-            var item = new ExplorerColumnVisibilityItem { Key = col.Key, Label = col.Label };
-            item.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(ExplorerColumnVisibilityItem.IsVisible))
-                {
-                    GridFilterChanged?.Invoke();
-                }
-            };
-            ColumnVisibility.Add(item);
-        }
-    }
-
-    private void RefreshRelationHealth()
-    {
-        var total = Rows.Count;
-        var matched = Rows.Count(r => GetRowMatchBadge(r.RowId) == ExplorerCellMatchBadge.Matched);
-        var health = ExplorerGridFilter.ComputeHealth(total, matched, _worksheetRelations.Count);
-        RelationHealthSummary = health.SummaryText;
-
-        if (SelectedDataTemplate is not null)
-        {
-            _explorerNav.PublishHealth(
-                new RelationHealthSnapshot(
-                    SelectedDataTemplate.Id,
-                    SelectedDataTemplate.Name,
-                    total,
-                    matched,
-                    _worksheetRelations.Count));
-        }
-    }
-
-    public void RefreshFilteredDataTemplates()
-    {
-        var query = TemplatePickerText.Trim();
-        FilteredDataTemplates.Clear();
-        IEnumerable<PartTemplateDefinition> matches = string.IsNullOrEmpty(query)
-            ? DataTemplates
-            : DataTemplates.Where(
-                t => t.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
-
-        foreach (var template in matches)
-        {
-            FilteredDataTemplates.Add(template);
-        }
-    }
-
-    public void SyncTemplatePickerTextFromSelection()
-    {
-        _suppressTemplatePickerTextSync = true;
-        TemplatePickerText = SelectedDataTemplate?.Name ?? string.Empty;
-        _suppressTemplatePickerTextSync = false;
-        RefreshFilteredDataTemplates();
-    }
-
-    public void SelectTemplateFromPicker(PartTemplateDefinition template)
-    {
-        if (string.Equals(SelectedDataTemplate?.Id, template.Id, StringComparison.Ordinal))
-        {
-            SyncTemplatePickerTextFromSelection();
-            return;
-        }
-
-        _suppressTemplateSelectionChange = true;
-        _suppressTemplatePickerTextSync = true;
-        SelectedDataTemplate = template;
-        TemplatePickerText = template.Name;
-        _suppressTemplatePickerTextSync = false;
-        _suppressTemplateSelectionChange = false;
-        _ = LoadForTemplateAsync(template.Id);
-    }
+    public bool CanAddRows =>
+        IsEditMode && Columns.Count > 0 && (CanEditMasterData || CanAddMasterData);
 
     partial void OnIsEditModeChanged(bool value)
     {
         OnPropertyChanged(nameof(EditModeButtonText));
-        OnPropertyChanged(nameof(ShowEditButton));
-        EditModeBannerText = value
-            ? "You are editing — save your changes or cancel to discard."
-            : string.Empty;
+        OnPropertyChanged(nameof(CanAddRows));
+        OnPropertyChanged(nameof(CanManageColumns));
+        OnPropertyChanged(nameof(CanRemoveColumns));
+        AddRowCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedDataTemplateChanged(PartTemplateDefinition? value)
     {
-        if (!_suppressTemplatePickerTextSync)
-        {
-            _suppressTemplatePickerTextSync = true;
-            TemplatePickerText = value?.Name ?? string.Empty;
-            _suppressTemplatePickerTextSync = false;
-            RefreshFilteredDataTemplates();
-        }
-
         if (_suppressTemplateSelectionChange || value is null)
         {
             return;
@@ -467,6 +163,13 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     {
         IsLoading = true;
         StatusMessage = null;
+        if (!_access.Capabilities.CanViewMasterData)
+        {
+            StatusMessage = "You do not have permission to view master data.";
+            IsLoading = false;
+            DataTemplates.Clear();
+            return;
+        }
         ShowNoTemplateHint = false;
         ShowNoDatabaseHint = false;
         ShowTemplatePicker = false;
@@ -477,13 +180,9 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         try
         {
-            var allTemplates = await _templateSchema
+            _cachedTemplates = await _templateSchema
                 .GetTemplatesAsync(cancellationToken)
                 .ConfigureAwait(true);
-
-            // Filter templates based on user permissions (employee sees only allowed templates)
-            var filtered = _access.FilterTemplatesForParts(allTemplates);
-            _cachedTemplates = filtered;
 
             if (_cachedTemplates.Count == 0)
             {
@@ -496,22 +195,15 @@ public sealed partial class MasterDataViewModel : ViewModelBase
                 DataTemplates.Add(t);
             }
 
-            ShowTemplatePicker = false;
-            RefreshFilteredDataTemplates();
+            ShowTemplatePicker = DataTemplates.Count > 1;
 
-            var master = _access.Capabilities.CanAccessMasterData
-                ? _cachedTemplates.FirstOrDefault(
-                    t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name))
-                : null;
+            var master = _cachedTemplates.FirstOrDefault(
+                t => string.Equals(t.Name, MongoTemplateSchemaService.MasterDataTemplateName, StringComparison.OrdinalIgnoreCase));
             var pick = master ?? DataTemplates[0];
 
             _suppressTemplateSelectionChange = true;
-            _suppressTemplatePickerTextSync = true;
             SelectedDataTemplate = pick;
-            TemplatePickerText = pick.Name;
-            _suppressTemplatePickerTextSync = false;
             _suppressTemplateSelectionChange = false;
-            RefreshFilteredDataTemplates();
 
             await LoadForTemplateAsync(pick.Id, cancellationToken).ConfigureAwait(true);
         }
@@ -529,36 +221,58 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
     }
 
-    public async Task LoadForTemplateAsync(string templateId, CancellationToken cancellationToken = default)
+    public async Task LoadForTemplateAsync(
+        string templateId,
+        CancellationToken cancellationToken = default,
+        bool restoreEditModeAfterLoad = false)
     {
+        _templateLoadCts?.Cancel();
+        _templateLoadCts?.Dispose();
+        _templateLoadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var loadCt = _templateLoadCts.Token;
+        var loadForId = templateId;
+        var preserveEditMode = restoreEditModeAfterLoad && IsEditMode;
+
         IsLoading = true;
         StatusMessage = null;
         ShowNoTemplateHint = false;
+        if (!preserveEditMode)
+        {
+            IsEditMode = false;
+        }
         Columns.Clear();
         Rows.Clear();
         _loadedContextActions = Array.Empty<TemplateContextAction>();
-        _enrichedByRowId.Clear();
-        LinkedRelationSections.Clear();
-        ShowLinkedInfoPanel = false;
-        SelectedGridRow = null;
+        _columnFilters.Clear();
 
         try
         {
             try
             {
-                var allTemplates = await _templateSchema
-                    .GetTemplatesAsync(cancellationToken)
+                _cachedTemplates = await _templateSchema
+                    .GetTemplatesAsync(loadCt)
                     .ConfigureAwait(true);
-                _cachedTemplates = _access.FilterTemplatesForParts(allTemplates);
+            }
+            catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
+            {
+                return;
             }
             catch
             {
                 // Keep prior cache for link resolution if refresh fails.
             }
 
+            loadCt.ThrowIfCancellationRequested();
+
             var template = await _templateSchema
-                .GetTemplateAsync(templateId, cancellationToken)
+                .GetTemplateAsync(loadForId, loadCt)
                 .ConfigureAwait(true);
+
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
 
             if (template is null || template.Fields.Count == 0)
             {
@@ -571,17 +285,31 @@ public sealed partial class MasterDataViewModel : ViewModelBase
                 Columns.Add(f);
             }
 
-            RebuildColumnVisibility();
-            GridSearchText = string.Empty;
-            RowMatchFilter = ExplorerRowMatchFilter.All;
-
             _loadedContextActions = await _contextActions
-                .GetForSourceTemplateAsync(template.Id, cancellationToken)
+                .GetForSourceTemplateAsync(template.Id, loadCt)
                 .ConfigureAwait(true);
+
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
 
             var persisted = await _records
-                .GetRowsAsync(template.Id, cancellationToken)
+                .GetStoredRowsAsync(template.Id, loadCt)
                 .ConfigureAwait(true);
+            if (persisted.Count == 0)
+            {
+                persisted = await _records
+                    .GetRowsAsync(template.Id, loadCt)
+                    .ConfigureAwait(true);
+            }
+
+            loadCt.ThrowIfCancellationRequested();
+            if (!IsLoadStillCurrent(loadForId))
+            {
+                return;
+            }
 
             if (persisted.Count == 0)
             {
@@ -589,187 +317,63 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             }
             else
             {
+                var added = 0;
                 foreach (var rec in persisted)
                 {
-                    Rows.Add(MapRecordToRow(rec));
-                }
-            }
-
-            await ResolveRecordLinkLabelsAsync(cancellationToken).ConfigureAwait(true);
-            await LoadLinkedDataAsync(template.Id, cancellationToken).ConfigureAwait(true);
-            SelectGridRow(Rows.FirstOrDefault());
-        }
-        catch (InvalidOperationException)
-        {
-            ShowNoDatabaseHint = true;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = "Error: " + ex.Message;
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    private async Task LoadLinkedDataAsync(string templateId, CancellationToken cancellationToken)
-    {
-        _enrichedByRowId = new Dictionary<string, EnrichedRowDto>(StringComparer.Ordinal);
-        LinkedRelationSections.Clear();
-        LinkedPrimaryDetails.Clear();
-        ShowLinkedInfoPanel = false;
-        _matchKeyColumnLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var (relationsOk, _, relations) = await _api.GetRelationsAsync(cancellationToken).ConfigureAwait(true);
-        if (relationsOk)
-        {
-            _worksheetRelations = relations
-                .Where(r => string.Equals(r.PrimaryTemplateId, templateId, StringComparison.Ordinal))
-                .ToList();
-            foreach (var relation in _worksheetRelations)
-            {
-                foreach (var key in relation.MatchKeys)
-                {
-                    if (!string.IsNullOrWhiteSpace(key.SourceColumn))
+                    if (loadCt.IsCancellationRequested || !IsLoadStillCurrent(loadForId))
                     {
-                        _matchKeyColumnLabels.Add(key.SourceColumn);
+                        return;
+                    }
+
+                    Rows.Add(MapRecordToRow(rec));
+                    added++;
+                    if (added % 250 == 0)
+                    {
+                        await Task.Yield();
                     }
                 }
             }
-        }
 
-        var (ok, _, rows) = await _api.GetViewDataAsync(templateId, cancellationToken).ConfigureAwait(true);
-        if (!ok || rows.Count == 0)
-        {
-            return;
+            await ResolveRecordLinkLabelsAsync(loadCt).ConfigureAwait(true);
         }
-
-        foreach (var row in rows)
+        catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
         {
-            if (!string.IsNullOrWhiteSpace(row.RowId))
+            // Superseded by a newer template selection or page unload.
+        }
+        catch (InvalidOperationException)
+        {
+            if (IsLoadStillCurrent(loadForId))
             {
-                _enrichedByRowId[row.RowId] = row;
+                ShowNoDatabaseHint = true;
             }
         }
-
-        ShowLinkedInfoPanel = rows.Any(r => r.LinkedData.Count > 0) || _worksheetRelations.Count > 0;
-        RefreshRelationHealth();
-        OnPropertyChanged(nameof(FilteredRowCountText));
-    }
-
-    public bool IsMatchKeyColumn(string fieldKey)
-    {
-        var label = GetColumnLabel(fieldKey);
-        return _matchKeyColumnLabels.Contains(label);
-    }
-
-    public ExplorerCellMatchBadge GetRowMatchBadge(string? rowId)
-    {
-        if (string.IsNullOrWhiteSpace(rowId) || _worksheetRelations.Count == 0)
+        catch (Exception ex)
         {
-            return ExplorerCellMatchBadge.None;
+            if (IsLoadStillCurrent(loadForId))
+            {
+                StatusMessage = "Error: " + ex.Message;
+            }
         }
-
-        if (!_enrichedByRowId.TryGetValue(rowId, out var enriched))
+        finally
         {
-            return ExplorerCellMatchBadge.Unmatched;
-        }
+            if (IsLoadStillCurrent(loadForId))
+            {
+                IsLoading = false;
+                if (preserveEditMode)
+                {
+                    IsEditMode = true;
+                }
 
-        return enriched.LinkedData.Values.Any(v => v.Matched)
-            ? ExplorerCellMatchBadge.Matched
-            : ExplorerCellMatchBadge.Unmatched;
-    }
-
-    public bool ShouldShowMatchBadge(MasterDataRowViewModel row, MasterDataCellViewModel cell) =>
-        IsMatchKeyColumn(cell.FieldKey) && GetRowMatchBadge(row.RowId) != ExplorerCellMatchBadge.None;
-
-    public void SelectGridCell(MasterDataRowViewModel? row, MasterDataCellViewModel? cell = null)
-    {
-        SelectedGridCell = cell;
-        if (cell is not null)
-        {
-            var label = GetColumnLabel(cell.FieldKey);
-            SelectedCellSummary = string.IsNullOrWhiteSpace(cell.Text)
-                ? label
-                : $"{label}: {cell.Text}";
-        }
-        else
-        {
-            SelectedCellSummary = string.Empty;
-        }
-
-        SelectGridRow(row);
-        ShowLinkedInfoPanel = true;
-    }
-
-    [RelayCommand]
-    private void CloseDetailsPanel()
-    {
-        if (IsDrawerPinned)
-        {
-            return;
-        }
-
-        ShowLinkedInfoPanel = false;
-        SelectedGridCell = null;
-        SelectedCellSummary = string.Empty;
-    }
-
-    private string GetColumnLabel(string fieldKey) =>
-        Columns.FirstOrDefault(c => string.Equals(c.Key, fieldKey, StringComparison.Ordinal))?.Label
-        ?? fieldKey;
-
-    public void SelectGridRow(MasterDataRowViewModel? row)
-    {
-        SelectedGridRow = row;
-        LinkedRelationSections.Clear();
-        LinkedPrimaryDetails.Clear();
-
-        if (row is null || string.IsNullOrWhiteSpace(row.RowId))
-        {
-            LinkedPanelTitle = "Linked information";
-            return;
-        }
-
-        if (!_enrichedByRowId.TryGetValue(row.RowId, out var enriched))
-        {
-            LinkedPanelTitle = "Linked information";
-            LinkedPrimaryDetails.Add(new DisplayPair("Status", "Select a row to see linked template data."));
-            return;
-        }
-
-        foreach (var kv in enriched.Cells.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
-        {
-            LinkedPrimaryDetails.Add(new DisplayPair(kv.Key, kv.Value));
-        }
-
-        var orderedRelations = enriched.LinkedData
-            .OrderByDescending(kv => kv.Value.Matched)
-            .ThenBy(kv => kv.Value.MenuLabel, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var firstLinked = orderedRelations.Select(kv => kv.Value).FirstOrDefault(v => v.Matched);
-        LinkedPanelTitle = firstLinked is not null && !string.IsNullOrWhiteSpace(firstLinked.MenuLabel)
-            ? firstLinked.MenuLabel
-            : "Linked information";
-
-        foreach (var relation in orderedRelations)
-        {
-            var meta = _worksheetRelations.FirstOrDefault(
-                r => string.Equals(r.Id, relation.Key, StringComparison.Ordinal));
-            var lookupName = meta is null
-                ? string.Empty
-                : _cachedTemplates.FirstOrDefault(t => t.Id == meta.LookupTemplateId)?.Name
-                  ?? meta.LookupTemplateId;
-            LinkedRelationSections.Add(
-                RelationDetailSectionBuilder.FromEnrichedRelation(
-                    relation.Key,
-                    relation.Value,
-                    meta,
-                    lookupName));
+                OnPropertyChanged(nameof(CanAddRows));
+                OnPropertyChanged(nameof(CanManageColumns));
+                OnPropertyChanged(nameof(CanRemoveColumns));
+                AddRowCommand.NotifyCanExecuteChanged();
+            }
         }
     }
+
+    private bool IsLoadStillCurrent(string templateId) =>
+        string.Equals(SelectedDataTemplate?.Id, templateId, StringComparison.Ordinal);
 
     private async Task ResolveRecordLinkLabelsAsync(CancellationToken cancellationToken)
     {
@@ -836,15 +440,11 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanAddRows))]
     private void AddRow()
     {
-        if (!IsEditMode || Columns.Count == 0)
-        {
-            return;
-        }
-
         Rows.Add(CreateEmptyRow());
+        StatusMessage = $"Added row {Rows.Count}. Click Save when finished.";
     }
 
     public void InsertRowAt(int index)
@@ -858,8 +458,20 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         Rows.Insert(clamped, CreateEmptyRow());
     }
 
+    public bool CanManageColumns =>
+        IsEditMode && Columns.Count > 0 && (CanEditMasterData || CanAddMasterData);
+
+    public bool CanRemoveColumns =>
+        IsEditMode && CanEditMasterData && Columns.Count > 1;
+
     public async Task<bool> InsertColumnAtAsync(int index, string columnName, CancellationToken cancellationToken = default)
     {
+        if (!CanManageColumns)
+        {
+            StatusMessage = "You do not have permission to add columns.";
+            return false;
+        }
+
         if (SelectedDataTemplate is null)
         {
             StatusMessage = "No template selected.";
@@ -869,7 +481,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         var trimmed = (columnName ?? string.Empty).Trim();
         if (trimmed.Length == 0)
         {
-            StatusMessage = "Column name cannot be empty.";
+            StatusMessage = "Enter a column name in the add-column bar above the table.";
             return false;
         }
 
@@ -930,6 +542,86 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
     }
 
+    public async Task<bool> RemoveColumnAtAsync(int index, CancellationToken cancellationToken = default)
+    {
+        if (!IsEditMode || !CanEditMasterData)
+        {
+            StatusMessage = "You do not have permission to remove columns.";
+            return false;
+        }
+
+        if (SelectedDataTemplate is null)
+        {
+            return false;
+        }
+
+        if (index < 0 || index >= Columns.Count)
+        {
+            StatusMessage = "Column is no longer on the grid. Try again.";
+            return false;
+        }
+
+        var fieldKey = Columns[index].Key;
+        var fields = SelectedDataTemplate.Fields.OrderBy(f => f.DisplayOrder).ToList();
+        var fieldIndex = fields.FindIndex(
+            f => string.Equals(f.Key, fieldKey, StringComparison.OrdinalIgnoreCase));
+        if (fieldIndex < 0)
+        {
+            StatusMessage = "Column could not be found on the template.";
+            return false;
+        }
+
+        if (fields.Count <= 1)
+        {
+            StatusMessage = "At least one column is required.";
+            return false;
+        }
+
+        var removed = fields[fieldIndex].Label;
+        fields.RemoveAt(fieldIndex);
+        var remapped = fields
+            .Select((f, i) => new TemplateFieldDefinition
+            {
+                Key = f.Key,
+                Label = f.Label,
+                Type = f.Type,
+                IsRequired = f.IsRequired,
+                DisplayOrder = i,
+                ValidationPattern = f.ValidationPattern,
+                Options = f.Options,
+                LinkedTemplateId = f.LinkedTemplateId,
+                LinkedDisplayFieldKey = f.LinkedDisplayFieldKey,
+            })
+            .ToList();
+
+        var patched = new PartTemplateDefinition
+        {
+            Id = SelectedDataTemplate.Id,
+            Name = SelectedDataTemplate.Name,
+            Version = SelectedDataTemplate.Version + 1,
+            IsPublished = true,
+            Fields = remapped,
+        };
+
+        try
+        {
+            await _templateSchema.SaveTemplateAsync(patched, cancellationToken).ConfigureAwait(true);
+            await LoadForTemplateAsync(
+                SelectedDataTemplate.Id,
+                cancellationToken,
+                restoreEditModeAfterLoad: true).ConfigureAwait(true);
+            StatusMessage = $"Column \"{removed}\" removed.";
+            _activityLogger.LogUserAction("Column Removed",
+                $"Column \"{removed}\" removed from template \"{SelectedDataTemplate.Name}\"");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Error: " + ex.Message;
+            return false;
+        }
+    }
+
     [RelayCommand]
     private async Task SaveGrid(CancellationToken cancellationToken = default)
     {
@@ -964,7 +656,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             await ResolveRecordLinkLabelsAsync(cancellationToken).ConfigureAwait(true);
             IsEditMode = false;
             StatusMessage = "Saved. You're back in view mode.";
-            _activityLogger.LogUserAction("Explorer Saved",
+            _activityLogger.LogUserAction("Master Data Saved",
                 $"Saved {Rows.Count} rows for template \"{SelectedDataTemplate.Name}\"");
         }
         catch (Exception ex)
@@ -988,8 +680,8 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         IsEditMode = !IsEditMode;
         StatusMessage = IsEditMode
-            ? "Edit mode enabled. Make changes, then click Save."
-            : "View mode enabled.";
+            ? "Edit mode: add columns above the grid, remove with × on column headers, then Save."
+            : "View mode: browse data only.";
     }
 
     private MasterDataRowViewModel CreateEmptyRow()

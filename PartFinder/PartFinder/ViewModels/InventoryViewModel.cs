@@ -5,14 +5,26 @@ using System.Collections.ObjectModel;
 
 namespace PartFinder.ViewModels;
 
+public enum InventoryFormMode
+{
+    None,
+    Add,
+    Edit,
+}
+
 public partial class InventoryViewModel : ViewModelBase
 {
     private readonly MongoInventoryService _inventoryService;
+    private readonly BulkInventoryImportService _bulkImport;
     private readonly ActivityLogger _activityLogger;
 
-    public InventoryViewModel(MongoInventoryService inventoryService, ActivityLogger activityLogger)
+    public InventoryViewModel(
+        MongoInventoryService inventoryService,
+        BulkInventoryImportService bulkImport,
+        ActivityLogger activityLogger)
     {
         _inventoryService = inventoryService;
+        _bulkImport = bulkImport;
         _activityLogger = activityLogger;
     }
 
@@ -26,6 +38,51 @@ public partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private double _totalValue;
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private InventoryItem? _selectedItem;
+    [ObservableProperty] private string _selectedCategoryFilter = "All categories";
+    [ObservableProperty] private string _selectedStatusFilter = "All statuses";
+
+    [ObservableProperty] private InventoryFormMode _formMode = InventoryFormMode.None;
+
+    [ObservableProperty] private string _formTitle = string.Empty;
+
+    [ObservableProperty] private string _formStatusMessage = string.Empty;
+
+    public bool IsListVisible => FormMode == InventoryFormMode.None;
+
+    public bool IsFormVisible => FormMode != InventoryFormMode.None;
+
+    partial void OnFormModeChanged(InventoryFormMode value)
+    {
+        OnPropertyChanged(nameof(IsListVisible));
+        OnPropertyChanged(nameof(IsFormVisible));
+        FormStatusMessage = string.Empty;
+    }
+
+    public void BeginAddForm()
+    {
+        FormTitle = "Add inventory item";
+        FormMode = InventoryFormMode.Add;
+    }
+
+    public void BeginEditForm(InventoryItem item)
+    {
+        SelectedItem = item;
+        FormTitle = $"Edit — {item.PartName}";
+        FormMode = InventoryFormMode.Edit;
+    }
+
+    public void CloseForm()
+    {
+        FormMode = InventoryFormMode.None;
+        FormStatusMessage = string.Empty;
+        SelectedItem = null;
+    }
+
+    public IReadOnlyList<string> CategoryFilterOptions { get; } =
+        ["All categories", "Engine", "Electrical", "Hardware", "General"];
+
+    public IReadOnlyList<string> StatusFilterOptions { get; } =
+        ["All statuses", "In Stock", "Low Stock", "Out of Stock"];
 
     public string TotalValueFormatted => TotalValue >= 1_000_000
         ? $"${TotalValue / 1_000_000:F1}M"
@@ -147,6 +204,16 @@ public partial class InventoryViewModel : ViewModelBase
 
     [RelayCommand]
     private async Task RefreshAsync() => await LoadInventoryAsync();
+
+    public async Task<BulkInventoryImportResult> ImportBulkFromFileAsync(
+        string filePath,
+        IProgress<BulkImportProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return await _bulkImport
+            .ImportFromFileAsync(filePath, progress, cancellationToken)
+            .ConfigureAwait(true);
+    }
 }
 
 public sealed partial class InventoryItem : ObservableObject

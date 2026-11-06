@@ -1,3 +1,5 @@
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using PartFinder.Services;
@@ -14,6 +16,10 @@ namespace PartFinder
 
         public App()
         {
+            // Required for WinUI: default Theme has no tooltip/legend until configured (otherwise Chart.Load throws).
+            LiveCharts.Configure(config =>
+                config.AddSkiaSharp().AddDefaultMappers().AddDefaultTheme());
+
             InitializeComponent();
             Services = ConfigureServices();
 
@@ -22,6 +28,7 @@ namespace PartFinder
                 e.Handled = true;
                 try
                 {
+                    System.Diagnostics.Debug.WriteLine($"[PartFinder] XAML unhandled: {e.Exception}");
                     DebugLogClient.Post("error", "XamlUnhandledException", e.Exception?.ToString() ?? e.Message);
                     var logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PartFinder", "Logs");
                     Directory.CreateDirectory(logDir);
@@ -64,6 +71,7 @@ namespace PartFinder
 
             services.AddSingleton<INavigationService, NavigationService>();
             services.AddSingleton<IAppStateStore, AppStateStore>();
+            services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<LocalUserSecurityStore>();
             services.AddSingleton<AdminSessionStore>();
             services.AddSingleton<ILocalSetupContext, LocalSetupContext>();
@@ -72,6 +80,8 @@ namespace PartFinder
             services.AddSingleton<IOrgUserDirectoryService, MongoOrgUserDirectoryService>();
             services.AddSingleton<ICurrentUserAccessService, CurrentUserAccessService>();
             services.AddSingleton<ITemplateSchemaService, MongoTemplateSchemaService>();
+            services.AddSingleton<BulkTemplateImportService>();
+            services.AddSingleton<BulkInventoryImportService>();
             services.AddSingleton<IMasterDataRecordsService, MongoMasterDataRecordsService>();
             services.AddSingleton<IContextActionsService, MongoContextActionsService>();
             services.AddSingleton<IPartsDataService, MongoPartsDataService>();
@@ -88,11 +98,12 @@ namespace PartFinder
 
             services.AddSingleton<ShellViewModel>();
             services.AddSingleton<IShellNavCoordinator>(sp => sp.GetRequiredService<ShellViewModel>());
-            services.AddTransient<DashboardViewModel>();
+            services.AddSingleton<DashboardViewModel>();
             services.AddTransient<PartsViewModel>();
             services.AddTransient<TemplatesViewModel>();
             services.AddTransient<ViewDataViewModel>();
             services.AddTransient<WorksheetRelationsViewModel>();
+            services.AddTransient<LinkedTemplatesViewModel>();
             services.AddTransient<MasterDataViewModel>();
             services.AddTransient<SettingsViewModel>();
             services.AddTransient<UserManagementViewModel>();
@@ -111,6 +122,7 @@ namespace PartFinder
             services.AddTransient<TemplatesPage>();
             services.AddTransient<ViewDataPage>();
             services.AddTransient<WorksheetRelationsPage>();
+            services.AddTransient<LinkedTemplatesPage>();
             services.AddTransient<SettingsPage>();
             services.AddTransient<UserManagementPage>();
             services.AddTransient<QrCodeManagerPage>();

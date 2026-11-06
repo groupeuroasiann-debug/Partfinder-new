@@ -3,23 +3,19 @@ import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
 import { PartFinderLogo } from './components/PartFinderLogo'
+import { apiBase } from './config/apiBase'
 import { EnterpriseHome } from './pages/EnterpriseHome'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
-function normalizeApiBase(rawUrl?: string): string {
-  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim() !== '') {
-    let trimmed = rawUrl.trim().replace(/\/$/, '')
-    if (!/^https?:\/\//i.test(trimmed)) {
-      trimmed = `https://${trimmed}`
-    }
-    return trimmed
-  }
-  return import.meta.env.DEV ? '' : 'https://backend.partfinder.store'
+function isAdminLoginPath(pathname: string): boolean {
+  return (
+    pathname === '/admin' ||
+    pathname === '/admin/' ||
+    pathname === '/admin/login' ||
+    pathname === '/login'
+  )
 }
-
-/** In dev, prefer same-origin `/api` (Vite proxy) unless VITE_API_URL is set — avoids stale SW/caches to :3000. */
-const apiBase = normalizeApiBase(import.meta.env.VITE_API_URL)
 
 function parseApiErrorMessage(body: unknown): string {
   if (!body || typeof body !== 'object') {
@@ -55,18 +51,32 @@ function authJsonHeaders(): HeadersInit {
 }
 
 function postLoginPath(pathname: string): string {
-  if (
-    pathname === '/admin' ||
-    pathname === '/admin/' ||
-    pathname === '/admin/login' ||
-    pathname === '/login'
-  ) {
+  if (isAdminLoginPath(pathname)) {
     return '/admin/dashboard'
   }
   if (pathname.startsWith('/admin/')) {
     return pathname
   }
   return '/admin/dashboard'
+}
+
+async function validateAdminSession(apiBaseUrl: string): Promise<boolean> {
+  const token =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem(ADMIN_TOKEN_KEY)
+      : null
+  if (!token) {
+    return false
+  }
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/organizations`, {
+      headers: authJsonHeaders(),
+    })
+    return response.ok
+  } catch {
+    // Offline or API unreachable — keep the stored token so a retry can succeed.
+    return true
+  }
 }
 
 function App() {
@@ -76,9 +86,9 @@ function App() {
       <Route path="/dashboard" element={<PublicDashboardPage />} />
       <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
-      <Route path="/register" element={<AdminRegisterPage />} />
+      <Route path="/admin/login" element={<AdminPortalPage />} />
+      <Route path="/admin" element={<AdminPortalPage />} />
       <Route path="/admin/*" element={<AdminPortalPage />} />
-      <Route path="/home" element={<Navigate to="/dashboard" replace />} />
       <Route path="/test" element={<R4a />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
@@ -131,42 +141,62 @@ function AdminPortalPage() {
     import.meta.env.MODE === 'development' ? 'jayandraa5@gmail.com' : ''
   const [email, setEmail] = useState(defaultDevEmail)
   const [password, setPassword] = useState('')
-  const [isAuthenticated, setIsAuthenticated] = useState(readStoredAuth)
+  const [authState, setAuthState] = useState<'checking' | 'guest' | 'authenticated'>(() =>
+    readStoredAuth() ? 'checking' : 'guest',
+  )
+  const isAuthenticated = authState === 'authenticated'
   const [error, setError] = useState('')
   const [loginPending, setLoginPending] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const isPublicDashboardRoute =
-    location.pathname === '/admin/dashboard' ||
-    location.pathname === '/dashboard'
-
-  const isLoginRoute =
-    location.pathname === '/admin' ||
-    location.pathname === '/admin/' ||
-    location.pathname === '/admin/login' ||
-    location.pathname === '/login'
+  const isLoginRoute = isAdminLoginPath(location.pathname)
 
   const handleSessionExpired = useCallback(() => {
     window.localStorage.removeItem(ADMIN_TOKEN_KEY)
-    setIsAuthenticated(false)
-    navigate('/admin', { replace: true })
+    setAuthState('guest')
+    navigate('/admin/login', { replace: true })
   }, [navigate])
+
+  useEffect(() => {
+    if (authState !== 'checking') {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const valid = await validateAdminSession(apiBase)
+      if (cancelled) {
+        return
+      }
+      if (!valid) {
+        window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+        setAuthState('guest')
+        return
+      }
+      setAuthState('authenticated')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authState])
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!email.trim() || !password.trim()) {
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !password.trim()) {
       setError('Please enter email and password.')
       return
     }
 
     setError('')
     setLoginPending(true)
+    window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+    setAuthState('guest')
     try {
       const response = await fetch(`${apiBase}/api/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       })
       const data: unknown = await response.json().catch(() => null)
       if (!response.ok) {
@@ -179,16 +209,20 @@ function AdminPortalPage() {
         return
       }
       window.localStorage.setItem(ADMIN_TOKEN_KEY, token)
-      setIsAuthenticated(true)
+      setAuthState('authenticated')
       navigate(postLoginPath(location.pathname), { replace: true })
     } catch {
-      setError('Cannot reach the server. Is the API running?')
+      setError(
+        import.meta.env.DEV
+          ? 'Cannot reach the API. Start PartFinder-Backend locally or set VITE_API_URL (dev uses the Vite /api proxy).'
+          : 'Cannot reach the server. Check your connection and API URL.',
+      )
     } finally {
       setLoginPending(false)
     }
   }
 
-  if (isLoginRoute || (!isAuthenticated && !isPublicDashboardRoute)) {
+  if (authState === 'checking') {
     return (
       <main className="auth-page">
         <section className="auth-card">
@@ -262,7 +296,11 @@ function AdminPortalPage() {
     )
   }
 
-  if (!isAuthenticated && isPublicDashboardRoute) {
+  if (isAuthenticated && isLoginRoute) {
+    return <Navigate to="/admin/dashboard" replace />
+  }
+
+  if (!isAuthenticated) {
     return (
       <main className="page">
         <header className="hero">
@@ -307,7 +345,7 @@ function AdminPortalPage() {
   )
   const databaseClusterDetailId = databaseClusterDetailMatch?.[1] ?? null
   const pageTitle = isOrganizationsPage
-    ? 'Organizations'
+    ? 'Organisations'
     : isUsersPage
       ? 'User Management'
       : isSettingsPage
@@ -318,7 +356,7 @@ function AdminPortalPage() {
             ? 'Release Management'
             : isDatabaseManagementPage
               ? databaseClusterDetailId
-                ? 'Cluster organizations'
+                ? 'Cluster organisations'
                 : 'Database Management'
               : 'Dashboard'
 
@@ -334,7 +372,7 @@ function AdminPortalPage() {
         </div>
         <nav>
           <NavLink to="/admin/dashboard">Dashboard</NavLink>
-          <NavLink to="/admin/organizations">Organizations</NavLink>
+          <NavLink to="/admin/organizations">Organisations</NavLink>
           <NavLink to="/admin/database-management">Database Management</NavLink>
           <NavLink to="/admin/users">User Management</NavLink>
           <NavLink to="/admin/releases">Releases</NavLink>
@@ -347,8 +385,8 @@ function AdminPortalPage() {
           className="sidebar-logout"
           onClick={() => {
             window.localStorage.removeItem(ADMIN_TOKEN_KEY)
-            setIsAuthenticated(false)
-            navigate('/admin', { replace: true })
+            setAuthState('guest')
+            navigate('/admin/login', { replace: true })
           }}
         >
           Logout
@@ -360,11 +398,11 @@ function AdminPortalPage() {
             <h1>{pageTitle}</h1>
             <p>
               {isOrganizationsPage
-                ? 'Manage platform organizations and their settings'
+                ? 'Manage platform organisations and their settings'
                 : isDatabaseManagementPage
                   ? databaseClusterDetailId
-                    ? 'Organizations provisioned on this cluster via Default database mode'
-                    : 'Register MongoDB clusters for default organization databases'
+                    ? 'Organisations provisioned on this cluster via Default database mode'
+                    : 'Register MongoDB clusters for default organisation databases'
                   : isSettingsPage
                     ? 'Manage administrator credentials and access'
                     : isDebugPage
@@ -413,7 +451,7 @@ function DashboardSection() {
   return (
     <section className="admin-kpi-grid">
       <article className="card">
-        <h3>Total Organizations</h3>
+        <h3>Total Organisations</h3>
         <p className="kpi-value">42</p>
       </article>
       <article className="card">
@@ -604,7 +642,7 @@ function OrganizationsSection({
       const list = Array.isArray(data) ? (data as ApiOrganization[]) : []
       setRows(list.map(mapOrgToRow))
     } catch {
-      setLoadError('Cannot load organizations. Is the API running?')
+      setLoadError('Cannot load organisations. Is the API running?')
     } finally {
       setLoading(false)
     }
@@ -836,8 +874,8 @@ function OrganizationsSection({
     const blocked = isLicenseCurrentlyBlocked(row)
     const ok = window.confirm(
       blocked
-        ? `Reactivate license for "${row.name}" (code ${row.code})? Clients can use the app again if the org is Active and the subscription is still valid.`
-        : `Clear license ban flags for "${row.name}" (code ${row.code})? This removes any stored ban end time from the server.`,
+        ? `Reactivate licence for "${row.name}" (code ${row.code})? Clients can use the app again if the org is Active and the subscription is still valid.`
+        : `Clear licence ban flags for "${row.name}" (code ${row.code})? This removes any stored ban end time from the server.`,
     )
     if (!ok) {
       return
@@ -863,7 +901,7 @@ function OrganizationsSection({
       const list = Array.isArray(data) ? (data as ApiOrganization[]) : []
       setRows(list.map(mapOrgToRow))
     } catch {
-      setLoadError('Cannot reactivate license. Is the API running?')
+      setLoadError('Cannot reactivate licence. Is the API running?')
     } finally {
       setReactivatingId(null)
     }
@@ -871,7 +909,7 @@ function OrganizationsSection({
 
   const deleteOrganization = async (row: OrgRow) => {
     const ok = window.confirm(
-      `Delete organization "${row.name}" (code ${row.code})? This cannot be undone.`,
+      `Delete organisation "${row.name}" (code ${row.code})? This cannot be undone.`,
     )
     if (!ok) {
       return
@@ -894,7 +932,7 @@ function OrganizationsSection({
       const list = Array.isArray(data) ? (data as ApiOrganization[]) : []
       setRows(list.map(mapOrgToRow))
     } catch {
-      setLoadError('Cannot delete organization. Is the API running?')
+      setLoadError('Cannot delete organisation. Is the API running?')
     } finally {
       setDeletingId(null)
     }
@@ -905,16 +943,16 @@ function OrganizationsSection({
       <div className="org-toolbar">
         <input
           type="text"
-          placeholder="Search organizations..."
+          placeholder="Search organisations..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
         <button type="button" className="btn-light" onClick={openCreateModal}>
-          + Add Organization
+          + Add Organisation
         </button>
       </div>
       {loadError ? <p className="form-error">{loadError}</p> : null}
-      {loading ? <p className="admin-muted">Loading organizations…</p> : null}
+      {loading ? <p className="admin-muted">Loading organisations…</p> : null}
       <div className="org-table-wrap">
         <table className="org-table">
           <thead>
@@ -925,7 +963,7 @@ function OrganizationsSection({
               <th>Plan</th>
               <th>Validity</th>
               <th>Status</th>
-              <th>License</th>
+              <th>Licence</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
@@ -934,7 +972,7 @@ function OrganizationsSection({
             {!loading && filteredRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="org-empty-cell">
-                  No organizations yet. Add one to get started.
+                  No organisations yet. Add one to get started.
                 </td>
               </tr>
             ) : null}
@@ -970,7 +1008,7 @@ function OrganizationsSection({
                   <button
                     type="button"
                     className="btn-icon"
-                    aria-label={`Ban license ${row.code}`}
+                    aria-label={`Ban licence ${row.code}`}
                     onClick={() => openBanModal(row)}
                   >
                     ⛔
@@ -979,7 +1017,7 @@ function OrganizationsSection({
                     <button
                       type="button"
                       className="btn-icon btn-icon-success"
-                      aria-label={`Reactivate license ${row.code}`}
+                      aria-label={`Reactivate licence ${row.code}`}
                       disabled={reactivatingId === row.id}
                       onClick={() => void reactivateLicense(row)}
                     >
@@ -1006,10 +1044,10 @@ function OrganizationsSection({
           <div className="modal-card">
             <div className="modal-head">
               <div>
-                <h3>{modalMode === 'create' ? 'Create New Organization' : 'Edit Organization'}</h3>
+                <h3>{modalMode === 'create' ? 'Create New Organisation' : 'Edit Organisation'}</h3>
                 <p>
                   {modalMode === 'create'
-                    ? 'Add a new organization to the platform.'
+                    ? 'Add a new organisation to the platform.'
                     : 'Update name, tier, plan, or status. Changing plan resets validity from today.'}
                 </p>
               </div>
@@ -1018,17 +1056,17 @@ function OrganizationsSection({
               </button>
             </div>
 
-            <label>Organization Name *</label>
+            <label>Organisation Name *</label>
             <input
               value={orgName}
               onChange={(event) => setOrgName(event.target.value)}
-              placeholder="Enter organization name"
+              placeholder="Enter organisation name"
             />
 
             <label>Type *</label>
             <select value={orgType} onChange={(event) => setOrgType(event.target.value)}>
               <option value="">Select type</option>
-              <option value="standard">Standard — single location / small catalog</option>
+              <option value="standard">Standard — single location / small catalogue</option>
               <option value="premium">Premium — multi-branch, advanced ops</option>
               <option value="enterprise">Enterprise — OEM / distributor scale</option>
             </select>
@@ -1066,7 +1104,7 @@ function OrganizationsSection({
                 />
 
                 <div className="generated-code-row" style={{ marginTop: 14 }}>
-                  <label htmlFor="modal-org-code">Organization Code (6 digits) *</label>
+                  <label htmlFor="modal-org-code">Organisation Code (6 digits) *</label>
                   <button
                     type="button"
                     className="btn-dark"
@@ -1115,7 +1153,7 @@ function OrganizationsSection({
               </>
             ) : (
               <div className="generated-code-box">
-                <span>Organization code (read-only)</span>
+                <span>Organisation code (read-only)</span>
                 <strong>{generatedCode}</strong>
               </div>
             )}
@@ -1137,7 +1175,7 @@ function OrganizationsSection({
                     ? 'Creating…'
                     : 'Saving…'
                   : modalMode === 'create'
-                    ? 'Create Organization'
+                    ? 'Create Organisation'
                     : 'Save changes'}
               </button>
             </div>
@@ -1149,11 +1187,11 @@ function OrganizationsSection({
           <div className="modal-card">
             <div className="modal-head">
         <div>
-                <h3>Ban license</h3>
+                <h3>Ban licence</h3>
           <p>
                   Block the Windows client for{' '}
                   <strong>{banModalRow.name}</strong> (code {banModalRow.code}). Subscription
-                  status is unchanged; this only affects license verification.
+                  status is unchanged; this only affects licence verification.
           </p>
         </div>
               <button type="button" className="modal-close" onClick={closeBanModal}>
@@ -1327,7 +1365,7 @@ function DatabaseClusterOrganizationsSection({
         </p>
       ) : null}
       {loadError ? <p className="form-error">{loadError}</p> : null}
-      {loading ? <p className="admin-muted">Loading organizations…</p> : null}
+      {loading ? <p className="admin-muted">Loading organisations…</p> : null}
       <div className="org-table-wrap">
         <table className="org-table">
           <thead>
@@ -1342,7 +1380,7 @@ function DatabaseClusterOrganizationsSection({
             {!loading && orgs.length === 0 && !loadError ? (
               <tr>
                 <td colSpan={4} className="org-empty-cell">
-                  No organizations are assigned to this cluster yet. Organizations appear here after
+                  No organisations are assigned to this cluster yet. Organisations appear here after
                   they complete setup with Default database mode.
                 </td>
               </tr>
@@ -1520,7 +1558,7 @@ function DatabaseManagementSection({
         </button>
       </div>
       <p className="admin-muted">
-        Right-click a cluster row to open the list of organizations using that cluster.
+        Right-click a cluster row to open the list of organisations using that cluster.
       </p>
       {loadError ? <p className="form-error">{loadError}</p> : null}
       {loading ? <p className="admin-muted">Loading clusters…</p> : null}
@@ -1545,7 +1583,7 @@ function DatabaseManagementSection({
               <tr
                 key={row.id}
                 className="db-cluster-row"
-                title="Right-click to view organizations on this cluster"
+                title="Right-click to view organisations on this cluster"
                 onContextMenu={(event) => {
                   event.preventDefault()
                   navigate(`/admin/database-management/cluster/${row.id}`)

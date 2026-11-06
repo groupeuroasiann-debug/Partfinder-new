@@ -35,6 +35,43 @@ public sealed class SetupInviteUserResponse
     public string? EmailError { get; set; }
 }
 
+public sealed class SetupListOrgUsersResponse
+{
+    public bool Ok { get; set; }
+    public string? OrgDatabaseUri { get; set; }
+    public List<SetupOrgUserListItem>? Users { get; set; }
+}
+
+public sealed class SetupOrgUserListItem
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public bool PartsAllTemplates { get; set; }
+    public List<string>? AllowedTemplateIds { get; set; }
+    public DateTime InvitedAtUtc { get; set; }
+    public TemplatePermissionsDto? TemplatePermissions { get; set; }
+    public MasterDataPermissionsDto? MasterDataPermissions { get; set; }
+    public string? Status { get; set; }
+    public bool IsOrgAdminDirectoryEntry { get; set; }
+}
+
+/// <summary>User row embedded in setup status (ISO date strings).</summary>
+public sealed class SetupListOrgUserItem
+{
+    public string? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public bool PartsAllTemplates { get; set; }
+    public List<string>? AllowedTemplateIds { get; set; }
+    public string? InvitedAtUtc { get; set; }
+    public TemplatePermissionsDto? TemplatePermissions { get; set; }
+    public MasterDataPermissionsDto? MasterDataPermissions { get; set; }
+    public string? Status { get; set; }
+}
+
 public sealed class SetupInviteLoginResponse
 {
     public bool Ok { get; set; }
@@ -42,6 +79,7 @@ public sealed class SetupInviteLoginResponse
     public string? Email { get; set; }
     public string? Role { get; set; }
     public bool MustChangePassword { get; set; }
+    public string? AccessToken { get; set; }
 }
 
 public static class SetupApiClient
@@ -278,6 +316,109 @@ public static class SetupApiClient
         }
 
         return (false, err ?? ParseApiError(text), null);
+    }
+
+    public static async Task<(bool ok, string? error, IReadOnlyList<OrgAppUserSummary>? users)> ListOrgUsersAsync(
+        string orgCode,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(orgCode))
+        {
+            return (false, "Organisation code is required.", null);
+        }
+
+        var (success, err, text) = await RawPostAsync(
+            "/api/public/setup/list-org-users",
+            new { orgCode = orgCode.Trim() },
+            ct).ConfigureAwait(true);
+
+        if (!success || string.IsNullOrWhiteSpace(text))
+        {
+            return (false, err ?? "Could not load users from the server.", null);
+        }
+
+        try
+        {
+            var o = JsonSerializer.Deserialize<SetupListOrgUsersResponse>(text, ReadJson);
+            if (o?.Ok != true || o.Users is null)
+            {
+                return (false, err ?? ParseApiError(text), null);
+            }
+
+            if (!string.IsNullOrWhiteSpace(o.OrgDatabaseUri))
+            {
+                SetupStatePersistence.TryWriteDbUri(o.OrgDatabaseUri.Trim(), orgCode.Trim());
+            }
+
+            var mapped = o.Users
+                .Where(u => !string.IsNullOrWhiteSpace(u.Id) && !string.IsNullOrWhiteSpace(u.Email))
+                .Select(u => new OrgAppUserSummary
+                {
+                    Id = u.Id!,
+                    Name = string.IsNullOrWhiteSpace(u.Name) ? u.Email! : u.Name!,
+                    Email = u.Email!,
+                    Role = string.IsNullOrWhiteSpace(u.Role) ? "Employee" : u.Role!,
+                    PartsAllTemplates = u.PartsAllTemplates,
+                    AllowedTemplateIds = u.AllowedTemplateIds ?? [],
+                    InvitedAtUtc = u.InvitedAtUtc == default ? DateTime.UtcNow : u.InvitedAtUtc,
+                    TemplatePermissions = u.TemplatePermissions,
+                    MasterDataPermissions = u.MasterDataPermissions,
+                    Status = string.IsNullOrWhiteSpace(u.Status) ? "Pending" : u.Status!,
+                    IsOrgAdminDirectoryEntry = u.IsOrgAdminDirectoryEntry,
+                })
+                .ToList();
+
+            return (true, null, mapped);
+        }
+        catch
+        {
+            return (false, "Server returned user data that could not be read.", null);
+        }
+    }
+
+    public static IReadOnlyList<OrgAppUserSummary> MapOrgAppUserItems(
+        IEnumerable<SetupListOrgUserItem>? items)
+    {
+        if (items is null)
+        {
+            return Array.Empty<OrgAppUserSummary>();
+        }
+
+        return items
+            .Select(MapListOrgUserItem)
+            .Where(u => !string.IsNullOrWhiteSpace(u.Email))
+            .ToList();
+    }
+
+    private static OrgAppUserSummary MapListOrgUserItem(SetupListOrgUserItem item)
+    {
+        DateTime invitedAt = default;
+        if (!string.IsNullOrWhiteSpace(item.InvitedAtUtc)
+            && DateTime.TryParse(
+                item.InvitedAtUtc,
+                null,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var parsed))
+        {
+            invitedAt = parsed.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+                : parsed.ToUniversalTime();
+        }
+
+        var status = string.IsNullOrWhiteSpace(item.Status) ? "Pending" : item.Status.Trim();
+        return new OrgAppUserSummary
+        {
+            Id = item.Id ?? string.Empty,
+            Name = item.Name?.Trim() ?? string.Empty,
+            Email = item.Email?.Trim() ?? string.Empty,
+            Role = item.Role?.Trim() ?? "Employee",
+            PartsAllTemplates = item.PartsAllTemplates,
+            AllowedTemplateIds = item.AllowedTemplateIds ?? [],
+            InvitedAtUtc = invitedAt,
+            TemplatePermissions = item.TemplatePermissions,
+            MasterDataPermissions = item.MasterDataPermissions,
+            Status = status,
+        };
     }
 
     public static async Task<(bool ok, string? error, SetupInviteLoginResponse? body)> ValidateInviteLoginAsync(

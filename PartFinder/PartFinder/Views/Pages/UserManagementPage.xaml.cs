@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Navigation;
 using PartFinder.Services;
 using PartFinder.ViewModels;
 using PartFinder.Views.Components;
@@ -15,18 +16,17 @@ public sealed partial class UserManagementPage : Page
         InitializeComponent();
         var vm = App.Services.GetRequiredService<UserManagementViewModel>();
         DataContext = vm;
-        Loaded += OnLoaded;
     }
 
-    private async void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
-        Loaded -= OnLoaded;
+        base.OnNavigatedTo(e);
+
         var access = App.Services.GetRequiredService<ICurrentUserAccessService>();
         await access.RefreshAsync().ConfigureAwait(true);
         if (!access.Capabilities.CanAccessUserManagement)
         {
-            NoPermissionOverlay.Message = "Only the organization creator can manage users. Contact them if you need user management access.";
-            NoPermissionOverlay.Visibility = Visibility.Visible;
+            App.Services.GetRequiredService<INavigationService>().Navigate(AppPage.Parts);
             return;
         }
 

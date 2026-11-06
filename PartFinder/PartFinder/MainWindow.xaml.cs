@@ -1,3 +1,4 @@
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,6 +10,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using Windows.Foundation;
+using Windows.Graphics;
+using WinRT.Interop;
 
 namespace PartFinder;
 
@@ -28,27 +31,117 @@ public sealed partial class MainWindow : Window
     private string? _resolvedSignedInRole;
     private bool _mustChangePassword = true;
     private bool _signedInThisSession;
+    private bool _loginTotpVerifiedThisSession;
     private SetupStatusResult? _lastStatus;
 
     private Microsoft.UI.Xaml.DispatcherTimer? _maintenanceTimer;
     private DateTimeOffset? _maintenanceUntilUtc;
     private string? _orgCodeForMaintenanceRetry;
+    private bool _shellTitleBarRegionsActive;
 
     private readonly string _setupFilePath = SetupPaths.SetupStateFilePath;
-
-    private AppWindow? _shellTitleBarAppWindow;
-    private TypedEventHandler<AppWindow, AppWindowChangedEventArgs>? _shellTitleBarAppWindowChangedHandler;
 
     public MainWindow()
     {
         InitializeComponent();
+        // WinUI ignores XAML EventTrigger, so a Loaded fade left this screen at opacity 0.
+        SetupRoot.Opacity = 1;
         // Setup / blocked / app-lock use the standard caption strip; shell applies extended chrome.
         ExtendsContentIntoTitleBar = false;
         BackButton.IsEnabled = false;
-
+        ShellRoot.SizeChanged += OnShellRootSizeChanged;
 
         RootGrid.Loaded += OnRootGridLoadedResumeWizard;
         UpdateStepUi();
+    }
+
+    private void EnableShellTitleBar()
+    {
+        try
+        {
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(ShellRoot.TitleBarDragElement);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            _shellTitleBarRegionsActive = false;
+            return;
+        }
+
+        _shellTitleBarRegionsActive = true;
+
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+        {
+            ShellRoot.UpdateTitleBarInsets(0, 0);
+            UpdateShellTitleBarRegions();
+            return;
+        }
+
+        ShellRoot.UpdateTitleBarInsets(0, 0);
+        UpdateShellTitleBarRegions();
+    }
+
+    private void DisableShellTitleBar()
+    {
+        _shellTitleBarRegionsActive = false;
+        try
+        {
+            ExtendsContentIntoTitleBar = false;
+            SetTitleBar(null);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // Window closing — ignore.
+        }
+
+        ShellRoot.UpdateTitleBarInsets(0, 0);
+    }
+
+    private void OnShellRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_shellTitleBarRegionsActive)
+        {
+            UpdateShellTitleBarRegions();
+        }
+    }
+
+    public void RefreshShellTitleBarRegions()
+    {
+        UpdateShellTitleBarRegions();
+    }
+     
+    private void UpdateShellTitleBarRegions()
+    {
+        if (!_shellTitleBarRegionsActive || ShellRoot is null || ShellRoot.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        try
+        {
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WindowNative.GetWindowHandle(this));
+            var inputSource = InputNonClientPointerSource.GetForWindowId(windowId);
+            if (inputSource is null)
+            {
+                return;
+            }
+
+            var rects = ShellRoot.GetTitleBarPassthroughRects();
+            inputSource.SetRegionRects(NonClientRegionKind.Passthrough, rects);
+        }
+        catch (System.Runtime.InteropServices.COMException ex)
+            when (ex.HResult == unchecked((int)0x80010108)
+                  || ex.HResult == unchecked((int)0x800710DD)
+                  || ex.HResult == unchecked((int)0x80004005)
+                  || ex.Message.Contains("closed", StringComparison.OrdinalIgnoreCase)
+                  || ex.Message.Contains("not valid", StringComparison.OrdinalIgnoreCase))
+        {
+            _shellTitleBarRegionsActive = false;
+        }
+        catch (Exception ex)
+        {
+            DebugLogClient.Post("warn", "UpdateShellTitleBarRegions", ex.Message);
+        }
     }
 
     private sealed class SetupState
@@ -129,6 +222,7 @@ public sealed partial class MainWindow : Window
         InviteLoginEmailBox.Text = string.Empty;
         InviteLoginPasswordBox.Password = string.Empty;
         _step = 1;
+        SetupRoot.Opacity = 1;
         SetupRoot.Visibility = Visibility.Visible;
         ShellRoot.Visibility = Visibility.Collapsed;
         UpdateStepUi();
@@ -199,7 +293,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(orgCode))
         {
             ShowSubscriptionBlocked(
-                "No organization code was found in local setup. Use \"Re-enter organization code\" or complete setup again.");
+                "No organisation code was found in local setup. Use \"Re-enter organisation code\" or complete setup again.");
             return;
         }
 
@@ -207,7 +301,7 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(dbUri))
         {
             ShowSubscriptionBlocked(
-                "No database URI in local setup. Use \"Re-enter organization code\" to run setup again.");
+                "No database URI in local setup. Use \"Re-enter organisation code\" to run setup again.");
             return;
         }
 
@@ -217,7 +311,7 @@ public sealed partial class MainWindow : Window
             var api = LicenseApiClient.GetBaseUrl();
             var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
             ShowSubscriptionBlocked(
-                $"Active internet is required. Cannot reach the license server at {api}.{detail} Start PartFinder-Backend (npm run start in PartFinder-Backend) and check LicenseApi:BaseUrl in appsettings.json next to the app.");
+                $"Active internet is required. Cannot reach the API at {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
             return;
         }
 
@@ -225,7 +319,7 @@ public sealed partial class MainWindow : Window
         {
             ShowSubscriptionBlocked(
                 string.IsNullOrWhiteSpace(status.Message)
-                    ? "This organization is not licensed to use PartFinder right now."
+                    ? "This organisation is not licenced to use PartFinder right now."
                     : status.Message);
             return;
         }
@@ -233,7 +327,7 @@ public sealed partial class MainWindow : Window
         if (!await MongoConnectionTester.TryPingAsync(dbUri, orgCode))
         {
             ShowSubscriptionBlocked(
-                "Cannot reach your organization MongoDB from this PC. Check the network or MongoDB URI.");
+                "Cannot reach your organisation MongoDB from this PC. Check the network or MongoDB URI.");
             return;
         }
 
@@ -241,7 +335,7 @@ public sealed partial class MainWindow : Window
         if (verify is null)
         {
             ShowSubscriptionBlocked(
-                "Active internet is required to verify your license. Connect to the internet, then restart the app or use \"Re-enter organization code\" to try again.");
+                "Active internet is required to verify your licence. Connect to the internet, then restart the app or use \"Re-enter organisation code\" to try again.");
             return;
         }
 
@@ -256,7 +350,7 @@ public sealed partial class MainWindow : Window
 
             ShowSubscriptionBlocked(
                 string.IsNullOrWhiteSpace(verify.Message)
-                    ? "License check failed. Is PartFinder-Backend running?"
+                    ? "Licence check failed. Is PartFinder-Backend running?"
                     : verify.Message);
             return;
         }
@@ -274,7 +368,7 @@ public sealed partial class MainWindow : Window
     private void ShowSubscriptionBlocked(string message)
     {
         StopMaintenanceTimer();
-        RestoreNonShellTitleBarChrome();
+        DisableShellTitleBar();
         MaintenanceBlockedRoot.Visibility = Visibility.Collapsed;
         SubscriptionBlockedMessage.Text = message;
         SubscriptionBlockedRoot.Visibility = Visibility.Visible;
@@ -285,7 +379,7 @@ public sealed partial class MainWindow : Window
     private void ShowMaintenanceBlocked(string maintenanceUntilIso, string orgCode)
     {
         StopMaintenanceTimer();
-        RestoreNonShellTitleBarChrome();
+        DisableShellTitleBar();
         SubscriptionBlockedRoot.Visibility = Visibility.Collapsed;
         _orgCodeForMaintenanceRetry = orgCode.Trim();
         if (!DateTimeOffset.TryParse(
@@ -407,7 +501,7 @@ public sealed partial class MainWindow : Window
         if (verify is null)
         {
             ShowSubscriptionBlocked(
-                "Active internet is required to verify your license after maintenance. Connect to the internet and try again.");
+                "Active internet is required to verify your licence after maintenance. Connect to the internet and try again.");
             return;
         }
 
@@ -417,14 +511,14 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(dbUri))
             {
                 ShowSubscriptionBlocked(
-                    "No database URI in local setup. Use \"Re-enter organization code\" to run setup again.");
+                    "No database URI in local setup. Use \"Re-enter organisation code\" to run setup again.");
                 return;
             }
 
             if (!await MongoConnectionTester.TryPingAsync(dbUri, code))
             {
                 ShowSubscriptionBlocked(
-                    "Cannot reach your organization MongoDB from this PC. Check the network or MongoDB URI.");
+                    "Cannot reach your organisation MongoDB from this PC. Check the network or MongoDB URI.");
                 return;
             }
 
@@ -443,7 +537,7 @@ public sealed partial class MainWindow : Window
 
         ShowSubscriptionBlocked(
             string.IsNullOrWhiteSpace(verify.Message)
-                ? "License check failed after maintenance."
+                ? "Licence check failed after maintenance."
                 : verify.Message);
     }
 
@@ -467,7 +561,7 @@ public sealed partial class MainWindow : Window
     public void ResetToSetup()
     {
         StopMaintenanceTimer();
-        RestoreNonShellTitleBarChrome();
+        DisableShellTitleBar();
         MaintenanceBlockedRoot.Visibility = Visibility.Collapsed;
 
         // Clear ALL cached state from previous session
@@ -491,6 +585,9 @@ public sealed partial class MainWindow : Window
         SetupRoot.Visibility = Visibility.Visible;
         ShellRoot.Visibility = Visibility.Collapsed;
         AppLockRoot.Visibility = Visibility.Collapsed;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        _loginTotpVerifiedThisSession = false;
+        LoginTotpBox.Text = string.Empty;
         _step = 1;
         _workingOrgCode = "";
         _cachedOrgDatabaseUri = null;
@@ -518,7 +615,7 @@ public sealed partial class MainWindow : Window
     private void UpdateLicenseSummary(SetupStatusResult s)
     {
         LicenseSummaryPanel.Visibility = Visibility.Visible;
-        LicenseOrgNameText.Text = $"Organization: {s.OrganizationName ?? "—"}";
+        LicenseOrgNameText.Text = $"Organisation: {s.OrganizationName ?? "—"}";
         LicenseCodeText.Text = $"Code: {s.OrgCode ?? "—"}";
         LicenseStatusText.Text = $"Status: {s.Status ?? "—"}";
         LicenseExpiryText.Text = string.IsNullOrWhiteSpace(s.ValidUntil)
@@ -606,129 +703,12 @@ public sealed partial class MainWindow : Window
 
         st.dbUri = storedUri;
         st.databaseMode = mode;
-        st.adminName = "Organization Admin";
+        st.adminName = "Organisation Admin";
         st.adminEmail = string.IsNullOrWhiteSpace(_resolvedSignedInEmail)
             ? InviteLoginEmailBox.Text.Trim()
             : _resolvedSignedInEmail;
         st.invitedUserLogin = !string.IsNullOrWhiteSpace(_resolvedSignedInEmail);
         SaveSetupState(st);
-    }
-
-    private void UnsubscribeShellTitleBarAppWindowChanged()
-    {
-        if (_shellTitleBarAppWindow is not null && _shellTitleBarAppWindowChangedHandler is not null)
-        {
-            _shellTitleBarAppWindow.Changed -= _shellTitleBarAppWindowChangedHandler;
-        }
-    }
-
-    private void OnShellTitleBarAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
-    {
-        SyncShellTitleBarCaptionInsets();
-    }
-
-    private void ApplyShellExtendedTitleBar()
-    {
-        if (ShellRoot.Visibility != Visibility.Visible)
-        {
-            return;
-        }
-
-        try
-        {
-            UnsubscribeShellTitleBarAppWindowChanged();
-            _shellTitleBarAppWindowChangedHandler = null;
-            _shellTitleBarAppWindow = null;
-
-            var appWindow = AppWindow;
-            _shellTitleBarAppWindow = appWindow;
-
-            var caption = appWindow.TitleBar;
-            caption.ExtendsContentIntoTitleBar = true;
-
-            ExtendsContentIntoTitleBar = true;
-            SetTitleBar(ShellRoot.ShellTitleBarDragTarget);
-
-            Windows.UI.Color bar = Windows.UI.Color.FromArgb(255, 255, 255, 255);
-            Windows.UI.Color text = Windows.UI.Color.FromArgb(255, 31, 41, 55);
-            Windows.UI.Color muted = Windows.UI.Color.FromArgb(255, 107, 114, 128);
-            caption.BackgroundColor = bar;
-            caption.InactiveBackgroundColor = bar;
-            caption.ForegroundColor = text;
-            caption.InactiveForegroundColor = muted;
-
-            caption.ButtonBackgroundColor = bar;
-            caption.ButtonInactiveBackgroundColor = bar;
-            caption.ButtonForegroundColor = text;
-            caption.ButtonInactiveForegroundColor = muted;
-            caption.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(255, 229, 231, 235);
-            caption.ButtonHoverForegroundColor = text;
-            caption.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(255, 209, 213, 219);
-            caption.ButtonPressedForegroundColor = text;
-
-            _shellTitleBarAppWindowChangedHandler = OnShellTitleBarAppWindowChanged;
-            appWindow.Changed += _shellTitleBarAppWindowChangedHandler;
-
-            SyncShellTitleBarCaptionInsets();
-        }
-        catch
-        {
-            RestoreNonShellTitleBarChrome();
-        }
-    }
-
-    private void RestoreNonShellTitleBarChrome()
-    {
-        UnsubscribeShellTitleBarAppWindowChanged();
-        _shellTitleBarAppWindowChangedHandler = null;
-        _shellTitleBarAppWindow = null;
-
-        try
-        {
-            SetTitleBar(null);
-        }
-        catch
-        {
-            // ignore
-        }
-
-        ExtendsContentIntoTitleBar = false;
-
-        try
-        {
-            var caption = AppWindow.TitleBar;
-            caption.ExtendsContentIntoTitleBar = false;
-            caption.BackgroundColor = null;
-            caption.InactiveBackgroundColor = null;
-            caption.ForegroundColor = null;
-            caption.InactiveForegroundColor = null;
-            caption.ButtonBackgroundColor = null;
-            caption.ButtonInactiveBackgroundColor = null;
-            caption.ButtonForegroundColor = null;
-            caption.ButtonInactiveForegroundColor = null;
-            caption.ButtonHoverBackgroundColor = null;
-            caption.ButtonHoverForegroundColor = null;
-            caption.ButtonPressedBackgroundColor = null;
-            caption.ButtonPressedForegroundColor = null;
-        }
-        catch
-        {
-            // ignore
-        }
-
-        ShellRoot.ResetShellTitleBarCaptionInsets();
-    }
-
-    private void SyncShellTitleBarCaptionInsets()
-    {
-        if (_shellTitleBarAppWindow is null || ShellRoot.Visibility != Visibility.Visible)
-        {
-            return;
-        }
-
-        var caption = _shellTitleBarAppWindow.TitleBar;
-        var scale = ShellRoot.XamlRoot?.RasterizationScale ?? 1.0;
-        ShellRoot.UpdateShellTitleBarCaptionInsets(caption.LeftInset, caption.RightInset, scale);
     }
 
     private async void ShowShell()
@@ -744,12 +724,23 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            RestoreNonShellTitleBarChrome();
+            DisableShellTitleBar();
             SetupRoot.Visibility = Visibility.Collapsed;
 
-            // Check if Windows Hello app lock is enabled
             var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
             security.Load();
+
+            if (security.TwoFactorEnabled && !_loginTotpVerifiedThisSession)
+            {
+                LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+                LoginTotpBox.Text = string.Empty;
+                LoginTwoFactorRoot.Visibility = Visibility.Visible;
+                ShellRoot.Visibility = Visibility.Collapsed;
+                AppLockRoot.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
 
             if (security.AppLockEnabled)
             {
@@ -766,12 +757,13 @@ public sealed partial class MainWindow : Window
                     {
                         AppLockRoot.Visibility = Visibility.Collapsed;
                         ShellRoot.Visibility = Visibility.Visible;
-                        ApplyShellExtendedTitleBar();
+                        EnableShellTitleBar();
                         await ReinitializeShellAsync();
                         return;
                     }
 
                     // Not verified — show lock screen with retry
+                    DisableShellTitleBar();
                     AppLockRoot.Visibility = Visibility.Visible;
                     ShellRoot.Visibility = Visibility.Collapsed;
                     AppLockErrorText.Text = "Verification failed. Try again.";
@@ -783,7 +775,7 @@ public sealed partial class MainWindow : Window
             // App lock off or Windows Hello not available — open directly
             AppLockRoot.Visibility = Visibility.Collapsed;
             ShellRoot.Visibility = Visibility.Visible;
-            ApplyShellExtendedTitleBar();
+            EnableShellTitleBar();
             await ReinitializeShellAsync();
         }
         catch (Exception ex)
@@ -797,9 +789,48 @@ public sealed partial class MainWindow : Window
     {
         // Always re-initialize shell with fresh data (permissions, name, nav items)
         // This ensures no stale data from previous user session.
+        App.Services.GetRequiredService<INavigationService>().Clear();
         var shellVm = App.Services.GetRequiredService<ShellViewModel>();
         await shellVm.InitializeAsync().ConfigureAwait(true);
         LogAutoLoginIfSessionActive();
+    }
+
+    private void OnLoginTotpVerifyClick(object sender, RoutedEventArgs e)
+    {
+        LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+        var code = LoginTotpBox.Text.Trim();
+        if (code.Length != 6 || !code.All(char.IsDigit))
+        {
+            LoginTotpErrorText.Text = "Enter the 6-digit code from your authenticator app.";
+            LoginTotpErrorBorder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
+        security.Load();
+        var secret = security.GetTwoFactorSecret();
+        if (secret is null || !TotpHelper.Verify(code, secret))
+        {
+            LoginTotpErrorText.Text = "That code is not valid. Check the time on your device and try again.";
+            LoginTotpErrorBorder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        _loginTotpVerifiedThisSession = true;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        ShowShell();
+    }
+
+    private void OnLoginTotpBackClick(object sender, RoutedEventArgs e)
+    {
+        _signedInThisSession = false;
+        _loginTotpVerifiedThisSession = false;
+        LoginTotpBox.Text = string.Empty;
+        LoginTwoFactorRoot.Visibility = Visibility.Collapsed;
+        LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
+        SetupRoot.Visibility = Visibility.Visible;
+        _step = 1;
+        UpdateStepUi();
     }
 
     private void LogAutoLoginIfSessionActive()
@@ -830,7 +861,7 @@ public sealed partial class MainWindow : Window
         {
             AppLockRoot.Visibility = Visibility.Collapsed;
             ShellRoot.Visibility = Visibility.Visible;
-            ApplyShellExtendedTitleBar();
+            EnableShellTitleBar();
             LogAutoLoginIfSessionActive();
         }
         else
@@ -869,18 +900,25 @@ public sealed partial class MainWindow : Window
 
             if (_step == 1)
         {
-            _resolvedSignedInEmail = null;
             if (string.IsNullOrWhiteSpace(OrgCodeBox.Text))
             {
-                ValidationText.Text = "Please enter organization code.";
+                ShowValidationMessage("Please enter organisation code.");
                 return;
             }
 
             var trimmed = OrgCodeBox.Text.Trim();
             if (trimmed.Length != 6 || !trimmed.All(char.IsDigit))
             {
-                ValidationText.Text = "Organization code must be exactly 6 digits.";
+                ShowValidationMessage("Organisation code must be exactly 6 digits.");
                 return;
+            }
+
+            if (!string.Equals(_workingOrgCode, trimmed, StringComparison.Ordinal))
+            {
+                _resolvedSignedInEmail = null;
+                _resolvedSignedInRole = null;
+                _signedInThisSession = false;
+                _mustChangePassword = true;
             }
 
             NextButton.IsEnabled = false;
@@ -891,16 +929,16 @@ public sealed partial class MainWindow : Window
                 {
                     var api = LicenseApiClient.GetBaseUrl();
                     var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
-                    ValidationText.Text =
-                        $"Active internet is required. Cannot reach {api}.{detail} Start PartFinder-Backend (port 3000 by default) and check LicenseApi:BaseUrl in appsettings.json.";
+                    ShowValidationMessage(
+                        $"Active internet is required. Cannot reach {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
                     return;
                 }
 
                 if (!status.Valid)
                 {
-                    ValidationText.Text = string.IsNullOrWhiteSpace(status.Message)
-                        ? "This organization code is not valid for PartFinder."
-                        : status.Message;
+                    ShowValidationMessage(string.IsNullOrWhiteSpace(status.Message)
+                        ? "This organisation code is not valid for PartFinder."
+                        : status.Message);
                     return;
                 }
 
@@ -915,32 +953,55 @@ public sealed partial class MainWindow : Window
                 {
                     var invitedEmail = InviteLoginEmailBox.Text.Trim();
                     var tempPassword = InviteLoginPasswordBox.Password;
-                    if (string.IsNullOrWhiteSpace(invitedEmail) || string.IsNullOrWhiteSpace(tempPassword))
-                    {
-                        ValidationText.Text =
-                            "This organization is already configured. Enter invited Email ID and temporary password.";
-                        return;
-                    }
+                    var alreadySignedInThisStep =
+                        _signedInThisSession &&
+                        string.Equals(_resolvedSignedInEmail, invitedEmail, StringComparison.OrdinalIgnoreCase);
 
-                    if (!IsValidEmail(invitedEmail))
+                    if (!alreadySignedInThisStep)
                     {
-                        ValidationText.Text = "Please enter a valid invited Email ID.";
-                        return;
-                    }
+                        if (string.IsNullOrWhiteSpace(invitedEmail) || string.IsNullOrWhiteSpace(tempPassword))
+                        {
+                            ShowValidationMessage(
+                                "This organisation is already configured. Enter invited Email ID and temporary password.");
+                            return;
+                        }
 
-                    var (okInviteLogin, inviteErr, inviteLoginResponse) = await SetupApiClient
-                        .ValidateInviteLoginAsync(trimmed, invitedEmail, tempPassword)
-                        .ConfigureAwait(true);
-                    if (!okInviteLogin)
-                    {
-                        ValidationText.Text = inviteErr ?? "Invalid invited Email ID or temporary password.";
-                        return;
-                    }
+                        if (!IsValidEmail(invitedEmail))
+                        {
+                            ShowValidationMessage("Please enter a valid invited Email ID.");
+                            return;
+                        }
 
-                    _resolvedSignedInEmail = invitedEmail;
-                    _mustChangePassword = inviteLoginResponse?.MustChangePassword ?? true;
-                    _resolvedSignedInRole = inviteLoginResponse?.Role;
-                    _signedInThisSession = true;
+                        var (okInviteLogin, inviteErr, inviteLoginResponse) = await SetupApiClient
+                            .ValidateInviteLoginAsync(trimmed, invitedEmail, tempPassword)
+                            .ConfigureAwait(true);
+                        if (!okInviteLogin)
+                        {
+                            ShowValidationMessage(inviteErr ?? "Invalid invited Email ID or temporary password.");
+                            return;
+                        }
+
+                        _resolvedSignedInEmail = invitedEmail;
+                        _mustChangePassword = inviteLoginResponse?.MustChangePassword ?? true;
+                        _resolvedSignedInRole = inviteLoginResponse?.Role;
+                        _signedInThisSession = true;
+
+                        if (!string.IsNullOrWhiteSpace(inviteLoginResponse?.AccessToken))
+                        {
+                            var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
+                            adminSession.Save(inviteLoginResponse.AccessToken, invitedEmail);
+                        }
+
+                        if (!_mustChangePassword)
+                        {
+                            var directory = App.Services.GetService<IOrgUserDirectoryService>();
+                            if (directory is not null)
+                            {
+                                _ = await directory.MarkInvitedUserActiveAfterLoginAsync(invitedEmail)
+                                    .ConfigureAwait(true);
+                            }
+                        }
+                    }
                 }
 
                 SaveProgressOrgCodeOnly(trimmed);
@@ -954,9 +1015,10 @@ public sealed partial class MainWindow : Window
 
                     if (string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
                     {
-                        ValidationText.Text =
-                            "This organization requires sign-in. Enter your email and password.";
+                        ShowValidationMessage(
+                            "This organisation requires sign-in. Enter your email and password.");
                         _step = 1;
+                        UpdateStepUi();
                         return;
                     }
 
@@ -975,7 +1037,6 @@ public sealed partial class MainWindow : Window
                         appState.OrgPlan = !string.IsNullOrWhiteSpace(status.Plan) ? status.Plan : string.Empty;
                         appState.OrgType = !string.IsNullOrWhiteSpace(status.OrgType) ? status.OrgType : string.Empty;
                         _step = 4;
-                        return;
                     }
                 }
             }
@@ -992,7 +1053,7 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(_workingOrgCode))
             {
-                ValidationText.Text = "Organization code is missing. Go back to step 1.";
+                ValidationText.Text = "Organisation code is missing. Go back to step 1.";
                 return;
             }
 
@@ -1094,7 +1155,7 @@ public sealed partial class MainWindow : Window
         {
             if (string.IsNullOrWhiteSpace(_workingOrgCode))
             {
-                ValidationText.Text = "Organization code is missing. Go back to step 1.";
+                ValidationText.Text = "Organisation code is missing. Go back to step 1.";
                 return;
             }
 
@@ -1130,8 +1191,45 @@ public sealed partial class MainWindow : Window
                 // Invited employees use ChangePassword; first org admin uses CreateOrgAdmin.
                 bool ok;
                 string? err;
+                var isFirstAdminTempChange =
+                    _mustChangePassword &&
+                    _lastStatus?.RequiresInviteLogin == true &&
+                    !string.IsNullOrWhiteSpace(_lastStatus.FirstAdminEmail) &&
+                    string.Equals(_resolvedSignedInEmail, _lastStatus.FirstAdminEmail, StringComparison.OrdinalIgnoreCase);
 
-                if (_mustChangePassword && !string.Equals(_lastStatus?.OrgAdminStatus, "no", StringComparison.OrdinalIgnoreCase))
+                if (isFirstAdminTempChange)
+                {
+                    var (loginOk, loginErr, _) = await SetupApiClient
+                        .ValidateInviteLoginAsync(_workingOrgCode, _resolvedSignedInEmail!, CurrentPasswordBox.Password)
+                        .ConfigureAwait(true);
+                    if (!loginOk)
+                    {
+                        ValidationText.Text = loginErr ?? "Current temporary password is invalid.";
+                        return;
+                    }
+
+                    var uri = !string.IsNullOrWhiteSpace(_cachedOrgDatabaseUri)
+                        ? _cachedOrgDatabaseUri
+                        : _lastStatus?.OrgDatabaseUri;
+                    if (string.IsNullOrWhiteSpace(uri) ||
+                        !await MongoTenantBootstrap.TrySetOrgAdminPasswordAsync(
+                            uri,
+                            _resolvedSignedInEmail!,
+                            NewPasswordBox.Password).ConfigureAwait(true))
+                    {
+                        ValidationText.Text = "Could not save the new password. Check the organisation database connection.";
+                        return;
+                    }
+
+                    var (adminOk, adminErr, _) = await SetupApiClient.CreateOrgAdminAsync(
+                        _workingOrgCode,
+                        _resolvedSignedInEmail!,
+                        CurrentPasswordBox.Password,
+                        NewPasswordBox.Password).ConfigureAwait(true);
+                    ok = true;
+                    err = adminOk ? null : adminErr;
+                }
+                else if (_mustChangePassword && !string.Equals(_lastStatus?.OrgAdminStatus, "no", StringComparison.OrdinalIgnoreCase))
                 {
                     // Invited user (employee or returning admin) — use change-password endpoint
                     (ok, err) = await SetupApiClient.ChangePasswordAsync(
@@ -1153,7 +1251,7 @@ public sealed partial class MainWindow : Window
 
                     if (body?.Skipped == true)
                     {
-                        ValidationText.Text = "An admin already exists for this organization. Continuing.";
+                        ValidationText.Text = "An admin already exists for this organisation. Continuing.";
                     }
                 }
 
@@ -1161,6 +1259,17 @@ public sealed partial class MainWindow : Window
                 {
                     ValidationText.Text = err ?? "Could not change password.";
                     return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
+                {
+                    var directory = App.Services.GetService<IOrgUserDirectoryService>();
+                    if (directory is not null)
+                    {
+                        _ = await directory.CompleteInvitedUserActivationAsync(
+                            _resolvedSignedInEmail,
+                            NewPasswordBox.Password).ConfigureAwait(true);
+                    }
                 }
 
                 _signedInThisSession = true;
@@ -1326,7 +1435,7 @@ public sealed partial class MainWindow : Window
 
         StepTitle.Text = _step switch
         {
-            1 => "Step 1 of 4: Organization",
+            1 => "Step 1 of 4: Organisation",
             2 => "Step 2 of 4: Database",
             3 => "Step 3 of 4: Change Password",
             _ => "Step 4 of 4: Completed",
@@ -1458,6 +1567,21 @@ public sealed partial class MainWindow : Window
         {
             ConfirmPasswordBox.PasswordRevealMode = Microsoft.UI.Xaml.Controls.PasswordRevealMode.Hidden;
             SetupConfirmPasswordRevealIcon.Glyph = "\uE890";
+        }
+    }
+
+    private void ShowValidationMessage(string message)
+    {
+        ValidationText.Text = message;
+        ValidationText.UpdateLayout();
+        try
+        {
+            var top = Math.Max(0, ValidationText.ActualOffset.Y - 24);
+            SetupFormScrollViewer?.ChangeView(null, top, null, disableAnimation: true);
+        }
+        catch
+        {
+            // Best effort — message is still set.
         }
     }
 

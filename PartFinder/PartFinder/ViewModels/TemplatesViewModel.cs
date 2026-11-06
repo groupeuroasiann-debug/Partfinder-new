@@ -19,6 +19,7 @@ public partial class TemplatesViewModel : ViewModelBase
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
 
     private readonly ICurrentUserAccessService _access;
+    private readonly BulkTemplateImportService _bulkImport;
 
     public TemplatesViewModel(
         ITemplateSchemaService templateSchema,
@@ -27,7 +28,8 @@ public partial class TemplatesViewModel : ViewModelBase
         IContextActionsService contextActions,
         ActivityLogger activityLogger,
         IFavouriteStore favouriteStore,
-        ICurrentUserAccessService access)
+        ICurrentUserAccessService access,
+        BulkTemplateImportService bulkImport)
     {
         _templateSchema = templateSchema;
         _shellNav = shellNav;
@@ -36,6 +38,7 @@ public partial class TemplatesViewModel : ViewModelBase
         _activityLogger = activityLogger;
         _favouriteStore = favouriteStore;
         _access = access;
+        _bulkImport = bulkImport;
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         
         ColumnLabels.Add(new ColumnLabelDraft());
@@ -88,6 +91,37 @@ public partial class TemplatesViewModel : ViewModelBase
     public event EventHandler? AllTemplatesViewRequested;
 
     public bool IsAllTemplatesGalleryEmpty => Templates.Count == 0;
+
+    public async Task<BulkTemplateImportResult> ImportBulkTemplatesFromFileAsync(
+        string filePath,
+        IProgress<BulkImportProgress>? progress = null)
+    {
+        var caps = _access.Capabilities;
+        if (!caps.CanAddTemplate && !caps.CanAddMasterData)
+        {
+            return new BulkTemplateImportResult
+            {
+                Errors = ["You do not have permission to add templates or import data."],
+            };
+        }
+
+        var result = await _bulkImport
+            .ImportFromFileAsync(filePath, caps.CanAddTemplate, caps.CanAddMasterData, progress)
+            .ConfigureAwait(true);
+
+        if (result.HasWork)
+        {
+            _activityLogger.LogTemplateChange(
+                "Bulk Template Import",
+                $"Created {result.CreatedCount} template(s), imported {result.ImportedRowCount} row(s).");
+            await LoadAsync().ConfigureAwait(true);
+            await _shellNav.NotifyTemplatesChangedAsync().ConfigureAwait(true);
+            OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
+            AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        return result;
+    }
 
     [RelayCommand]
     private async Task DeleteTemplateAsync(string templateId)
@@ -201,6 +235,7 @@ public partial class TemplatesViewModel : ViewModelBase
                 OnPropertyChanged(nameof(LinkTargetCandidates));
                 OnPropertyChanged(nameof(CanSaveTemplate));
                 OnPropertyChanged(nameof(EditorHeaderTitle));
+                SaveTemplateCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -300,6 +335,7 @@ public partial class TemplatesViewModel : ViewModelBase
     }
 
     private bool _hasTenantDb;
+    private int _orgTemplateCount;
 
     public bool ShowDbMissingBanner => !_hasTenantDb;
 
@@ -331,6 +367,7 @@ public partial class TemplatesViewModel : ViewModelBase
         OnPropertyChanged(nameof(LinkTargetCandidates));
         OnPropertyChanged(nameof(EditorHeaderTitle));
         OnPropertyChanged(nameof(ShowFavouritesSubPage));
+        SaveTemplateCommand.NotifyCanExecuteChanged();
     }
 
     public async Task ReloadContextActionsAsync(CancellationToken cancellationToken = default)
@@ -473,6 +510,7 @@ public partial class TemplatesViewModel : ViewModelBase
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        System.Diagnostics.Debug.WriteLine("[TemplatesViewModel] Loading templates...");
         FormError = string.Empty;
         if (!_access.Capabilities.CanViewTemplate)
         {
@@ -504,9 +542,8 @@ public partial class TemplatesViewModel : ViewModelBase
             Templates.Add(template);
         }
 
-        var hasMaster = templates.Any(
-            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
-        CanAddAnotherTemplate = hasMaster && _access.Capabilities.CanAddTemplate;
+        _orgTemplateCount = templates.Count;
+        CanAddAnotherTemplate = _access.Capabilities.CanAddTemplate;
 
         SelectedTemplate = Templates.FirstOrDefault();
 
@@ -568,18 +605,9 @@ public partial class TemplatesViewModel : ViewModelBase
         ColumnLabels.Remove(draft);
     }
 
-    /// <summary>Opens the canvas editor for a new template (Master Data first if none exists).</summary>
+    /// <summary>Opens the canvas editor for a new template (any name).</summary>
     public void StartCreateFromGallery()
     {
-        var hasMaster = Templates.Any(
-            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
-
-        if (!hasMaster && _hasTenantDb)
-        {
-            BeginMasterDataFlow();
-            return;
-        }
-
         if (!CanAddAnotherTemplate)
         {
             return;
@@ -712,7 +740,7 @@ public partial class TemplatesViewModel : ViewModelBase
         NotifyTemplateUiState();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSaveTemplate))]
     private async Task SaveTemplateAsync()
     {
         FormError = string.Empty;
@@ -723,20 +751,12 @@ public partial class TemplatesViewModel : ViewModelBase
             return;
         }
 
-        var hasMasterAlready = Templates.Any(
-            t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name));
-
         if (!IsEditingExisting)
         {
-            if (!hasMasterAlready && !MongoTemplateSchemaService.IsExplorerTemplateName(name))
+            if (MongoTemplateSchemaService.IsExplorerTemplateName(name)
+                && Templates.Any(t => MongoTemplateSchemaService.IsExplorerTemplateName(t.Name)))
             {
-                FormError = "Your first template must be named Explorer.";
-                return;
-            }
-
-            if (hasMasterAlready && MongoTemplateSchemaService.IsExplorerTemplateName(name))
-            {
-                FormError = "A template named Explorer already exists.";
+                FormError = "A template named Explorer or Master Data already exists.";
                 return;
             }
 
@@ -794,7 +814,11 @@ public partial class TemplatesViewModel : ViewModelBase
                 version = existing.Version + 1;
             }
         }
-        else if (!hasMasterAlready)
+        else if (MongoTemplateSchemaService.IsExplorerTemplateName(name)
+                 && !Templates.Any(t => string.Equals(
+                     t.Id,
+                     MongoTemplateSchemaService.MasterDataTemplateId,
+                     StringComparison.Ordinal)))
         {
             templateId = MongoTemplateSchemaService.MasterDataTemplateId;
         }
@@ -875,11 +899,25 @@ public partial class TemplatesViewModel : ViewModelBase
             IsEditingExisting ? "Template Edited" : "Template Created",
             $"Template \"{name}\" {(IsEditingExisting ? "updated" : "created")}");
 
-        var firstMasterSave = !IsEditingExisting && !hasMasterAlready;
+        var firstMasterSave = !IsEditingExisting && _orgTemplateCount == 0;
+        var savedName = name;
         IsEditingExisting = false;
         EditingTemplateId = null;
         await LoadAsync().ConfigureAwait(true);
         await _shellNav.NotifyTemplatesChangedAsync(openMasterDataPage: firstMasterSave).ConfigureAwait(true);
+
+        SelectedTemplate = Templates.FirstOrDefault(
+            t => string.Equals(t.Name, savedName, StringComparison.OrdinalIgnoreCase))
+            ?? Templates.FirstOrDefault();
+
+        FormError = string.Empty;
+        IsTemplateNameReadOnly = false;
+        NewTemplateName = string.Empty;
+        ColumnLabels.Clear();
+        ColumnLabels.Add(new ColumnLabelDraft());
+        CellConnections.Clear();
+        IsCreatingTemplate = false;
+
         OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
         AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
     }

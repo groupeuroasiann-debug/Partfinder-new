@@ -93,11 +93,11 @@ public static class LicenseApiClient
         if (string.IsNullOrWhiteSpace(json))
         {
             return response.IsSuccessStatusCode
-                ? new LicenseVerifyResponse(false, "EMPTY_RESPONSE", "Empty response from license server.", null, null, null)
+                ? new LicenseVerifyResponse(false, "EMPTY_RESPONSE", "Empty response from licence server.", null, null, null)
                 : new LicenseVerifyResponse(
                     false,
                     "HTTP_ERROR",
-                    $"License server returned {(int)response.StatusCode} with an empty body.",
+                    $"Licence server returned {(int)response.StatusCode} with an empty body.",
                     null,
                     null,
                     null);
@@ -115,7 +115,7 @@ public static class LicenseApiClient
                 return new LicenseVerifyResponse(
                     false,
                     "HTTP_ERROR",
-                    err ?? $"License server error ({(int)response.StatusCode}).",
+                    err ?? $"Licence server error ({(int)response.StatusCode}).",
                     null,
                     null,
                     maintUntilErr);
@@ -132,7 +132,7 @@ public static class LicenseApiClient
         }
         catch (JsonException)
         {
-            return new LicenseVerifyResponse(false, "INVALID_RESPONSE", "Invalid response from license server.", null, null, null);
+            return new LicenseVerifyResponse(false, "INVALID_RESPONSE", "Invalid response from licence server.", null, null, null);
         }
     }
 
