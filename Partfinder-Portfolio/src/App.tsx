@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
 import { PartFinderLogo } from './components/PartFinderLogo'
+import { apiBase } from './config/apiBase'
 import { EnterpriseHome } from './pages/EnterpriseHome'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
@@ -57,6 +58,25 @@ function postLoginPath(pathname: string): string {
     return pathname
   }
   return '/admin/dashboard'
+}
+
+async function validateAdminSession(apiBaseUrl: string): Promise<boolean> {
+  const token =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem(ADMIN_TOKEN_KEY)
+      : null
+  if (!token) {
+    return false
+  }
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/organizations`, {
+      headers: authJsonHeaders(),
+    })
+    return response.ok
+  } catch {
+    // Offline or API unreachable — keep the stored token so a retry can succeed.
+    return true
+  }
 }
 
 function App() {
