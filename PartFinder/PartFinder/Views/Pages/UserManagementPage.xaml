@@ -229,34 +229,44 @@
                             TextWrapping="WrapWholeWords"
                             Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}" />
 
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <StackPanel Spacing="0" MinWidth="820">
-                        <!-- Table Header -->
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
+                            <Grid HorizontalAlignment="Stretch">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                        <!-- Table Header (full width; column defs match rows below) -->
                         <Grid
+                            Grid.Row="0"
+                            HorizontalAlignment="Stretch"
                             Padding="12,8"
-                            ColumnSpacing="6"
+                            ColumnSpacing="12"
                             Background="{StaticResource GridHeaderBackgroundBrush}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="36" />
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="200" />
-                                <ColumnDefinition Width="84" />
-                                <ColumnDefinition Width="84" />
-                                <ColumnDefinition Width="*" MinWidth="140" />
-                                <ColumnDefinition Width="92" />
-                                <ColumnDefinition Width="72" />
+                                <ColumnDefinition Width="40" />
+                                <ColumnDefinition Width="1*" MinWidth="160" />
+                                <ColumnDefinition Width="2*" MinWidth="180" />
+                                <ColumnDefinition Width="1*" MinWidth="120" />
+                                <ColumnDefinition Width="1*" MinWidth="120" />
+                                <ColumnDefinition Width="1*" MinWidth="120" />
+                                <ColumnDefinition Width="1*" MinWidth="120" />
+                                <ColumnDefinition Width="1*" MinWidth="120" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="2" Text="EMAIL" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="3" Text="ROLE" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="4" Text="STATUS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="5" Text="ACCESS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="6" Text="INVITED" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="7" Text="ACTIONS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="NAME" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="EMAIL" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="ROLE" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="4" Text="STATUS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="ACCESS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="6" Text="INVITED" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
+                            <TextBlock Grid.Column="7" Text="ACTIONS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" CharacterSpacing="60" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" />
                         </Grid>
 
                         <!-- Table Rows -->
                         <ListView
+                            Grid.Row="1"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
                             Padding="0"
                             ItemsSource="{Binding Users}"
                             SelectionMode="None"
@@ -264,26 +274,28 @@
                             <ListView.ItemTemplate>
                                 <DataTemplate>
                                     <Grid
+                                        HorizontalAlignment="Stretch"
                                         Padding="12,8"
-                                        ColumnSpacing="6"
+                                        ColumnSpacing="12"
                                         MinHeight="44"
                                         BorderBrush="{StaticResource BorderDefaultBrush}"
                                         BorderThickness="0,0,0,1">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="36" />
-                                            <ColumnDefinition Width="130" />
-                                            <ColumnDefinition Width="200" />
-                                            <ColumnDefinition Width="84" />
-                                            <ColumnDefinition Width="84" />
-                                            <ColumnDefinition Width="*" MinWidth="140" />
-                                            <ColumnDefinition Width="92" />
-                                            <ColumnDefinition Width="72" />
+                                            <ColumnDefinition Width="40" />
+                                            <ColumnDefinition Width="1*" MinWidth="160" />
+                                            <ColumnDefinition Width="2*" MinWidth="180" />
+                                            <ColumnDefinition Width="1*" MinWidth="120" />
+                                            <ColumnDefinition Width="1*" MinWidth="120" />
+                                            <ColumnDefinition Width="1*" MinWidth="120" />
+                                            <ColumnDefinition Width="1*" MinWidth="120" />
+                                            <ColumnDefinition Width="1*" MinWidth="120" />
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Avatar -->
                                         <Border
                                             Grid.Column="0"
                                             Width="28" Height="28"
+                                            HorizontalAlignment="Center"
                                             CornerRadius="14"
                                             Background="{StaticResource AccentPrimaryBrush}"
                                             VerticalAlignment="Center">
@@ -297,14 +309,16 @@
                                         </Border>
 
                                         <!-- Name -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                            <TextBlock
-                                                Text="{Binding Name}"
-                                                FontSize="12"
-                                                FontWeight="SemiBold"
-                                                Foreground="{StaticResource TextPrimaryBrush}"
-                                                TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            Text="{Binding Name}"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Foreground="{StaticResource TextPrimaryBrush}"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            TextAlignment="Center"
+                                            TextTrimming="CharacterEllipsis" />
 
                                         <!-- Email -->
                                         <TextBlock
@@ -313,37 +327,39 @@
                                             FontSize="11"
                                             Foreground="{StaticResource TextSecondaryBrush}"
                                             VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            TextAlignment="Center"
                                             TextTrimming="CharacterEllipsis" />
 
-                                        <!-- Role Badge -->
-                                        <Border
-                                            Grid.Column="3"
-                                            VerticalAlignment="Center"
-                                            HorizontalAlignment="Left"
-                                            CornerRadius="6"
-                                            Padding="6,2"
-                                            Background="#1A2B43">
-                                            <TextBlock
-                                                Text="{Binding Role}"
-                                                FontSize="10"
-                                                FontWeight="SemiBold"
-                                                Foreground="{StaticResource AccentPrimaryBrush}" />
-                                        </Border>
+                                        <!-- Role Badge (fit to label, centered in column) -->
+                                        <StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <Border
+                                                HorizontalAlignment="Center"
+                                                CornerRadius="6"
+                                                Padding="8,4"
+                                                Background="#1A2B43">
+                                                <TextBlock
+                                                    Text="{Binding Role}"
+                                                    FontSize="10"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{StaticResource AccentPrimaryBrush}" />
+                                            </Border>
+                                        </StackPanel>
 
                                         <!-- Status -->
-                                        <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Center">
                                             <Border
-                                                HorizontalAlignment="Left"
+                                                HorizontalAlignment="Center"
                                                 CornerRadius="6"
-                                                Padding="6,2"
+                                                Padding="8,4"
                                                 Background="#1A38D6A4"
                                                 Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}}">
                                                 <TextBlock Text="Active" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
                                             </Border>
                                             <Border
-                                                HorizontalAlignment="Left"
+                                                HorizontalAlignment="Center"
                                                 CornerRadius="6"
-                                                Padding="6,2"
+                                                Padding="8,4"
                                                 Background="#33FFC98D"
                                                 Visibility="{Binding IsActive, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
                                                 <TextBlock Text="Pending" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}" />
@@ -357,6 +373,10 @@
                                             FontSize="11"
                                             Foreground="{StaticResource TextSecondaryBrush}"
                                             VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            TextAlignment="Center"
+                                            TextTrimming="CharacterEllipsis"
+                                            MaxLines="2"
                                             TextWrapping="WrapWholeWords" />
 
                                         <!-- Invited date -->
@@ -365,31 +385,40 @@
                                             Text="{Binding InvitedAtDisplay}"
                                             FontSize="10"
                                             Foreground="{StaticResource TextTertiaryBrush}"
-                                            VerticalAlignment="Center" />
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            TextAlignment="Center"
+                                            TextTrimming="CharacterEllipsis" />
 
-                                        <!-- Actions -->
-                                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnEditUserClicked" IsEnabled="{Binding CanEditInUserManagement}" ToolTipService.ToolTip="Edit User">
-                                                <FontIcon Glyph="&#xE70F;" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
-                                            </Button>
-                                            <Button Style="{StaticResource GhostButtonStyle}" Padding="6" CornerRadius="4" Click="OnDeleteUserClicked" IsEnabled="{Binding CanEditInUserManagement}" ToolTipService.ToolTip="Delete User">
-                                                <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{StaticResource DangerBrush}" />
-                                            </Button>
-                                        </StackPanel>
+                                        <!-- Actions (overflow menu) -->
+                                        <Button
+                                            Grid.Column="7"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Width="32"
+                                            Height="32"
+                                            Padding="0"
+                                            CornerRadius="8"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            Tag="{Binding}"
+                                            Click="OnUserActionsButtonClick"
+                                            ToolTipService.ToolTip="More actions">
+                                            <FontIcon Glyph="&#xE712;" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </Button>
                                     </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
 
                         <!-- Loading -->
-                        <Border Padding="16,12" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Border Grid.Row="2" Padding="16,12" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                                 <ProgressRing Width="18" Height="18" IsActive="True" />
                                 <TextBlock Text="Loading users..." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
 
-                            </StackPanel>
+                            </Grid>
                         </ScrollViewer>
                     </StackPanel>
                 </Border>

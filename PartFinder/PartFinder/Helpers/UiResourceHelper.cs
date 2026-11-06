@@ -98,12 +98,12 @@ internal static class UiResourceHelper
         RefreshLightComboBoxChrome(sender);
     }
 
-    private static void OnCanvasComboBoxDropDownClosed(object sender, object e)
+    private static void OnCanvasComboBoxDropDownClosed(object? sender, object? e)
     {
         RefreshLightComboBoxChrome(sender);
     }
 
-    private static void RefreshLightComboBoxChrome(object sender)
+    private static void RefreshLightComboBoxChrome(object? sender)
     {
         if (sender is not ComboBox box)
         {
