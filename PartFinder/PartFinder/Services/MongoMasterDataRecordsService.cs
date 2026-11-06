@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
@@ -12,14 +13,43 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
 {
     public const string CollectionName = "partfinder_master_data_rows";
 
-    private readonly ILocalSetupContext _setupContext;
+    private const int InsertBatchSize = 50;
 
-    public MongoMasterDataRecordsService(ILocalSetupContext setupContext)
+    private static readonly ConcurrentDictionary<string, MongoClient> ClientCache = new();
+
+    private readonly ILocalSetupContext _setupContext;
+    private readonly ITemplateSchemaService _templateSchema;
+
+    public MongoMasterDataRecordsService(
+        ILocalSetupContext setupContext,
+        ITemplateSchemaService templateSchema)
     {
         _setupContext = setupContext;
+        _templateSchema = templateSchema;
     }
 
-    private IMongoCollection<MasterDataRowDoc>? TryGetCollection()
+    private bool TryGetClient(out MongoClient client)
+    {
+        client = null!;
+        try
+        {
+            if (!_setupContext.TryGetTenantMongoUri(out var raw) || string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            var cs = MongoConnectionStringUtil.Prepare(raw, _setupContext.OrgCode);
+            client = ClientCache.GetOrAdd(cs, static connectionString => new MongoClient(connectionString));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MongoMasterDataRecordsService] TryGetClient failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private IMongoCollection<MasterDataRowDoc>? TryGetCollection(MongoClient client)
     {
         try
         {
@@ -29,7 +59,6 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
             }
 
             var cs = MongoConnectionStringUtil.Prepare(raw, _setupContext.OrgCode);
-            var client = new MongoClient(cs);
             var db = MongoConnectionStringUtil.GetTenantDatabase(client, cs, _setupContext.OrgCode);
             if (string.Equals(db.DatabaseNamespace.DatabaseName, "admin", StringComparison.OrdinalIgnoreCase))
             {
@@ -51,7 +80,27 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
     {
         try
         {
-            var coll = TryGetCollection();
+            if (!TryGetClient(out var client))
+            {
+                return Array.Empty<MasterDataRowRecord>();
+            }
+
+            var template = await _templateSchema
+                .GetTemplateAsync(templateId, cancellationToken)
+                .ConfigureAwait(false);
+            if (template is not null
+                && MongoSharedPartsCatalog.IsCatalogTemplateName(template.Name)
+                && !string.IsNullOrWhiteSpace(_setupContext.OrgCode))
+            {
+                return await MongoSharedPartsCatalog.LoadRowsAsync(
+                        client,
+                        _setupContext.OrgCode,
+                        template.Fields,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            var coll = TryGetCollection(client);
             if (coll is null)
             {
                 return Array.Empty<MasterDataRowRecord>();
@@ -70,13 +119,42 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
         }
     }
 
+    public async Task<IReadOnlyList<MasterDataRowRecord>> GetStoredRowsAsync(
+        string templateId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!TryGetClient(out var client))
+            {
+                return Array.Empty<MasterDataRowRecord>();
+            }
+
+            var coll = TryGetCollection(client);
+            if (coll is null)
+            {
+                return Array.Empty<MasterDataRowRecord>();
+            }
+
+            var docs = await coll.Find(d => d.TemplateId == templateId)
+                .SortBy(d => d.RowOrder)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            return docs.Select(Map).ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MongoMasterDataRecordsService] GetStoredRowsAsync failed: {ex.Message}");
+            return Array.Empty<MasterDataRowRecord>();
+        }
+    }
+
     public async Task<IReadOnlyList<MasterDataRowRecord>> GetRowsByIdsAsync(
         string templateId,
         IReadOnlyList<string> rowIds,
         CancellationToken cancellationToken = default)
     {
-        var coll = TryGetCollection();
-        if (coll is null || rowIds.Count == 0)
+        if (rowIds.Count == 0 || !TryGetClient(out var client))
         {
             return Array.Empty<MasterDataRowRecord>();
         }
@@ -91,6 +169,28 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
         }
 
         if (oids.Count == 0)
+        {
+            return Array.Empty<MasterDataRowRecord>();
+        }
+
+        var template = await _templateSchema
+            .GetTemplateAsync(templateId, cancellationToken)
+            .ConfigureAwait(false);
+        if (template is not null
+            && MongoSharedPartsCatalog.IsCatalogTemplateName(template.Name)
+            && !string.IsNullOrWhiteSpace(_setupContext.OrgCode))
+        {
+            return await MongoSharedPartsCatalog.LoadRowsByIdsAsync(
+                    client,
+                    _setupContext.OrgCode,
+                    template.Fields,
+                    oids,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var coll = TryGetCollection(client);
+        if (coll is null)
         {
             return Array.Empty<MasterDataRowRecord>();
         }
@@ -111,7 +211,13 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
         IReadOnlyDictionary<string, string> values,
         CancellationToken cancellationToken = default)
     {
-        var coll = TryGetCollection()
+        if (!TryGetClient(out var client))
+        {
+            throw new InvalidOperationException(
+                "No tenant database is configured. Complete setup and ensure setup-state.json contains dbUri.");
+        }
+
+        var coll = TryGetCollection(client)
                    ?? throw new InvalidOperationException(
                        "No tenant database is configured. Complete setup and ensure setup-state.json contains dbUri.");
 
@@ -138,6 +244,66 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
                 cancellationToken)
             .ConfigureAwait(false);
         return id.ToString();
+    }
+
+    public async Task<int> AppendRowsAsync(
+        string templateId,
+        IEnumerable<IReadOnlyDictionary<string, string>> rows,
+        IProgress<int>? insertedCount = null,
+        CancellationToken cancellationToken = default)
+    {
+        var rowList = rows as IReadOnlyList<IReadOnlyDictionary<string, string>> ?? rows.ToList();
+        if (rowList.Count == 0)
+        {
+            return 0;
+        }
+
+        if (!TryGetClient(out var client))
+        {
+            throw new InvalidOperationException(
+                "No tenant database is configured. Complete setup and ensure setup-state.json contains dbUri.");
+        }
+
+        var coll = TryGetCollection(client)
+                   ?? throw new InvalidOperationException(
+                       "No tenant database is configured. Complete setup and ensure setup-state.json contains dbUri.");
+
+        var startOrder = (int)await coll
+            .CountDocumentsAsync(
+                Builders<MasterDataRowDoc>.Filter.Eq(d => d.TemplateId, templateId),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var inserted = 0;
+        for (var offset = 0; offset < rowList.Count; offset += InsertBatchSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var count = Math.Min(InsertBatchSize, rowList.Count - offset);
+            var docs = new List<MasterDataRowDoc>(count);
+            for (var i = 0; i < count; i++)
+            {
+                var bsonValues = new BsonDocument();
+                foreach (var kv in rowList[offset + i])
+                {
+                    bsonValues[kv.Key] = kv.Value ?? string.Empty;
+                }
+
+                docs.Add(
+                    new MasterDataRowDoc
+                    {
+                        MongoId = ObjectId.GenerateNewId(),
+                        TemplateId = templateId,
+                        RowOrder = startOrder + inserted + i,
+                        Values = bsonValues,
+                    });
+            }
+
+            await coll.InsertManyAsync(docs, cancellationToken: cancellationToken).ConfigureAwait(false);
+            inserted += docs.Count;
+            insertedCount?.Report(inserted);
+        }
+
+        return inserted;
     }
 
     private static MasterDataRowRecord Map(MasterDataRowDoc d)

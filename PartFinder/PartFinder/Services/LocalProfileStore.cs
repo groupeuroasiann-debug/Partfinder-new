@@ -23,6 +23,8 @@ public sealed class LocalProfileStore
 
     public string? DisplayName { get; private set; }
     public string? Department { get; private set; }
+    public string? Designation { get; private set; }
+    public string? Bio { get; private set; }
 
     /// <summary>
     /// Absolute path to the saved avatar image, or null if none is set.
@@ -69,6 +71,8 @@ public sealed class LocalProfileStore
             {
                 DisplayName = null;
                 Department = null;
+                Designation = null;
+                Bio = null;
                 AvatarPath = null;
                 return;
             }
@@ -81,6 +85,12 @@ public sealed class LocalProfileStore
             Department = dto?.Department?.Trim();
             if (string.IsNullOrWhiteSpace(Department)) Department = null;
 
+            Designation = dto?.Designation?.Trim();
+            if (string.IsNullOrWhiteSpace(Designation)) Designation = null;
+
+            Bio = dto?.Bio?.Trim();
+            if (string.IsNullOrWhiteSpace(Bio)) Bio = null;
+
             // Validate stored avatar path still exists
             var storedAvatar = dto?.AvatarPath?.Trim();
             AvatarPath = (!string.IsNullOrWhiteSpace(storedAvatar) && File.Exists(storedAvatar))
@@ -91,17 +101,25 @@ public sealed class LocalProfileStore
         {
             DisplayName = null;
             Department = null;
+            Designation = null;
+            Bio = null;
             AvatarPath = null;
         }
     }
 
-    public void SaveProfile(string? displayName, string? department)
+    public void SaveProfile(string? displayName, string? department, string? designation = null, string? bio = null)
     {
         DisplayName = displayName?.Trim();
         if (string.IsNullOrWhiteSpace(DisplayName)) DisplayName = null;
 
         Department = department?.Trim();
         if (string.IsNullOrWhiteSpace(Department)) Department = null;
+
+        Designation = designation?.Trim();
+        if (string.IsNullOrWhiteSpace(Designation)) Designation = null;
+
+        Bio = bio?.Trim();
+        if (string.IsNullOrWhiteSpace(Bio)) Bio = null;
 
         Persist();
         ProfileChanged?.Invoke();
@@ -157,6 +175,8 @@ public sealed class LocalProfileStore
     {
         DisplayName = null;
         Department = null;
+        Designation = null;
+        Bio = null;
         AvatarPath = null;
         try
         {
@@ -180,6 +200,8 @@ public sealed class LocalProfileStore
                 {
                     DisplayName = DisplayName,
                     Department = Department,
+                    Designation = Designation,
+                    Bio = Bio,
                     AvatarPath = AvatarPath,
                 },
                 Json));
@@ -189,6 +211,8 @@ public sealed class LocalProfileStore
     {
         public string? DisplayName { get; set; }
         public string? Department { get; set; }
+        public string? Designation { get; set; }
+        public string? Bio { get; set; }
         public string? AvatarPath { get; set; }
     }
 }

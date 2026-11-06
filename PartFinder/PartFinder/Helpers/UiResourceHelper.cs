@@ -174,6 +174,23 @@ internal static class UiResourceHelper
         dialog.RequestedTheme = ElementTheme.Light;
     }
 
+    /// <summary>Prepare inputs created for ContentDialog content (avoids WinRT COM errors from theme styles).</summary>
+    public static void PrepareDialogInputTree(DependencyObject root)
+    {
+        foreach (var box in FindVisualChildren<TextBox>(root))
+        {
+            WirePersistentLightTextBox(box);
+        }
+
+        foreach (var combo in FindVisualChildren<ComboBox>(root))
+        {
+            WirePersistentLightComboBox(combo);
+        }
+    }
+
+    public static XamlRoot? ResolveXamlRoot(FrameworkElement? host) =>
+        host?.XamlRoot ?? (PartFinder.App.MainAppWindow?.Content as FrameworkElement)?.XamlRoot;
+
     private static SolidColorBrush BrushFromHex(string fallbackHex)
     {
         var hex = fallbackHex.TrimStart('#');

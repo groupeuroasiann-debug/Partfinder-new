@@ -68,6 +68,30 @@ public class MongoInventoryService
         return doc.MongoId.ToString();
     }
 
+    public async Task InsertManyAsync(IReadOnlyList<InventoryDoc> docs, CancellationToken ct = default)
+    {
+        if (docs.Count == 0)
+        {
+            return;
+        }
+
+        var coll = TryGetCollection()
+            ?? throw new InvalidOperationException("No tenant database configured.");
+
+        var now = DateTime.UtcNow;
+        foreach (var doc in docs)
+        {
+            if (doc.MongoId == ObjectId.Empty)
+            {
+                doc.MongoId = ObjectId.GenerateNewId();
+            }
+
+            doc.LastUpdated = now;
+        }
+
+        await coll.InsertManyAsync(docs, cancellationToken: ct).ConfigureAwait(false);
+    }
+
     public async Task DeleteAsync(string id, CancellationToken ct = default)
     {
         var coll = TryGetCollection();

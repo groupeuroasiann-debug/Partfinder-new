@@ -10,6 +10,7 @@ public enum AppPage
     Audit,
     Templates,
     WorksheetRelations,
+    LinkedTemplates,
     ViewData,
     UserManagement,
     Settings,

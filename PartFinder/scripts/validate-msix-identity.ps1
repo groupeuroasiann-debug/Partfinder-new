@@ -89,11 +89,16 @@ public static class PfnNative {
     Write-Host ("{0,-12} actual:   {1}  [{2}]" -f "", $prop.a, $mark)
   }
   Write-Host ("Version      actual:   {0}" -f $actualVersion)
+  $storeVersionInvalid = $false
+  if ($actualVersion -match '^(\d+)\.(\d+)\.(\d+)\.(\d+)$' -and [int]$Matches[4] -ne 0) {
+    Write-Host "Version      Store:    revision (4th segment) must be 0  [INVALID FOR STORE]"
+    $storeVersionInvalid = $true
+  }
   $fOk = ($pfn -eq $expected.Family)
   Write-Host ("Family (PFN) expected: {0}" -f $expected.Family)
   Write-Host ("Family (PFN) actual:   {0}  [{1}]" -f $pfn, $(if ($fOk) { "OK" } else { "MISMATCH" }))
 
-  $failed = ($actualName -ne $expected.Name) -or ($actualPublisher -ne $expected.Publisher) -or ($actualArch -ne $expected.Arch) -or (-not $fOk)
+  $failed = $storeVersionInvalid -or ($actualName -ne $expected.Name) -or ($actualPublisher -ne $expected.Publisher) -or ($actualArch -ne $expected.Arch) -or (-not $fOk)
   if ($failed) { exit 1 }
 }
 finally {

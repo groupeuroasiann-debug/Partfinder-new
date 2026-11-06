@@ -1,14 +1,11 @@
 using System.Collections.Specialized;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using PartFinder.Core;
 using PartFinder.Helpers;
 using PartFinder.Models;
 using PartFinder.Services;
@@ -23,31 +20,22 @@ public sealed partial class MasterDataPage : Page
 {
     private const double GridCellTextWidth = 160d;
     private const double GridCellHorizontalPadding = 10d;
-    private const double ActionPanelWidth = 320;
+    private const double ActionPanelWidth = 360;
+    private const int MasterDataPageSize = 50;
+    private int _gridPageIndex;
+    private bool _rebuildSpreadsheetScheduled;
     private MasterDataViewModel? _viewModel;
-    // Maps each data row to its cell borders so we can toggle visibility on filter
-    // without destroying/recreating any element (prevents focus loss + chrome dim).
-    private readonly Dictionary<MasterDataRowViewModel, List<Border>> _rowCellBorders = new();
     private readonly IExcelTemplateService _excelTemplateService;
     private readonly ActivityLogger _activity;
-    private readonly ExplorerNavigationCoordinator _explorerNav;
     private readonly List<ActionResultDisplayItem> _actionResultRows = new();
-    private Button? _headerEditButton;
-    private Button? _headerExportButton;
-    private Button? _headerImportButton;
-    private AutoSuggestBox? _explorerTemplateSuggestBox;
-    private Popup? _headerActionTipPopup;
-    private Border? _headerActionTipHost;
-    private TextBlock? _headerActionTipText;
-    private DispatcherQueueTimer? _headerTipCloseTimer;
+    private Grid? _sheetGrid;
+
     public MasterDataPage()
     {
         InitializeComponent();
-        ResolveHeaderHoverUi();
         var vm = App.Services.GetRequiredService<MasterDataViewModel>();
         _excelTemplateService = App.Services.GetRequiredService<IExcelTemplateService>();
         _activity = App.Services.GetRequiredService<ActivityLogger>();
-        _explorerNav = App.Services.GetRequiredService<ExplorerNavigationCoordinator>();
         DataContext = vm;
         Loaded += OnMasterDataPageLoaded;
         Unloaded += OnMasterDataPageUnloaded;
@@ -61,349 +49,134 @@ public sealed partial class MasterDataPage : Page
             return;
         }
 
-        // Permission check - need at least Parts access OR Master Data view permission
-        var access = App.Services.GetRequiredService<ICurrentUserAccessService>();
-        await access.RefreshAsync().ConfigureAwait(true);
-        if (!access.Capabilities.CanAccessParts && !access.Capabilities.CanViewMasterData)
-        {
-            NoPermissionOverlay.Message = "You don't have permission to view this section. Contact your organization admin to grant access.";
-            NoPermissionOverlay.Visibility = Visibility.Visible;
-            return;
-        }
-
         _viewModel = vm;
         vm.Rows.CollectionChanged += OnGridStructureChanged;
         vm.Columns.CollectionChanged += OnGridStructureChanged;
         vm.PropertyChanged += OnViewModelPropertyChanged;
-        vm.GridFilterChanged += OnGridFilterChanged;
-        _explorerNav.OpenTemplateRequested += OnExplorerOpenTemplateRequested;
-        RootGrid.KeyDown += OnRootGridKeyDown;
+        var theme = App.Services.GetService<IThemeService>();
+        if (theme is not null)
+        {
+            theme.ThemeChanged += OnAppThemeChanged;
+        }
 
         await vm.LoadAsync().ConfigureAwait(true);
         RebuildSpreadsheet();
-        BuildColumnCheckboxFlyout();
-        AttachHeaderHoverTips();
     }
 
     private void OnMasterDataPageUnloaded(object sender, RoutedEventArgs e)
     {
         Unloaded -= OnMasterDataPageUnloaded;
-        DetachHeaderHoverTips();
-        RootGrid.KeyDown -= OnRootGridKeyDown;
-
-        _explorerNav.OpenTemplateRequested -= OnExplorerOpenTemplateRequested;
         if (_viewModel is not null)
         {
             _viewModel.Rows.CollectionChanged -= OnGridStructureChanged;
             _viewModel.Columns.CollectionChanged -= OnGridStructureChanged;
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-            _viewModel.GridFilterChanged -= OnGridFilterChanged;
             _viewModel = null;
         }
-    }
 
-    private void OnExplorerOpenTemplateRequested(string templateId) =>
-        _viewModel?.OpenTemplateById(templateId);
-
-    private void OnGridFilterChanged() => DebouncedRebuild();
-
-    private DispatcherQueueTimer? _filterDebounceTimer;
-
-    private void DebouncedRebuild()
-    {
-        var queue = DispatcherQueue.GetForCurrentThread();
-        _filterDebounceTimer ??= queue.CreateTimer();
-        _filterDebounceTimer.Stop();
-        _filterDebounceTimer.Interval = TimeSpan.FromMilliseconds(300);
-        _filterDebounceTimer.IsRepeating = false;
-        _filterDebounceTimer.Tick -= OnFilterDebounced;
-        _filterDebounceTimer.Tick += OnFilterDebounced;
-        _filterDebounceTimer.Start();
-    }
-
-    private void OnFilterDebounced(DispatcherQueueTimer sender, object args)
-    {
-        sender.Tick -= OnFilterDebounced;
-        // Toggle row visibility only — never destroy/recreate elements.
-        if (SpreadsheetHost?.Content is ScrollViewer sv && sv.Content is Grid grid)
+        var theme = App.Services.GetService<IThemeService>();
+        if (theme is not null)
         {
-            ApplyRowVisibilityFilter(grid);
+            theme.ThemeChanged -= OnAppThemeChanged;
         }
     }
 
-    /// <summary>Shows/hides each row's cell borders + its grid row height based on active
-    /// filters. No element is created or destroyed, so focus is never lost and the window
-    /// never dims / goes stale.</summary>
-    private void ApplyRowVisibilityFilter(Grid grid)
-    {
-        if (_viewModel is null) return;
-
-        var allRows = _viewModel.Rows.ToList();
-        for (var i = 0; i < allRows.Count; i++)
-        {
-            var rowVm = allRows[i];
-            var pass = _viewModel.RowPassesAllFilters(rowVm);
-            var gridRowIndex = i + 2; // Row 0=filters, Row 1=headers, data starts at 2
-
-            if (gridRowIndex < grid.RowDefinitions.Count)
-            {
-                grid.RowDefinitions[gridRowIndex].Height = pass
-                    ? GridLength.Auto
-                    : new GridLength(0);
-            }
-
-            if (_rowCellBorders.TryGetValue(rowVm, out var borders))
-            {
-                foreach (var b in borders)
-                {
-                    b.Visibility = pass ? Visibility.Visible : Visibility.Collapsed;
-                }
-            }
-        }
-    }
-
-    /// <summary>Refresh only the data rows in the existing grid — keeps filter boxes and headers intact (no focus loss).</summary>
-    private void OnRootGridKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (_viewModel is null)
-        {
-            return;
-        }
-
-        var ctrlDown = Microsoft.UI.Input.InputKeyboardSource
-            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-        if (e.Key == Windows.System.VirtualKey.F && ctrlDown)
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Windows.System.VirtualKey.Escape && !_viewModel.IsDrawerPinned)
-        {
-            _viewModel.CloseDetailsPanelCommand.Execute(null);
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Windows.System.VirtualKey.Enter && _viewModel.SelectedGridRow is not null)
-        {
-            var cell = _viewModel.SelectedGridCell ?? _viewModel.SelectedGridRow.Cells.FirstOrDefault();
-            _viewModel.SelectGridCell(_viewModel.SelectedGridRow, cell);
-            e.Handled = true;
-            return;
-        }
-
-        var rowDelta = e.Key switch
-        {
-            Windows.System.VirtualKey.Down => 1,
-            Windows.System.VirtualKey.Up => -1,
-            _ => 0,
-        };
-        var colDelta = e.Key switch
-        {
-            Windows.System.VirtualKey.Right => 1,
-            Windows.System.VirtualKey.Left => -1,
-            _ => 0,
-        };
-
-        if (rowDelta != 0 || colDelta != 0)
-        {
-            if (_viewModel.TryMoveSelection(rowDelta, colDelta))
-            {
-                RebuildSpreadsheet();
-                e.Handled = true;
-            }
-        }
-    }
-
-    private void OnColumnVisibilityClick(object sender, RoutedEventArgs e) { }
-
-    private void OnColumnVisibilityButtonPointerEntered(object sender, PointerRoutedEventArgs e) { }
-
-    private void ShowColumnVisibilityMenu() { }
-
-    // Resolves header controls by name so code-behind does not rely on generated field symbols.
-    private void ResolveHeaderHoverUi()
-    {
-        _headerEditButton = FindName("HeaderEditButton") as Button;
-        _headerExportButton = FindName("HeaderExportButton") as Button;
-        _headerImportButton = FindName("HeaderImportButton") as Button;
-        _explorerTemplateSuggestBox = FindName("ExplorerTemplateSuggestBox") as AutoSuggestBox;
-        _headerActionTipPopup = FindName("HeaderActionTipPopup") as Popup;
-        _headerActionTipHost = FindName("HeaderActionTipHost") as Border;
-        _headerActionTipText = FindName("HeaderActionTipText") as TextBlock;
-    }
-
-    private void AttachHeaderHoverTips()
-    {
-        // Custom hover popup disabled — relying on standard ToolTipService.ToolTip in XAML
-    }
-
-    private void DetachHeaderHoverTips()
-    {
-        CancelHeaderTipClose();
-        if (_headerActionTipPopup is not null)
-        {
-            _headerActionTipPopup.IsOpen = false;
-        }
-    }
-
-    // Hover tip handlers retained as no-ops in case any wiring still references them.
-    private void OnHeaderToolbarButtonPointerEntered(object sender, PointerRoutedEventArgs e) { }
-    private void OnHeaderToolbarButtonPointerExited(object sender, PointerRoutedEventArgs e) { }
-    private void OnHeaderActionTipHostPointerEntered(object sender, PointerRoutedEventArgs e) { }
-    private void OnHeaderActionTipHostPointerExited(object sender, PointerRoutedEventArgs e) { }
-
-    private void CancelHeaderTipClose()
-    {
-        _headerTipCloseTimer?.Stop();
-    }
-
-    private void ScheduleHeaderTipClose()
-    {
-        var queue = DispatcherQueue.GetForCurrentThread();
-        _headerTipCloseTimer ??= queue.CreateTimer();
-        _headerTipCloseTimer.Stop();
-        _headerTipCloseTimer.Interval = TimeSpan.FromMilliseconds(120);
-        _headerTipCloseTimer.IsRepeating = false;
-        _headerTipCloseTimer.Tick -= OnHeaderTipCloseTimerTick;
-        _headerTipCloseTimer.Tick += OnHeaderTipCloseTimerTick;
-        _headerTipCloseTimer.Start();
-    }
-
-    private void OnHeaderTipCloseTimerTick(DispatcherQueueTimer sender, object args)
-    {
-        sender.Tick -= OnHeaderTipCloseTimerTick;
-        if (_headerActionTipPopup is not null)
-        {
-            _headerActionTipPopup.IsOpen = false;
-        }
-    }
+    private void OnAppThemeChanged(object? sender, EventArgs e) => RebuildSpreadsheet();
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MasterDataViewModel.IsEditMode))
         {
-            RebuildSpreadsheet();
-        }
-
-        if (e.PropertyName is nameof(MasterDataViewModel.SelectedGridRow)
-            or nameof(MasterDataViewModel.SelectedGridCell)
-            or nameof(MasterDataViewModel.LinkedRelationSections)
-            or nameof(MasterDataViewModel.ShowLinkedInfoPanel))
-        {
-            UpdateLinkedPanelEmptyHint();
-        }
-
-        if (e.PropertyName is nameof(MasterDataViewModel.IsEditMode))
-        {
-            RebuildSpreadsheet();
-        }
-
-        if (e.PropertyName == nameof(MasterDataViewModel.ToastMessage)
-            && !string.IsNullOrEmpty(_viewModel?.ToastMessage))
-        {
-            _ = ClearToastAfterDelayAsync();
-        }
-    }
-
-    private async Task ClearToastAfterDelayAsync()
-    {
-        await Task.Delay(2200).ConfigureAwait(true);
-        if (_viewModel is not null)
-        {
-            _viewModel.ToastMessage = string.Empty;
-        }
-    }
-
-    private void OnGridCellTapped(object sender, TappedRoutedEventArgs e)
-    {
-        if (_viewModel is null || sender is not Border { Tag: GridCellTag tag })
-        {
-            return;
-        }
-
-        _viewModel.SelectGridCell(tag.Row, tag.Cell);
-        RebuildSpreadsheet();
-        UpdateLinkedPanelEmptyHint();
-    }
-
-    private void UpdateLinkedPanelEmptyHint()
-    {
-        if (LinkedPanelEmptyHint is null || _viewModel is null)
-        {
-            return;
-        }
-
-        LinkedPanelEmptyHint.Visibility =
-            _viewModel.ShowLinkedInfoPanel && _viewModel.LinkedRelationSections.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-    }
-
-    private void OnExplorerTemplateSuggestTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
-    {
-        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput || _viewModel is null)
-        {
-            return;
-        }
-
-        _viewModel.TemplatePickerText = sender.Text ?? string.Empty;
-    }
-
-    private void OnExplorerTemplateSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
-    {
-        if (_viewModel is null || args.SelectedItem is not PartTemplateDefinition template)
-        {
-            return;
-        }
-
-        _viewModel.SelectTemplateFromPicker(template);
-    }
-
-    // ── Column visibility filter (checkbox flyout) ──────────────────────────
-
-    private void BuildColumnCheckboxFlyout()
-    {
-        if (_viewModel is null || ColumnCheckboxPanel is null) return;
-
-        ColumnCheckboxPanel.Children.Clear();
-        foreach (var col in _viewModel.ColumnVisibility)
-        {
-            var captured = col;
-            var cb = new CheckBox
+            if (_viewModel is { IsEditMode: false } && NewColumnNameBox is not null)
             {
-                Content = col.Label,
-                IsChecked = col.IsVisible,
-                FontSize = 13,
-                MinWidth = 0,
-            };
-            cb.Checked += (_, _) => { captured.IsVisible = true; RebuildSpreadsheet(); };
-            cb.Unchecked += (_, _) => { captured.IsVisible = false; RebuildSpreadsheet(); };
-            ColumnCheckboxPanel.Children.Add(cb);
+                NewColumnNameBox.Text = string.Empty;
+            }
+
+            RebuildSpreadsheet();
+            return;
+        }
+
+        if (e.PropertyName == nameof(MasterDataViewModel.IsLoading)
+            && _viewModel is { IsLoading: false })
+        {
+            RebuildSpreadsheet();
         }
     }
 
     private void OnGridStructureChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_viewModel is { IsLoading: true })
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                _gridPageIndex = 0;
+            }
+
+            return;
+        }
+
+        if (e.Action == NotifyCollectionChangedAction.Add
+            && _viewModel is not null
+            && e.NewItems is { Count: > 0 }
+            && e.NewItems[e.NewItems.Count - 1] is MasterDataRowViewModel addedRow)
+        {
+            var visibleIndex = 0;
+            foreach (var row in _viewModel.Rows)
+            {
+                if (!_viewModel.IsRowVisible(row))
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(row, addedRow))
+                {
+                    _gridPageIndex = visibleIndex / MasterDataPageSize;
+                    break;
+                }
+
+                visibleIndex++;
+            }
+        }
+
+        ScheduleRebuildSpreadsheet();
+    }
+
+    private void OnMasterDataPrevPageClick(object sender, RoutedEventArgs e)
+    {
+        if (_gridPageIndex <= 0)
+        {
+            return;
+        }
+
+        _gridPageIndex--;
         RebuildSpreadsheet();
-        BuildColumnCheckboxFlyout();
+    }
+
+    private void OnMasterDataNextPageClick(object sender, RoutedEventArgs e)
+    {
+        _gridPageIndex++;
+        RebuildSpreadsheet();
+    }
+
+    private void ScheduleRebuildSpreadsheet()
+    {
+        if (_rebuildSpreadsheetScheduled)
+        {
+            return;
+        }
+
+        _rebuildSpreadsheetScheduled = true;
+        _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _rebuildSpreadsheetScheduled = false;
+            RebuildSpreadsheet();
+        });
     }
 
     private async void OnToggleEditModeClicked(object sender, RoutedEventArgs e)
     {
         if (_viewModel is null || XamlRoot is null)
         {
-            return;
-        }
-
-        // Permission check — must have Edit OR Add permission to enter edit mode
-        if (!_viewModel.IsEditMode &&
-            !_viewModel.CanEditMasterData &&
-            !_viewModel.CanAddMasterData)
-        {
-            await PermissionToast.ShowAsync(XamlRoot).ConfigureAwait(true);
             return;
         }
 
@@ -431,12 +204,6 @@ public sealed partial class MasterDataPage : Page
         }
     }
 
-    private void OnAddNewRowClicked(object sender, RoutedEventArgs e)
-    {
-        _viewModel?.AddRowCommand.Execute(null);
-        RebuildSpreadsheet();
-    }
-
     private async void OnSaveGridClicked(object sender, RoutedEventArgs e)
     {
         if (_viewModel is null || XamlRoot is null)
@@ -459,7 +226,7 @@ public sealed partial class MasterDataPage : Page
         {
             _viewModel.SaveGridCommand.Execute(null);
             var templateName = _viewModel.SelectedDataTemplate?.Name ?? "Unknown";
-            _activity.LogStockChange("Data Saved", $"Explorer data saved for template '{templateName}' — {_viewModel.Rows.Count} rows");
+            _activity.LogStockChange("Data Saved", $"Master Data saved for template '{templateName}' — {_viewModel.Rows.Count} rows");
         }
     }
 
@@ -490,16 +257,9 @@ public sealed partial class MasterDataPage : Page
             return;
         }
 
-        // Permission check — need View or Copy permission to export
-        if (!_viewModel.CanExportMasterData)
-        {
-            await PermissionToast.ShowAsync(XamlRoot).ConfigureAwait(true);
-            return;
-        }
-
         var picker = new FileSavePicker
         {
-            SuggestedFileName = $"{_viewModel.SelectedDataTemplate.Name}-export",
+            SuggestedFileName = $"{_viewModel.SelectedDataTemplate.Name}-template",
         };
         picker.FileTypeChoices.Add("Excel Workbook", new List<string> { ".xlsx" });
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainAppWindow));
@@ -509,14 +269,12 @@ public sealed partial class MasterDataPage : Page
             return;
         }
 
-        // Collect current grid data for export
-        var rows = _viewModel.GetExportRows();
-        await _excelTemplateService.ExportTemplateWithDataAsync(_viewModel.SelectedDataTemplate, file.Path, rows);
+        await _excelTemplateService.ExportTemplateAsync(_viewModel.SelectedDataTemplate, file.Path);
 
         var dlg = new ContentDialog
         {
-            Title = "Data exported",
-            Content = $"Exported {rows.Count} rows to:\n{file.Path}",
+            Title = "Template exported",
+            Content = $"Excel template saved to:\n{file.Path}",
             CloseButtonText = "OK",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
@@ -529,13 +287,6 @@ public sealed partial class MasterDataPage : Page
     {
         if (_viewModel?.SelectedDataTemplate is null || App.MainAppWindow is null || XamlRoot is null)
         {
-            return;
-        }
-
-        // Permission check — need Add permission to import
-        if (!_viewModel.CanImportMasterData)
-        {
-            await PermissionToast.ShowAsync(XamlRoot).ConfigureAwait(true);
             return;
         }
 
@@ -623,334 +374,402 @@ public sealed partial class MasterDataPage : Page
         if (_viewModel.Columns.Count == 0)
         {
             SpreadsheetHost.Content = null;
+            _sheetGrid = null;
+            UpdatePager(0);
             return;
         }
 
-        // Build ALL rows (unfiltered). Filtering is done by toggling row Visibility,
-        // never by destroying/recreating elements — this avoids focus loss and the
-        // window-deactivation dim/stale-render bug entirely.
-        var visibleRows = _viewModel.Rows.ToList();
-        _rowCellBorders.Clear();
-
-        const double minColWidth = GridCellTextWidth + (GridCellHorizontalPadding * 2);
-        var visibleColumns = _viewModel.GetVisibleColumns();
-        var colCount = visibleColumns.Count;
-        var rowCount = visibleRows.Count;
+        var visibleRows = _viewModel.Rows.Where(_viewModel.IsRowVisible).ToList();
+        UpdatePager(visibleRows.Count);
+        var pageStart = _gridPageIndex * MasterDataPageSize;
+        var pageRows = visibleRows.Skip(pageStart).Take(MasterDataPageSize).ToList();
+        var colCount = _viewModel.Columns.Count;
+        var rowCount = pageRows.Count;
 
         var scroll = new ScrollViewer
         {
-            HorizontalScrollMode = ScrollMode.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollMode = ScrollMode.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
 
         var grid = new Grid
         {
-            MinWidth = colCount * minColWidth,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Background = (Brush)Application.Current.Resources["CardBackgroundBrush"],
         };
 
-        for (var c = 0; c < colCount; c++)
+        void FitGridToViewport(object? sender, object e)
         {
-            grid.ColumnDefinitions.Add(
-                new ColumnDefinition
-                {
-                    Width = new GridLength(1, GridUnitType.Star),
-                    MinWidth = minColWidth,
-                });
+            var width = scroll.ActualWidth;
+            if (width <= 0 && SpreadsheetHost.ActualWidth > 0)
+            {
+                width = SpreadsheetHost.ActualWidth;
+            }
+
+            if (width > 0)
+            {
+                grid.Width = width;
+            }
         }
 
-        // Row 0 = filter boxes, Row 1 = headers, Row 2+ = data
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // filters
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // headers
-        for (var r = 0; r < rowCount; r++)
+        scroll.SizeChanged += FitGridToViewport;
+        scroll.Loaded += (_, _) => FitGridToViewport(null, EventArgs.Empty);
+
+        for (var c = 0; c < colCount; c++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+
+        for (var r = 0; r <= rowCount; r++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         }
 
-        // Column HEADERS: distinct highlighted color (stands out from everything)
-        var headerBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 25, 55, 95));
-        var filterRowBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 14, 20, 32));
+        var headerBg = (Brush)Application.Current.Resources["GridHeaderBackgroundBrush"];
         var borderBrush = (Brush)Application.Current.Resources["BorderDefaultBrush"];
-        var headerForeground = (Brush)Application.Current.Resources["TextPrimaryBrush"];
-        // ALL data rows use the same single color
-        var rowBg = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 14, 20, 32));
-        var rowDataForeground = (Brush)Application.Current.Resources["TextSecondaryBrush"];
 
         for (var c = 0; c < colCount; c++)
         {
-            var field = visibleColumns[c];
+            var field = _viewModel.Columns[c];
             var headerLabel = field.Type == TemplateFieldType.RecordLink
-                ? $"{field.Label.ToUpper()} (LINK)"
-                : field.Label.ToUpper();
+                ? $"{field.Label} (link)"
+                : field.Label;
             var headerBorder = new Border
             {
                 Background = headerBg,
                 BorderBrush = borderBrush,
-                BorderThickness = new Thickness(0, 0, 1, 0),
+                BorderThickness = new Thickness(0, 0, 1, 1),
                 Padding = new Thickness(10, 10, 10, 10),
             };
-            Grid.SetRow(headerBorder, 1);
+            Grid.SetRow(headerBorder, 0);
             Grid.SetColumn(headerBorder, c);
 
-            var headerGrid = new Grid();
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            
-            var title = new TextBlock
+            var headerHost = new Grid
+            {
+                MinHeight = 32,
+                ColumnSpacing = 4,
+            };
+            headerHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (_viewModel.CanRemoveColumns)
+            {
+                headerHost.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            }
+
+            var titleBlock = new TextBlock
             {
                 Text = headerLabel,
+                FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                FontSize = 13,
-                TextWrapping = TextWrapping.WrapWholeWords,
-                Foreground = headerForeground,
+                Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left,
             };
-            Grid.SetColumn(title, 0);
-            headerGrid.Children.Add(title);
+            Grid.SetColumn(titleBlock, 0);
+            headerHost.Children.Add(titleBlock);
 
-            if (_viewModel.IsEditMode)
+            if (_viewModel.CanRemoveColumns)
             {
-                var addColumnBtn = new Button
+                var columnIndex = c;
+                var columnLabel = field.Label;
+                var removeBtn = new Button
+                {
+                    Width = 18,
+                    Height = 18,
+                    MinWidth = 18,
+                    MinHeight = 18,
+                    Padding = new Thickness(0),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(0x22, 0xE0, 0x52, 0x52)),
+                    BorderBrush = (Brush)Application.Current.Resources["DangerBrush"],
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(9),
+                };
+                ToolTipService.SetToolTip(removeBtn, $"Remove column \"{columnLabel}\"");
+                removeBtn.Content = new FontIcon
+                {
+                    Glyph = "\uE711",
+                    FontSize = 8,
+                    Foreground = (Brush)Application.Current.Resources["DangerBrush"],
+                };
+                Grid.SetColumn(removeBtn, 1);
+                removeBtn.Click += (_, _) =>
+                {
+                    if (_viewModel is null || !_viewModel.CanRemoveColumns)
+                    {
+                        return;
+                    }
+
+                    _ = ConfirmAndRemoveColumnAsync(columnIndex, columnLabel);
+                };
+                headerHost.Children.Add(removeBtn);
+            }
+
+            headerBorder.Child = headerHost;
+
+            grid.Children.Add(headerBorder);
+        }
+
+        for (var r = 0; r < rowCount; r++)
+        {
+            var rowVm = pageRows[r];
+            var rowVisible = _viewModel.IsRowVisible(rowVm);
+            for (var c = 0; c < colCount; c++)
+            {
+                var cellVm = rowVm.Cells[c];
+                UIElement cellContent;
+                if (cellVm.IsRecordLink)
+                {
+                    cellContent = BuildLinkCell(cellVm, rowVm);
+                }
+                else
+                {
+                    cellContent = BuildTextCell(cellVm, rowVm);
+                }
+
+                var cellBorder = new Border
+                {
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Background = (Brush)Application.Current.Resources[
+                        r % 2 == 0 ? "CardBackgroundBrush" : "GridRowAltBackgroundBrush"],
+                    BorderBrush = borderBrush,
+                    BorderThickness = new Thickness(0, 0, 1, 1),
+                    Tag = rowVm,
+                    Visibility = rowVisible ? Visibility.Visible : Visibility.Collapsed,
+                    Child = cellContent,
+                };
+                Grid.SetRow(cellBorder, r + 1);
+                Grid.SetColumn(cellBorder, c);
+                grid.Children.Add(cellBorder);
+            }
+        }
+
+        if (_viewModel.IsEditMode)
+        {
+            // Canva-like affordance: insert points between rows (and at the end), pinned to last column.
+            for (var insertAfterRow = 0; insertAfterRow <= rowCount; insertAfterRow++)
+            {
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var insertionIndex = insertAfterRow;
+                var addRowButton = new Button
                 {
                     Content = "+",
                     Width = 24,
                     Height = 24,
                     HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 2, 8, 2),
                     Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
                     Visibility = Visibility.Visible,
                     Opacity = 0,
                     IsHitTestVisible = false,
-                    Tag = c + 1,
                 };
-                ToolTipService.SetToolTip(addColumnBtn, "Insert column after this header");
-                addColumnBtn.Click += OnInsertColumnFromHeaderClick;
-                Grid.SetColumn(addColumnBtn, 1);
-                headerGrid.Children.Add(addColumnBtn);
+                addRowButton.Click += (_, _) => InsertRowFromPage(insertionIndex);
 
-                headerBorder.PointerEntered += (_, _) => AffordanceAnimationHelper.Fade(addColumnBtn, show: true, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
-                headerBorder.PointerExited += (_, _) => AffordanceAnimationHelper.Fade(addColumnBtn, show: false, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
-            }
-
-            headerBorder.Child = headerGrid;
-
-            grid.Children.Add(headerBorder);
-        }
-
-        // ── Per-column filter boxes (Row 0). Created fresh here; only RebuildSpreadsheet
-        // touches them (on load/structure change). Filter typing uses RefreshDataRowsOnly
-        // which never rebuilds these boxes, so focus is preserved. ──
-        for (var c = 0; c < colCount; c++)
-        {
-            var field = visibleColumns[c];
-            var capturedFieldKey = field.Key;
-
-            var filterBorder = new Border
-            {
-                Background = filterRowBg,
-                BorderBrush = borderBrush,
-                BorderThickness = new Thickness(0, 0, 1, 1),
-                Padding = new Thickness(3),
-            };
-            Grid.SetRow(filterBorder, 0);
-            Grid.SetColumn(filterBorder, c);
-
-            var filterBox = new TextBox
-            {
-                PlaceholderText = $"Search {field.Label}...",
-                Text = _viewModel.GetColumnFilter(capturedFieldKey),
-                FontSize = 11,
-                MinHeight = 30,
-                Padding = new Thickness(8, 5, 8, 5),
-                BorderThickness = new Thickness(1),
-                BorderBrush = borderBrush,
-                Background = (Brush)Application.Current.Resources["CardBackgroundBrush"],
-                Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
-                CornerRadius = new CornerRadius(2),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Tag = capturedFieldKey,
-            };
-
-            filterBox.TextChanged += (sender, _) =>
-            {
-                if (sender is not TextBox box) return;
-                var text = box.Text?.Trim() ?? string.Empty;
-                _viewModel!.SetColumnFilter(capturedFieldKey, text);
-            };
-
-            filterBorder.Child = filterBox;
-            grid.Children.Add(filterBorder);
-        }
-
-        if (_viewModel.IsEditMode && colCount > 0)
-        {
-            var addFirstHeader = new Button
-            {
-                Content = "+",
-                Width = 24,
-                Height = 24,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(6, 0, 0, 0),
-                Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
-                Tag = 0,
-            };
-            ToolTipService.SetToolTip(addFirstHeader, "Insert column before the first header");
-            addFirstHeader.Click += OnInsertColumnFromHeaderClick;
-            Grid.SetRow(addFirstHeader, 1);
-            Grid.SetColumn(addFirstHeader, 0);
-            grid.Children.Add(addFirstHeader);
-        }
-
-        for (var r = 0; r < rowCount; r++)
-        {
-            var rowVm = visibleRows[r];
-            for (var c = 0; c < colCount; c++)
-            {
-                var field = visibleColumns[c];
-                var cellVm = rowVm.Cells.FirstOrDefault(x => x.FieldKey == field.Key);
-                if (cellVm is null)
+                var addRowHost = new Border
                 {
-                    continue;
-                }
-
-                UIElement cellContent;
-                if (cellVm.IsRecordLink)
-                {
-                    cellContent = WrapCellWithMatchBadge(BuildLinkCell(cellVm, rowVm, rowDataForeground), rowVm, cellVm);
-                }
-                else
-                {
-                    cellContent = WrapCellWithMatchBadge(BuildTextCell(cellVm, rowVm, rowDataForeground), rowVm, cellVm);
-                }
-
-                var cellBorder = new Border
-                {
-                    Background = rowBg,
                     BorderBrush = borderBrush,
                     BorderThickness = new Thickness(0, 0, 1, 1),
-                    Child = cellContent,
-                    Tag = new GridCellTag(rowVm, cellVm),
+                    Background = (Brush)Application.Current.Resources["CardBackgroundBrush"],
+                    Child = addRowButton,
                 };
-                cellBorder.Tapped += OnGridCellTapped;
 
-                Grid.SetRow(cellBorder, r + 2);
-                Grid.SetColumn(cellBorder, c);
-                grid.Children.Add(cellBorder);
+                // Header is row 0; data rows are 1..rowCount. Insert strip after each data row.
+                Grid.SetRow(addRowHost, rowCount + 1 + insertAfterRow);
+                Grid.SetColumn(addRowHost, colCount - 1);
+                grid.Children.Add(addRowHost);
 
-                // Track this border for visibility-based filtering
-                if (!_rowCellBorders.TryGetValue(rowVm, out var borders))
-                {
-                    borders = new List<Border>();
-                    _rowCellBorders[rowVm] = borders;
-                }
-                borders.Add(cellBorder);
+                addRowHost.PointerEntered += (_, _) => AffordanceAnimationHelper.Fade(addRowButton, show: true, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
+                addRowHost.PointerExited += (_, _) => AffordanceAnimationHelper.Fade(addRowButton, show: false, shownOpacity: 1, hiddenOpacity: 0, disableHitTestingWhenHidden: true);
             }
-        }
-
-        // Apply current filters via visibility (after building all rows)
-        ApplyRowVisibilityFilter(grid);
-
-        if (_viewModel.IsEditMode)
-        {
-            // Add a single "+" button at the bottom of all rows
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var addRowBtn = new Button
-            {
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(10, 6, 0, 6),
-                Style = (Style)Application.Current.Resources["PrimaryButtonStyle"],
-                FontSize = 12,
-                Padding = new Thickness(14, 6, 14, 6),
-            };
-            var addRowContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            addRowContent.Children.Add(new FontIcon { Glyph = "\uE710", FontSize = 12 });
-            addRowContent.Children.Add(new TextBlock { Text = "Add New Row", FontSize = 12 });
-            addRowBtn.Content = addRowContent;
-            addRowBtn.Click += OnAddNewRowClicked;
-            Grid.SetRow(addRowBtn, rowCount + 2);
-            Grid.SetColumn(addRowBtn, 0);
-            Grid.SetColumnSpan(addRowBtn, colCount);
-            grid.Children.Add(addRowBtn);
         }
 
         scroll.Content = grid;
         SpreadsheetHost.Content = scroll;
+        _sheetGrid = grid;
+        RefreshColumnManagementCombos();
+        FitGridToViewport(null, EventArgs.Empty);
     }
 
-    private async void OnInsertColumnFromHeaderClick(object sender, RoutedEventArgs e)
+    private sealed class ColumnInsertOption
     {
-        if (_viewModel is null || XamlRoot is null || sender is not Button { Tag: int insertAt })
+        public required string Label { get; init; }
+        public int InsertIndex { get; init; }
+    }
+
+    private void RefreshColumnManagementCombos()
+    {
+        if (_viewModel is null || InsertAfterColumnCombo is null)
         {
             return;
         }
 
-        var input = new TextBox { PlaceholderText = "Column name" };
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "Add column",
-            Content = input,
-            PrimaryButtonText = "Add",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
+        if (!_viewModel.CanManageColumns)
         {
             return;
         }
 
-        _ = await _viewModel.InsertColumnAtAsync(insertAt, input.Text).ConfigureAwait(true);
-    }
-
-    private UIElement WrapCellWithMatchBadge(UIElement content, MasterDataRowViewModel rowVm, MasterDataCellViewModel cellVm)
-    {
-        var host = new Grid { MinHeight = 36 };
-        host.Children.Add(content);
-
-        // Show link icon for all RecordLink cells
-        if (cellVm.IsRecordLink)
+        InsertAfterColumnCombo.Items.Clear();
+        InsertAfterColumnCombo.Items.Add(new ColumnInsertOption { Label = "At end of table", InsertIndex = _viewModel.Columns.Count });
+        for (var i = 0; i < _viewModel.Columns.Count; i++)
         {
-            var badge = new FontIcon
+            var col = _viewModel.Columns[i];
+            InsertAfterColumnCombo.Items.Add(new ColumnInsertOption
             {
-                Glyph = "\uE71B",
-                FontSize = 16,
-                Foreground = (Brush)Application.Current.Resources["AccentPrimaryBrush"],
-                Margin = new Thickness(0, 4, 6, 0),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            ToolTipService.SetToolTip(badge, "Linked record");
-            host.Children.Add(badge);
+                Label = $"After \"{col.Label}\"",
+                InsertIndex = i + 1,
+            });
         }
 
-        return host;
+        InsertAfterColumnCombo.SelectedIndex = 0;
     }
 
-    private TextBox BuildTextCell(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm, Brush rowDataForeground)
+    private void InsertRowFromPage(int pageLocalIndex)
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        var visible = _viewModel.Rows.Where(_viewModel.IsRowVisible).ToList();
+        var absolute = _gridPageIndex * MasterDataPageSize + pageLocalIndex;
+        int rowsIndex;
+        if (absolute >= visible.Count || visible.Count == 0)
+        {
+            rowsIndex = _viewModel.Rows.Count;
+        }
+        else
+        {
+            var index = _viewModel.Rows.IndexOf(visible[absolute]);
+            rowsIndex = index < 0 ? _viewModel.Rows.Count : index;
+        }
+
+        _viewModel.InsertRowAt(rowsIndex);
+    }
+
+    private void UpdatePager(int visibleCount)
+    {
+        if (MasterDataPageStatusText is null || MasterDataPrevPageButton is null || MasterDataNextPageButton is null)
+        {
+            return;
+        }
+
+        var pageCount = Math.Max(1, (visibleCount + MasterDataPageSize - 1) / MasterDataPageSize);
+        if (_gridPageIndex >= pageCount)
+        {
+            _gridPageIndex = pageCount - 1;
+        }
+
+        if (_gridPageIndex < 0)
+        {
+            _gridPageIndex = 0;
+        }
+
+        if (visibleCount == 0)
+        {
+            MasterDataPageStatusText.Text = "No rows";
+        }
+        else
+        {
+            var start = _gridPageIndex * MasterDataPageSize + 1;
+            var end = Math.Min(visibleCount, (_gridPageIndex + 1) * MasterDataPageSize);
+            MasterDataPageStatusText.Text = $"Showing {start}–{end} of {visibleCount}";
+        }
+
+        MasterDataPrevPageButton.IsEnabled = _gridPageIndex > 0;
+        MasterDataNextPageButton.IsEnabled = visibleCount > 0 && _gridPageIndex < pageCount - 1;
+    }
+
+    private async Task ConfirmAndRemoveColumnAsync(int columnIndex, string columnLabel)
+    {
+        if (_viewModel is null || XamlRoot is null || !_viewModel.CanRemoveColumns)
+        {
+            return;
+        }
+
+        var dlg = new ContentDialog
+        {
+            Title = "Remove column?",
+            Content = $"Do you confirm deleting the column \"{columnLabel}\"? This removes it from the template for everyone.",
+            PrimaryButtonText = "Delete column",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+
+        if (await dlg.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var ok = await _viewModel.RemoveColumnAtAsync(columnIndex).ConfigureAwait(true);
+        if (!ok && string.IsNullOrWhiteSpace(_viewModel.StatusMessage))
+        {
+            _viewModel.StatusMessage = "Could not remove that column.";
+        }
+
+        RebuildSpreadsheet();
+    }
+
+    private string? GetNewColumnNameFromBar()
+    {
+        var name = NewColumnNameBox?.Text?.Trim();
+        return string.IsNullOrEmpty(name) ? null : name;
+    }
+
+    private async void OnAddColumnClick(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.CanManageColumns)
+        {
+            return;
+        }
+
+        var name = GetNewColumnNameFromBar();
+        if (name is null)
+        {
+            _viewModel.StatusMessage = "Enter a column name, then click Add column.";
+            NewColumnNameBox?.Focus(FocusState.Programmatic);
+            return;
+        }
+
+        var insertAt = _viewModel.Columns.Count;
+        if (InsertAfterColumnCombo?.SelectedItem is ColumnInsertOption opt)
+        {
+            insertAt = opt.InsertIndex;
+        }
+
+        if (await _viewModel.InsertColumnAtAsync(insertAt, name).ConfigureAwait(true)
+            && NewColumnNameBox is not null)
+        {
+            NewColumnNameBox.Text = string.Empty;
+        }
+    }
+
+    private void OnNewColumnNameKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter && _viewModel?.CanManageColumns == true)
+        {
+            e.Handled = true;
+            OnAddColumnClick(sender, e);
+        }
+    }
+
+    private TextBox BuildTextCell(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
     {
         var box = new TextBox
         {
             MinHeight = 36,
-            Width = GridCellTextWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(GridCellHorizontalPadding, 6, GridCellHorizontalPadding, 6),
             BorderThickness = new Thickness(0),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            Foreground = rowDataForeground,
+            Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
             TextWrapping = TextWrapping.Wrap,
         };
-        
-        // Show "empty" placeholder in blue when cell is empty
-        box.PlaceholderText = "empty";
-        box.PlaceholderForeground = (Brush)Application.Current.Resources["AccentPrimaryBrush"];
-        
         box.SetBinding(
             TextBox.TextProperty,
             new Binding
@@ -961,35 +780,24 @@ public sealed partial class MasterDataPage : Page
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
             });
         box.IsReadOnly = _viewModel is null || !_viewModel.IsEditMode;
-        if (box.IsReadOnly)
-        {
-            box.IsTabStop = false;
-            box.AllowFocusOnInteraction = false;
-            box.IsHitTestVisible = false;
-        }
-        box.ContextFlyout = BuildCellContextMenu(cellVm, rowVm, isRecordLink: false);
+        box.ContextFlyout = BuildTextCellMenu(cellVm, rowVm);
         return box;
     }
 
-    private UIElement BuildLinkCell(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm, Brush rowDataForeground)
+    private UIElement BuildLinkCell(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
     {
         var box = new TextBox
         {
             MinHeight = 36,
-            Width = GridCellTextWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(GridCellHorizontalPadding, 6, GridCellHorizontalPadding, 6),
             BorderThickness = new Thickness(0),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            Foreground = rowDataForeground,
+            Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.WrapWholeWords,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0),
         };
-        
-        // Show "empty" placeholder in blue when cell is empty
-        box.PlaceholderText = "empty";
-        box.PlaceholderForeground = (Brush)Application.Current.Resources["AccentPrimaryBrush"];
-        
         box.SetBinding(
             TextBox.TextProperty,
             new Binding
@@ -1000,12 +808,6 @@ public sealed partial class MasterDataPage : Page
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
             });
         box.IsReadOnly = _viewModel is null || !_viewModel.IsEditMode;
-        if (box.IsReadOnly)
-        {
-            box.IsTabStop = false;
-            box.AllowFocusOnInteraction = false;
-            box.IsHitTestVisible = false;
-        }
         var originalText = string.Empty;
         box.GotFocus += (_, _) => originalText = cellVm.Text;
         box.LostFocus += (_, _) =>
@@ -1037,58 +839,31 @@ public sealed partial class MasterDataPage : Page
         rowPanel.Children.Add(pickBtn);
 
         var outer = new Border { MinHeight = 36 };
-        outer.ContextFlyout = BuildCellContextMenu(cellVm, rowVm, isRecordLink: true);
+        outer.ContextFlyout = BuildLinkCellMenu(cellVm, rowVm);
         outer.Child = rowPanel;
         return outer;
     }
 
-    private MenuFlyout BuildCellContextMenu(
-        MasterDataCellViewModel cellVm,
-        MasterDataRowViewModel rowVm,
-        bool isRecordLink)
+    private MenuFlyout BuildTextCellMenu(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
     {
         var flyout = new MenuFlyout();
         flyout.Opening += (_, _) =>
         {
             flyout.Items.Clear();
-
-            var copy = new MenuFlyoutItem { Text = "Copy" };
+            var copy = new MenuFlyoutItem { Text = "Copy cell value" };
             copy.Click += (_, _) => CopyToClipboard(cellVm.EffectiveCopyValue);
             flyout.Items.Add(copy);
+        };
+        return flyout;
+    }
 
-            var copyRow = new MenuFlyoutItem { Text = "Copy row" };
-            copyRow.Click += (_, _) => CopyRowToClipboard(rowVm);
-            flyout.Items.Add(copyRow);
-
-            if (_viewModel is not null && _viewModel.IsEditMode && !isRecordLink)
-            {
-                var edit = new MenuFlyoutItem { Text = "Edit" };
-                edit.Click += (_, _) =>
-                {
-                    _viewModel.SelectGridCell(rowVm, cellVm);
-                    RebuildSpreadsheet();
-                };
-                flyout.Items.Add(edit);
-            }
-
-            var details = new MenuFlyoutItem { Text = "View details" };
-            details.Click += (_, _) =>
-            {
-                _viewModel?.SelectGridCell(rowVm, cellVm);
-                RebuildSpreadsheet();
-                UpdateLinkedPanelEmptyHint();
-            };
-            flyout.Items.Add(details);
-
-            if (isRecordLink)
-            {
-                flyout.Items.Add(new MenuFlyoutSeparator());
-                AppendLinkCellMenuItems(flyout, cellVm, rowVm);
-            }
-            else
-            {
-                AppendConfiguredContextActions(flyout, cellVm, rowVm);
-            }
+    private MenuFlyout BuildLinkCellMenu(MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
+    {
+        var flyout = new MenuFlyout();
+        flyout.Opening += (_, _) =>
+        {
+            flyout.Items.Clear();
+            PopulateLinkCellMenuItems(flyout, cellVm, rowVm);
         };
         return flyout;
     }
@@ -1174,71 +949,26 @@ public sealed partial class MasterDataPage : Page
         CloseActionPanel();
     }
 
-    private void OnActionOverlayTapped(object sender, TappedRoutedEventArgs e)
-    {
-        CloseActionPanel();
-    }
-
     private void OpenActionPanel()
     {
-        if (ActionResultsPanel is null || ActionResultsTransform is null || ActionResultsOverlay is null)
+        if (ActionResultsPanel is null || ActionResultsColumn is null)
         {
             return;
         }
 
+        ActionResultsColumn.Width = new GridLength(ActionPanelWidth);
         ActionResultsPanel.Visibility = Visibility.Visible;
-        if (LinkedInfoPanel is not null)
-        {
-            LinkedInfoPanel.Visibility = Visibility.Collapsed;
-        }
-        ActionResultsOverlay.Visibility = Visibility.Visible;
-
-        var animation = new DoubleAnimation
-        {
-            Duration = TimeSpan.FromMilliseconds(200),
-            From = ActionPanelWidth,
-            To = 0,
-            EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 },
-            EnableDependentAnimation = true,
-        };
-        Storyboard.SetTarget(animation, ActionResultsTransform);
-        Storyboard.SetTargetProperty(animation, "X");
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        storyboard.Begin();
     }
 
     private void CloseActionPanel()
     {
-        if (ActionResultsPanel is null || ActionResultsTransform is null || ActionResultsOverlay is null)
+        if (ActionResultsPanel is null || ActionResultsColumn is null)
         {
             return;
         }
 
-        var animation = new DoubleAnimation
-        {
-            Duration = TimeSpan.FromMilliseconds(200),
-            From = 0,
-            To = ActionPanelWidth,
-            EasingFunction = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 },
-            EnableDependentAnimation = true,
-        };
-        Storyboard.SetTarget(animation, ActionResultsTransform);
-        Storyboard.SetTargetProperty(animation, "X");
-
-        var storyboard = new Storyboard();
-        storyboard.Children.Add(animation);
-        storyboard.Completed += (_, _) =>
-        {
-            ActionResultsPanel.Visibility = Visibility.Collapsed;
-            if (LinkedInfoPanel is not null && _viewModel?.ShowLinkedInfoPanel == true)
-            {
-                LinkedInfoPanel.Visibility = Visibility.Visible;
-            }
-            ActionResultsOverlay.Visibility = Visibility.Collapsed;
-        };
-        storyboard.Begin();
+        ActionResultsPanel.Visibility = Visibility.Collapsed;
+        ActionResultsColumn.Width = new GridLength(0);
     }
 
     private static List<TemplateFieldDefinition> ResolveDisplayFields(
@@ -1264,8 +994,12 @@ public sealed partial class MasterDataPage : Page
         return list.Count > 0 ? list : ordered;
     }
 
-    private void AppendLinkCellMenuItems(MenuFlyout flyout, MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
+    private void PopulateLinkCellMenuItems(MenuFlyout flyout, MasterDataCellViewModel cellVm, MasterDataRowViewModel rowVm)
     {
+        var copyDisplay = new MenuFlyoutItem { Text = "Copy displayed label" };
+        copyDisplay.Click += (_, _) => CopyToClipboard(string.IsNullOrEmpty(cellVm.Text) ? null : cellVm.Text);
+        flyout.Items.Add(copyDisplay);
+
         var copyId = new MenuFlyoutItem { Text = "Copy linked row id" };
         copyId.Click += (_, _) => CopyToClipboard(cellVm.LinkedRowId);
         copyId.IsEnabled = !string.IsNullOrWhiteSpace(cellVm.LinkedRowId);
@@ -1286,7 +1020,7 @@ public sealed partial class MasterDataPage : Page
         flyout.Items.Add(clear);
     }
 
-    private void CopyToClipboard(string? text)
+    private static void CopyToClipboard(string? text)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -1296,28 +1030,7 @@ public sealed partial class MasterDataPage : Page
         var package = new DataPackage();
         package.SetText(text);
         Clipboard.SetContent(package);
-        _viewModel?.ShowToast("Copied to clipboard");
     }
-
-    private void CopyRowToClipboard(MasterDataRowViewModel rowVm)
-    {
-        if (_viewModel is null)
-        {
-            return;
-        }
-
-        var parts = new List<string>();
-        for (var i = 0; i < _viewModel.Columns.Count && i < rowVm.Cells.Count; i++)
-        {
-            var label = _viewModel.Columns[i].Label;
-            var value = rowVm.Cells[i].Text;
-            parts.Add($"{label}\t{value}");
-        }
-
-        CopyToClipboard(string.Join(Environment.NewLine, parts));
-    }
-
-    private sealed record GridCellTag(MasterDataRowViewModel Row, MasterDataCellViewModel Cell);
 
     private async Task ShowPickLinkDialogAsync(MasterDataCellViewModel cellVm)
     {
@@ -1414,46 +1127,33 @@ public sealed partial class MasterDataPage : Page
             .ConfigureAwait(true);
 
         var row = rows.FirstOrDefault();
-        var stack = new StackPanel { Spacing = 10 };
+
+        ActionTitleText.Text = $"Linked — {template.Name}";
+        ActionCountText.Text = row is null ? "Record details" : template.Name;
+        _actionResultRows.Clear();
+
         if (row is null)
         {
-            stack.Children.Add(
-                new TextBlock
-                {
-                    Text = "That row no longer exists. Clear the link or pick another row.",
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                });
+            _actionResultRows.Add(
+                new ActionResultDisplayItem(
+                    "Missing row",
+                    new[] { "That row no longer exists. Clear the link or pick another row." }));
         }
         else
         {
-            foreach (var f in template.Fields.OrderBy(x => x.DisplayOrder))
-            {
-                var val = row.Values.TryGetValue(f.Key, out var v) ? v : string.Empty;
-                stack.Children.Add(
-                    new TextBlock
-                    {
-                        Text = $"{f.Label}: {val}",
-                        TextWrapping = TextWrapping.WrapWholeWords,
-                    });
-            }
+            var lines = template.Fields
+                .OrderBy(x => x.DisplayOrder)
+                .Select(f =>
+                {
+                    var val = row.Values.TryGetValue(f.Key, out var v) ? v : string.Empty;
+                    return $"{f.Label}: {val}";
+                })
+                .ToList();
+            _actionResultRows.Add(new ActionResultDisplayItem("Linked record", lines));
         }
 
-        var scroll = new ScrollViewer
-        {
-            MaxHeight = 420,
-            Content = stack,
-        };
-
-        var dlg = new ContentDialog
-        {
-            Title = $"Linked — {template.Name}",
-            Content = scroll,
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
-
-        _ = await dlg.ShowAsync();
+        ActionRowsListView.ItemsSource = _actionResultRows;
+        OpenActionPanel();
     }
 
     private static string FormatRowDisplay(MasterDataRowRecord row, string displayKey)

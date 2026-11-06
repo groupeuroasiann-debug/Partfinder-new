@@ -154,6 +154,24 @@ internal static class MongoConnectionStringUtil
         return client.GetDatabase(dbName);
     }
 
+    /// <summary>
+    /// User directory (<c>org_app_users</c> / <c>org_admin_users</c>) follows the backend/Mongoose URI:
+    /// when the path is missing, data lives in <c>test</c>, not the org-code database.
+    /// </summary>
+    public static IMongoDatabase GetUserDirectoryDatabase(MongoClient client, string connectionString)
+    {
+        var normalized = Normalize(connectionString);
+        var url = new MongoUrl(normalized);
+        var dbName = url.DatabaseName?.Trim();
+        if (string.IsNullOrEmpty(dbName)
+            || string.Equals(dbName, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            dbName = "test";
+        }
+
+        return client.GetDatabase(dbName);
+    }
+
     private static bool QueryHasTls(string uri)
     {
         var q = uri.IndexOf('?', StringComparison.Ordinal);
