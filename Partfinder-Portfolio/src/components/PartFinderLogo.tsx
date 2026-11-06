@@ -11,6 +11,8 @@ type PartFinderLogoProps = {
   style?: CSSProperties
   /** Light = navy logo for light backgrounds; dark = white logo for dark UI. */
   variant?: PartFinderLogoVariant
+  /** Use `alt=""` when the image is decorative next to visible text. */
+  alt?: string
 }
 
 function resolveVariant(variant: PartFinderLogoVariant): 'light' | 'dark' {
@@ -27,6 +29,7 @@ export function PartFinderLogo({
   className,
   style,
   variant = 'auto',
+  alt = 'PartFinder',
 }: PartFinderLogoProps) {
   const [active, setActive] = useState<'light' | 'dark'>(() => resolveVariant(variant))
 
@@ -48,7 +51,7 @@ export function PartFinderLogo({
       className={className}
       style={style}
       src={active === 'light' ? LOGO_LIGHT : LOGO_DARK}
-      alt="PartFinder"
+      alt={alt}
     />
   )
 }
