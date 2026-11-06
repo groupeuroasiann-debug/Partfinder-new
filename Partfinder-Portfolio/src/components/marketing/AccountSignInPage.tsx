@@ -24,6 +24,9 @@ export function AccountSignInPage() {
   const [mustChange, setMustChange] = useState<AccountSession | null>(null)
   const [nextPassword, setNextPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNextPassword, setShowNextPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   if (existing && !mustChange) {
     return <Navigate to="/" replace />
@@ -153,28 +156,56 @@ export function AccountSignInPage() {
                   <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="account-new-password">
                     New password
                   </label>
-                  <input
-                    id="account-new-password"
-                    className={fieldClass}
-                    type="password"
-                    autoComplete="new-password"
-                    value={nextPassword}
-                    onChange={(event) => setNextPassword(event.target.value)}
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <input
+                      id="account-new-password"
+                      className={`${fieldClass} pr-11`}
+                      type={showNextPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={nextPassword}
+                      onChange={(event) => setNextPassword(event.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 border-0 bg-transparent p-0 cursor-pointer"
+                      onClick={() => setShowNextPassword((v) => !v)}
+                      aria-label={showNextPassword ? 'Hide new password' : 'Show new password'}
+                      aria-pressed={showNextPassword}
+                    >
+                      <Icon
+                        name={showNextPassword ? 'visibility_off' : 'visibility'}
+                        className="text-[22px]"
+                      />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="account-confirm-password">
                     Confirm password
                   </label>
-                  <input
-                    id="account-confirm-password"
-                    className={fieldClass}
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                  />
+                  <div className="relative">
+                    <input
+                      id="account-confirm-password"
+                      className={`${fieldClass} pr-11`}
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 border-0 bg-transparent p-0 cursor-pointer"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      aria-pressed={showConfirmPassword}
+                    >
+                      <Icon
+                        name={showConfirmPassword ? 'visibility_off' : 'visibility'}
+                        className="text-[22px]"
+                      />
+                    </button>
+                  </div>
                 </div>
                 {error ? <ErrorNote message={error} /> : null}
                 <button
@@ -221,15 +252,29 @@ export function AccountSignInPage() {
                   <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="account-password">
                     Password
                   </label>
-                  <input
-                    id="account-password"
-                    className={fieldClass}
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Account password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                  />
+                  <div className="relative">
+                    <input
+                      id="account-password"
+                      className={`${fieldClass} pr-11`}
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Account password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 border-0 bg-transparent p-0 cursor-pointer"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                    >
+                      <Icon
+                        name={showPassword ? 'visibility_off' : 'visibility'}
+                        className="text-[22px]"
+                      />
+                    </button>
+                  </div>
                 </div>
                 {error ? <ErrorNote message={error} /> : null}
                 <button

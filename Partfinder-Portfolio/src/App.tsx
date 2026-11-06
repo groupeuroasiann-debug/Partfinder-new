@@ -2,9 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AdminRegisterPage } from './components/AdminRegisterPage'
+import { AccountSignInPage } from './components/marketing/AccountSignInPage'
+import { AdminLoginView } from './components/marketing/AdminLoginView'
+import { GetLicencePage } from './components/marketing/GetLicencePage'
+import { IndustriesPage } from './components/marketing/IndustriesPage'
+import { FeaturesPage } from './components/marketing/FeaturesPage'
+import { PricingPage } from './components/marketing/PricingPage'
+import { ResourcesPage } from './components/marketing/ResourcesPage'
+import { ProductsPage } from './components/marketing/ProductsPage'
+import { SolutionsPage } from './components/marketing/SolutionsPage'
 import { PartFinderLogo } from './components/PartFinderLogo'
 import { apiBase } from './config/apiBase'
-import { EnterpriseHome } from './pages/EnterpriseHome'
 
 const ADMIN_TOKEN_KEY = 'pf_admin_token'
 
@@ -82,9 +90,19 @@ async function validateAdminSession(apiBaseUrl: string): Promise<boolean> {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<EnterpriseHome />} />
+      <Route path="/" element={<SolutionsPage />} />
+      <Route path="/products" element={<ProductsPage />} />
+      <Route path="/industries" element={<IndustriesPage />} />
+      <Route path="/features" element={<FeaturesPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/resources" element={<ResourcesPage />} />
+      <Route path="/get-licence" element={<GetLicencePage />} />
+      <Route path="/sign-in" element={<AccountSignInPage />} />
       <Route path="/dashboard" element={<PublicDashboardPage />} />
-      <Route path="/login" element={<Navigate to="/admin" replace />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
+      {/* Hidden admin URLs — not listed on the marketing header; direct address only */}
+      <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/register" element={<Navigate to="/admin/register" replace />} />
       <Route path="/admin/register" element={<AdminRegisterPage />} />
       <Route path="/admin/login" element={<AdminPortalPage />} />
       <Route path="/admin" element={<AdminPortalPage />} />
@@ -224,74 +242,11 @@ function AdminPortalPage() {
 
   if (authState === 'checking') {
     return (
-      <main className="auth-page">
-        <section className="auth-card">
-          <Link to="/" title="Go to home page">
-            <PartFinderLogo className="brand-logo" />
-          </Link>
-          <h1>Admin Portal Login</h1>
-          <p>Sign in with your email and password.</p>
-
-          {isAuthenticated ? (
-            <div
-              style={{
-                background: 'rgba(56, 189, 248, 0.1)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                marginBottom: 16,
-                fontSize: 13,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <span style={{ color: '#e2e8f0' }}>You have an active session.</span>
-              <Link
-                to="/admin/dashboard"
-                style={{ color: '#38bdf8', fontWeight: 600, textDecoration: 'none' }}
-              >
-                Go to Dashboard →
-              </Link>
-            </div>
-          ) : null}
-
-          <form className="auth-form" onSubmit={handleLogin}>
-            <label htmlFor="admin-email">Email ID</label>
-            <input
-              id="admin-email"
-              type="email"
-              placeholder="admin@partfinder.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-
-            <label htmlFor="admin-password">Password</label>
-            <input
-              id="admin-password"
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-
-            {error ? <p className="form-error">{error}</p> : null}
-
-            <button type="submit" className="btn-primary" disabled={loginPending}>
-              {loginPending ? 'Signing in…' : 'Login'}
-            </button>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255, 255, 255, 0.08)', fontSize: 13 }}>
-              <Link to="/" style={{ color: '#94a3b8', textDecoration: 'none' }}>
-                ← Public Dashboard
-              </Link>
-              <Link to="/admin/register" style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <span>Register as Admin</span>
-                <span aria-hidden="true">🔒→</span>
-              </Link>
-            </div>
-          </form>
-        </section>
+      <main className="page">
+        <header className="hero">
+          <p className="badge">Admin</p>
+          <h1>Checking session…</h1>
+        </header>
       </main>
     )
   }
@@ -302,33 +257,15 @@ function AdminPortalPage() {
 
   if (!isAuthenticated) {
     return (
-      <main className="page">
-        <header className="hero">
-          <Link
-            to="/"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              textDecoration: 'none',
-              marginBottom: 16,
-            }}
-            title="Go to home page"
-          >
-            <PartFinderLogo className="brand-logo" />
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc' }}>PartFinder</span>
-          </Link>
-          <p className="badge">Public Dashboard</p>
-          <h1>PartFinder platform overview</h1>
-          <p className="sub">This dashboard is visible to anyone without signing in.</p>
-          <div className="actions">
-            <Link to="/admin" className="btn-primary">
-              Admin Login
-            </Link>
-          </div>
-        </header>
-        <DashboardSection />
-      </main>
+      <AdminLoginView
+        email={email}
+        password={password}
+        error={error}
+        loginPending={loginPending}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={handleLogin}
+      />
     )
   }
 

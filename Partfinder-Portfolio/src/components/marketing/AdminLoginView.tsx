@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { AdminFrame, Icon } from './SiteChrome'
 
@@ -23,6 +24,8 @@ export function AdminLoginView({
   onPasswordChange,
   onSubmit,
 }: AdminLoginViewProps) {
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
     <AdminFrame>
       <main className="w-full pt-space-xl bg-background">
@@ -94,15 +97,29 @@ export function AdminLoginView({
                     <label className="font-label-sm text-label-sm text-on-surface block mb-1.5" htmlFor="admin-password">
                       Password
                     </label>
-                    <input
-                      id="admin-password"
-                      className={fieldClass}
-                      type="password"
-                      placeholder="Enter password"
-                      value={password}
-                      onChange={(event) => onPasswordChange(event.target.value)}
-                      autoComplete="current-password"
-                    />
+                    <div className="relative">
+                      <input
+                        id="admin-password"
+                        className={`${fieldClass} pr-11`}
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(event) => onPasswordChange(event.target.value)}
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 border-0 bg-transparent p-0 cursor-pointer"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                      >
+                        <Icon
+                          name={showPassword ? 'visibility_off' : 'visibility'}
+                          className="text-[22px]"
+                        />
+                      </button>
+                    </div>
                   </div>
                   {error ? (
                     <div className="flex items-start gap-2 rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm text-body-sm">
