@@ -149,6 +149,48 @@ public sealed class MongoMasterDataRecordsService : IMasterDataRecordsService
         }
     }
 
+    public async Task<int> GetRowCountAsync(string templateId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!TryGetClient(out var client))
+            {
+                return 0;
+            }
+
+            var template = await _templateSchema
+                .GetTemplateAsync(templateId, cancellationToken)
+                .ConfigureAwait(false);
+            if (template is not null
+                && MongoSharedPartsCatalog.IsCatalogTemplateName(template.Name)
+                && !string.IsNullOrWhiteSpace(_setupContext.OrgCode))
+            {
+                var rows = await MongoSharedPartsCatalog.LoadRowsAsync(
+                        client,
+                        _setupContext.OrgCode,
+                        template.Fields,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return rows.Count;
+            }
+
+            var coll = TryGetCollection(client);
+            if (coll is null)
+            {
+                return 0;
+            }
+
+            return (int)await coll
+                .CountDocumentsAsync(d => d.TemplateId == templateId, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MongoMasterDataRecordsService] GetRowCountAsync failed: {ex.Message}");
+            return 0;
+        }
+    }
+
     public async Task<IReadOnlyList<MasterDataRowRecord>> GetRowsByIdsAsync(
         string templateId,
         IReadOnlyList<string> rowIds,

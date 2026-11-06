@@ -41,13 +41,13 @@ public sealed class BackendApiClient
 
     public async Task<(bool Ok, string? Error, DashboardStatsDto? Data)> GetDashboardStatsAsync(CancellationToken ct = default)
     {
-        var result = await GetAsync<Envelope<DashboardStatsDto>>("/dashboard/stats", ct).ConfigureAwait(true);
+        var result = await GetAsync<Envelope<DashboardStatsDto>>("/dashboard/stats", ct).ConfigureAwait(false);
         return result.Ok ? (true, null, result.Data?.Data) : (false, result.Error, null);
     }
 
     public async Task<(bool Ok, string? Error, IReadOnlyList<DashboardTrendPointDto> Data)> GetDashboardTrendAsync(CancellationToken ct = default)
     {
-        var result = await GetAsync<Envelope<List<DashboardTrendPointDto>>>("/dashboard/trend", ct).ConfigureAwait(true);
+        var result = await GetAsync<Envelope<List<DashboardTrendPointDto>>>("/dashboard/trend", ct).ConfigureAwait(false);
         return result.Ok
             ? (true, null, (IReadOnlyList<DashboardTrendPointDto>)(result.Data?.Data ?? []))
             : (false, result.Error, Array.Empty<DashboardTrendPointDto>());

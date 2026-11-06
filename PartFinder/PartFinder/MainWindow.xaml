@@ -524,18 +524,18 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <!-- Logo + Brand -->
-                        <StackPanel Grid.Row="0" Spacing="0">
+                        <!-- Logo + Brand (login panel is always dark chrome) -->
+                        <StackPanel Grid.Row="0" Spacing="0" RequestedTheme="Dark">
                             <!-- Logo above PartFinder text -->
                             <Border
-                                Width="66" Height="66"
+                                Width="108" Height="108"
                                 CornerRadius="8"
                                 Background="Transparent"
                                 HorizontalAlignment="Left"
                                 Margin="0,0,0,20">
                                 <Image
-                                    Source="Assets/logo.png"
-                                    Width="66" Height="66"
+                                    Source="{ThemeResource PartFinderLogoImage}"
+                                    Width="108" Height="108"
                                     Stretch="Uniform" />
                             </Border>
 

@@ -26,14 +26,28 @@ public sealed class NavigationService : INavigationService
 
     private Frame? _frame;
     private int _resetGeneration;
+    private readonly TaskCompletionSource _frameReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public bool IsFrameReady => _frame is not null;
+
+    public async Task WaitForFrameReadyAsync(CancellationToken cancellationToken = default)
+    {
+        if (_frame is not null)
+        {
+            return;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        await _frameReady.Task.WaitAsync(timeout.Token).ConfigureAwait(true);
+    }
 
     public bool CanGoBack => _frame?.CanGoBack ?? false;
 
     public void Initialize(Frame frame)
     {
         _frame = frame;
+        _frameReady.TrySetResult();
         _frame.CacheSize = 1;
         if (App.Current.Resources.TryGetValue("LuxuryPageTransitions", out var transitions) &&
             transitions is TransitionCollection transitionCollection)

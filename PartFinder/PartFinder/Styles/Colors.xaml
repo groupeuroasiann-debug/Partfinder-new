@@ -64,6 +64,11 @@
             <Color x:Key="AppBorderColor">#406884A8</Color>
             <Color x:Key="AppSkeletonColor">#26FFFFFF</Color>
             <Color x:Key="AppSubtleTextColor">#C4D0DF</Color>
+
+            <BitmapImage
+                x:Key="PartFinderLogoImage"
+                UriSource="ms-appx:///Assets/PartFinderLogo-Darkmode.png"
+                DecodePixelWidth="512" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -127,6 +132,11 @@
             <Color x:Key="AppBorderColor">#66A8BDD8</Color>
             <Color x:Key="AppSkeletonColor">#2E7FA6D6</Color>
             <Color x:Key="AppSubtleTextColor">#4B5F77</Color>
+
+            <BitmapImage
+                x:Key="PartFinderLogoImage"
+                UriSource="ms-appx:///Assets/PartFinderLogo-Lightmode.png"
+                DecodePixelWidth="512" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 

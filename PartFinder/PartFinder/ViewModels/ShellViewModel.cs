@@ -224,8 +224,8 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         var alertsTask = RefreshAlertBadgeAsync();
         var accessTask = _access.RefreshAsync();
         var masterTask = HasMasterDataTemplateAsync();
-        var dashboardTask = _dashboard.WarmUpAsync();
-        await Task.WhenAll(avatarTask, alertsTask, accessTask, masterTask, dashboardTask).ConfigureAwait(true);
+        _ = _dashboard.WarmUpAsync();
+        await Task.WhenAll(avatarTask, alertsTask, accessTask, masterTask).ConfigureAwait(true);
         var hasMaster = await masterTask.ConfigureAwait(true);
         RebuildNavigationItems(hasMaster, _access.Capabilities);
 
@@ -240,15 +240,17 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
         startPage = startItem.Page;
         _lastSelectedPage = startPage;
 
-        for (var attempt = 0; attempt < 40 && !_navigationService.IsFrameReady; attempt++)
-        {
-            await Task.Delay(50).ConfigureAwait(true);
-        }
-
         if (!_navigationService.IsFrameReady)
         {
-            System.Diagnostics.Debug.WriteLine("[ShellViewModel] Content frame not ready; home navigation skipped.");
-            return;
+            try
+            {
+                await _navigationService.WaitForFrameReadyAsync().ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                System.Diagnostics.Debug.WriteLine("[ShellViewModel] Content frame not ready; home navigation skipped.");
+                return;
+            }
         }
 
         ApplyNavigationSelection(startItem, navigate: false);

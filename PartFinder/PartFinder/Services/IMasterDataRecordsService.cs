@@ -11,6 +11,8 @@ public interface IMasterDataRecordsService
     /// </summary>
     Task<IReadOnlyList<MasterDataRowRecord>> GetStoredRowsAsync(string templateId, CancellationToken cancellationToken = default);
 
+    Task<int> GetRowCountAsync(string templateId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<MasterDataRowRecord>> GetRowsByIdsAsync(
         string templateId,
         IReadOnlyList<string> rowIds,

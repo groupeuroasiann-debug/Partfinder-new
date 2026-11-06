@@ -25,6 +25,11 @@ public partial class DashboardViewModel : ViewModelBase
     private readonly DispatcherQueue? _uiQueue;
     private PeriodicTimer? _refreshTimer;
     private CancellationTokenSource? _refreshCts;
+    private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _distributionCts;
+    private int _loadGeneration;
+    private DateTimeOffset _lastLoadUtc = DateTimeOffset.MinValue;
+    private bool _hasCompletedInitialLoad;
     private double _lastImportSuccessRate;
 
     public DashboardViewModel(
@@ -66,7 +71,7 @@ public partial class DashboardViewModel : ViewModelBase
         StockLevelYLabels  = ["—"];
         DistributionSeries = BuildEmptyDistributionSeries();
         HealthGaugeSeries  = BuildHealthGaugeSeries(0);
-        LazyLoadTrendCommand = new AsyncRelayCommand(LoadDashboardAsync);
+        LazyLoadTrendCommand = new AsyncRelayCommand(() => PrepareForPageDisplayAsync());
 
         _themeService.ThemeChanged += (_, _) => OnAppThemeChanged();
         RefreshChartAppearance();
@@ -141,33 +146,52 @@ public partial class DashboardViewModel : ViewModelBase
     private void GoToSettings() => _nav.Navigate(AppPage.Settings);
 
     // ── Load ──────────────────────────────────────────────────────────────────
-    public Task WarmUpAsync()
+    public Task WarmUpAsync() => LoadDashboardCoreAsync(showLoadingIndicator: false);
+
+    /// <summary>Show cached dashboard instantly when fresh; otherwise load without blocking navigation.</summary>
+    public Task PrepareForPageDisplayAsync()
     {
-        if (LazyLoadTrendCommand.CanExecute(null))
+        var hasCached = _hasCompletedInitialLoad && Kpis[0].Value != "-";
+        var isFresh = _lastLoadUtc > DateTimeOffset.UtcNow.AddSeconds(-25);
+        if (hasCached && isFresh)
         {
-            return LazyLoadTrendCommand.ExecuteAsync(null)!;
+            return Task.CompletedTask;
         }
 
-        return Task.CompletedTask;
+        return LoadDashboardCoreAsync(showLoadingIndicator: !hasCached);
     }
 
-    private async Task LoadDashboardAsync()
+    private async Task LoadDashboardCoreAsync(bool showLoadingIndicator)
     {
-        if (IsLoading) return;
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+        var generation = Interlocked.Increment(ref _loadGeneration);
 
-        IsLoading = true;
+        if (showLoadingIndicator)
+        {
+            IsLoading = true;
+        }
+
+        var loadDistributionAfter = false;
+        var animateCharts = !_hasCompletedInitialLoad;
         try
         {
-            var statsTask = _api.GetDashboardStatsAsync();
-            var trendTask = _api.GetDashboardTrendAsync();
+            ct.ThrowIfCancellationRequested();
+
+            var statsTask = _api.GetDashboardStatsAsync(ct);
+            var trendTask = _api.GetDashboardTrendAsync(ct);
             await Task.WhenAll(statsTask, trendTask).ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
+
             var (statsOk, statsError, stats) = await statsTask.ConfigureAwait(true);
             var (trendOk, _, trend) = await trendTask.ConfigureAwait(true);
 
             if (!statsOk || stats is null)
             {
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] Stats API failed: {statsError}");
-                stats = await BuildLocalStatsAsync().ConfigureAwait(true);
+                stats = await BuildLocalStatsAsync(ct).ConfigureAwait(true);
                 if (stats is null)
                 {
                     var friendly = ApiErrorFormatter.ToUserMessage(statsError);
@@ -236,9 +260,6 @@ public partial class DashboardViewModel : ViewModelBase
                     }
                 }
 
-                // ── Distribution (parts per template) ─────────────────────────
-                await BuildDistributionAsync().ConfigureAwait(true);
-
                 // ── Stock level bar chart ─────────────────────────────────────
                 StockLevelSeries  = BuildStockLevelSeries(stats, !_themeService.IsDark);
                 StockLevelYLabels = LowStockItems.Select(i => i.Name).Take(5).ToArray();
@@ -249,12 +270,21 @@ public partial class DashboardViewModel : ViewModelBase
                 OnPropertyChanged(nameof(StockLevelYAxes));
 
                 LastUpdated = $"Updated {DateTime.Now:HH:mm}";
+                loadDistributionAfter = true;
             }
 
-            if (!trendOk) return;
+            if (!trendOk)
+            {
+                return;
+            }
+
+            ct.ThrowIfCancellationRequested();
 
             var points = trend.Select(t => t.Value).ToArray();
             if (points.Length == 0) points = [0d];
+
+            var trendAnim = animateCharts ? TimeSpan.FromMilliseconds(400) : TimeSpan.Zero;
+            var avgAnim = animateCharts ? TimeSpan.FromMilliseconds(450) : TimeSpan.Zero;
 
             TrendSeries =
             [
@@ -271,7 +301,7 @@ public partial class DashboardViewModel : ViewModelBase
                                           new SKPoint(0.5f, 0f),
                                           new SKPoint(0.5f, 1f)),
                     Stroke          = new SolidColorPaint(new SKColor(31, 122, 224), 3f),
-                    AnimationsSpeed = TimeSpan.FromMilliseconds(1200),
+                    AnimationsSpeed = trendAnim,
                 },
                 new LineSeries<double>
                 {
@@ -285,7 +315,7 @@ public partial class DashboardViewModel : ViewModelBase
                     },
                     GeometryStroke = null,
                     GeometryFill   = null,
-                    AnimationsSpeed = TimeSpan.FromMilliseconds(1400),
+                    AnimationsSpeed = avgAnim,
                 }
             ];
 
@@ -295,17 +325,46 @@ public partial class DashboardViewModel : ViewModelBase
             OnPropertyChanged(nameof(TrendXLabels));
             OnPropertyChanged(nameof(TrendXAxes));
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Dashboard] LoadDashboardCoreAsync failed: {ex.Message}");
+        }
         finally
         {
-            IsLoading = false;
+            if (generation == _loadGeneration && showLoadingIndicator)
+            {
+                IsLoading = false;
+            }
+        }
+
+        if (generation != _loadGeneration)
+        {
+            return;
+        }
+
+        _lastLoadUtc = DateTimeOffset.UtcNow;
+        _hasCompletedInitialLoad = true;
+
+        if (loadDistributionAfter)
+        {
+            _ = BuildDistributionAsync(ct);
         }
 
         StartAutoRefresh();
     }
 
     // ── Distribution ──────────────────────────────────────────────────────────
-    private async Task BuildDistributionAsync()
+    private async Task BuildDistributionAsync(CancellationToken cancellationToken = default)
     {
+        _distributionCts?.Cancel();
+        _distributionCts?.Dispose();
+        _distributionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var ct = _distributionCts.Token;
+
         DistributionItems.Clear();
 
         var colors = new[] { "#1F7AE0", "#2ABD8F", "#FEBC2E", "#8B5CF6", "#FF6B6B" };
@@ -315,14 +374,27 @@ public partial class DashboardViewModel : ViewModelBase
 
         try
         {
-            var templates = await _templateSchema.GetTemplatesAsync().ConfigureAwait(true);
-            var slices = new List<(string Name, int Count)>();
+            ct.ThrowIfCancellationRequested();
 
-            foreach (var template in templates.Take(5))
+            var templates = await _templateSchema.GetTemplatesAsync().ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
+
+            var topTemplates = templates.Take(5).ToList();
+            if (topTemplates.Count == 0)
             {
-                var rows = await _masterData.GetRowsAsync(template.Id).ConfigureAwait(true);
-                slices.Add((template.Name, rows.Count));
+                DistributionSeries = BuildEmptyDistributionSeries();
+                OnPropertyChanged(nameof(DistributionSeries));
+                return;
             }
+
+            var countTasks = topTemplates
+                .Select(t => _masterData.GetRowCountAsync(t.Id, ct))
+                .ToArray();
+            var counts = await Task.WhenAll(countTasks).ConfigureAwait(true);
+            ct.ThrowIfCancellationRequested();
+            var slices = topTemplates
+                .Select((t, i) => (Name: t.Name, Count: counts[i]))
+                .ToList();
 
             if (slices.Count == 0)
             {
@@ -356,6 +428,10 @@ public partial class DashboardViewModel : ViewModelBase
 
             DistributionSeries = series;
             OnPropertyChanged(nameof(DistributionSeries));
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer dashboard load.
         }
         catch (Exception ex)
         {
@@ -453,18 +529,17 @@ public partial class DashboardViewModel : ViewModelBase
         ];
     }
 
-    private async Task<DashboardStatsDto?> BuildLocalStatsAsync()
+    private async Task<DashboardStatsDto?> BuildLocalStatsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var templates = await _templateSchema.GetTemplatesAsync().ConfigureAwait(true);
             var activeTemplates = templates.Count;
-            var totalParts = 0;
-            foreach (var template in templates.Take(12))
-            {
-                var rows = await _masterData.GetRowsAsync(template.Id).ConfigureAwait(true);
-                totalParts += rows.Count;
-            }
+            var countTasks = templates.Take(12).Select(t => _masterData.GetRowCountAsync(t.Id, cancellationToken)).ToArray();
+            var counts = await Task.WhenAll(countTasks).ConfigureAwait(true);
+            var totalParts = counts.Sum();
 
             return new DashboardStatsDto
             {
@@ -534,7 +609,9 @@ public partial class DashboardViewModel : ViewModelBase
                        await _refreshTimer.WaitForNextTickAsync(_refreshCts.Token).ConfigureAwait(false))
                 {
                     if (_uiQueue is not null)
-                        _ = _uiQueue.TryEnqueue(async () => await LoadDashboardAsync().ConfigureAwait(true));
+                    {
+                        _ = _uiQueue.TryEnqueue(() => _ = LoadDashboardCoreAsync(showLoadingIndicator: false));
+                    }
                 }
             }
             catch { }

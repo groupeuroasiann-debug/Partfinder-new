@@ -29,6 +29,7 @@ public sealed partial class DashboardPage : Page
     {
         _themeService.ThemeChanged -= OnAppThemeChanged;
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        _viewModel.PropertyChanged -= OnHasLowStockChanged;
     }
 
     private void OnAppThemeChanged(object? sender, EventArgs e) => ApplyChartChrome();
@@ -97,16 +98,14 @@ public sealed partial class DashboardPage : Page
 
             StartPulseDot();
 
-            if (_viewModel.LazyLoadTrendCommand.CanExecute(null))
-            {
-                _ = _viewModel.LazyLoadTrendCommand.ExecuteAsync(null);
-            }
+            await _viewModel.PrepareForPageDisplayAsync().ConfigureAwait(true);
 
             if (_viewModel.HasLowStock)
             {
                 AnimateBannerIn();
             }
 
+            _viewModel.PropertyChanged -= OnHasLowStockChanged;
             _viewModel.PropertyChanged += OnHasLowStockChanged;
         }
         catch (Exception ex)

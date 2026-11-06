@@ -53,6 +53,108 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += OnRootGridLoadedResumeWizard;
         UpdateStepUi();
+
+        var themeService = App.Services.GetRequiredService<IThemeService>();
+        themeService.ThemeChanged += OnShellThemeChangedForTitleBar;
+    }
+
+    private void OnShellThemeChangedForTitleBar(object? sender, EventArgs e)
+    {
+        if (_shellTitleBarRegionsActive)
+        {
+            ApplyShellTitleBarChrome();
+        }
+    }
+
+    private AppWindow? TryGetAppWindow()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+            return AppWindow.GetFromWindowId(windowId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Standard (non-extended) caption strip for login, setup, and blocked screens.</summary>
+    private void ApplySetupTitleBarChrome()
+    {
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+        {
+            return;
+        }
+
+        var titleBar = TryGetAppWindow()?.TitleBar;
+        if (titleBar is null)
+        {
+            return;
+        }
+
+        var background = Windows.UI.Color.FromArgb(255, 10, 14, 21);
+        var foreground = Windows.UI.Color.FromArgb(255, 234, 242, 255);
+        var muted = Windows.UI.Color.FromArgb(255, 123, 141, 168);
+        var hoverBg = Windows.UI.Color.FromArgb(255, 26, 39, 64);
+        var pressedBg = Windows.UI.Color.FromArgb(255, 42, 61, 88);
+
+        titleBar.BackgroundColor = background;
+        titleBar.ForegroundColor = foreground;
+        titleBar.InactiveBackgroundColor = background;
+        titleBar.InactiveForegroundColor = muted;
+        titleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+        titleBar.ButtonForegroundColor = foreground;
+        titleBar.ButtonHoverBackgroundColor = hoverBg;
+        titleBar.ButtonHoverForegroundColor = foreground;
+        titleBar.ButtonPressedBackgroundColor = pressedBg;
+        titleBar.ButtonPressedForegroundColor = foreground;
+        titleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+        titleBar.ButtonInactiveForegroundColor = muted;
+    }
+
+    /// <summary>Extended shell title bar: transparent strip with theme-aware control glyphs.</summary>
+    private void ApplyShellTitleBarChrome()
+    {
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+        {
+            return;
+        }
+
+        var titleBar = TryGetAppWindow()?.TitleBar;
+        if (titleBar is null)
+        {
+            return;
+        }
+
+        var isDark = App.Services.GetRequiredService<IThemeService>().IsDark;
+        var foreground = isDark
+            ? Windows.UI.Color.FromArgb(255, 244, 248, 255)
+            : Windows.UI.Color.FromArgb(255, 23, 34, 52);
+        var muted = isDark
+            ? Windows.UI.Color.FromArgb(255, 196, 208, 223)
+            : Windows.UI.Color.FromArgb(255, 75, 95, 119);
+        var hoverBg = isDark
+            ? Windows.UI.Color.FromArgb(64, 255, 255, 255)
+            : Windows.UI.Color.FromArgb(48, 0, 0, 0);
+        var pressedBg = isDark
+            ? Windows.UI.Color.FromArgb(96, 255, 255, 255)
+            : Windows.UI.Color.FromArgb(72, 0, 0, 0);
+        var transparent = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+
+        titleBar.BackgroundColor = transparent;
+        titleBar.InactiveBackgroundColor = transparent;
+        titleBar.ForegroundColor = foreground;
+        titleBar.InactiveForegroundColor = muted;
+        titleBar.ButtonBackgroundColor = transparent;
+        titleBar.ButtonForegroundColor = foreground;
+        titleBar.ButtonHoverBackgroundColor = hoverBg;
+        titleBar.ButtonHoverForegroundColor = foreground;
+        titleBar.ButtonPressedBackgroundColor = pressedBg;
+        titleBar.ButtonPressedForegroundColor = foreground;
+        titleBar.ButtonInactiveBackgroundColor = transparent;
+        titleBar.ButtonInactiveForegroundColor = muted;
     }
 
     private void EnableShellTitleBar()
@@ -79,6 +181,7 @@ public sealed partial class MainWindow : Window
 
         ShellRoot.UpdateTitleBarInsets(0, 0);
         UpdateShellTitleBarRegions();
+        ApplyShellTitleBarChrome();
     }
 
     private void DisableShellTitleBar()
@@ -95,6 +198,7 @@ public sealed partial class MainWindow : Window
         }
 
         ShellRoot.UpdateTitleBarInsets(0, 0);
+        ApplySetupTitleBarChrome();
     }
 
     private void OnShellRootSizeChanged(object sender, SizeChangedEventArgs e)
@@ -194,6 +298,7 @@ public sealed partial class MainWindow : Window
     private async void OnRootGridLoadedResumeWizard(object sender, RoutedEventArgs e)
     {
         RootGrid.Loaded -= OnRootGridLoadedResumeWizard;
+        ApplySetupTitleBarChrome();
 
         _signedInThisSession = false;
 
