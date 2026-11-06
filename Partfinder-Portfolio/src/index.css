@@ -363,9 +363,17 @@ h3 {
   margin-bottom: 10px;
 }
 
-.sidebar-gear {
-  color: #9ca3af;
-  font-size: 14px;
+/* Small brand mark next to sidebar title (replaces generic gear emoji) */
+.admin-sidebar-mark {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.light-theme .admin-sidebar-mark {
+  opacity: 1;
 }
 
 .admin-sidebar h2 {

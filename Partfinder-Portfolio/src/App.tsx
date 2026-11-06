@@ -305,7 +305,7 @@ function AdminPortalPage() {
             <PartFinderLogo className="brand-logo" />
             <h2>PartFinder Admin</h2>
           </Link>
-          <span className="sidebar-gear">⚙</span>
+          <PartFinderLogo className="admin-sidebar-mark" variant="dark" alt="" />
         </div>
         <nav>
           <NavLink to="/admin/dashboard">Dashboard</NavLink>
