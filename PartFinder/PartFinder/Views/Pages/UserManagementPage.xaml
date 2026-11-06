@@ -403,7 +403,18 @@
                                             Tag="{Binding}"
                                             Click="OnUserActionsButtonClick"
                                             ToolTipService.ToolTip="More actions">
-                                            <FontIcon Glyph="&#xE712;" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <!-- Stacked dots: font glyphs map differently across MDL2/Fluent; this is always vertical -->
+                                            <Viewbox
+                                                Width="14"
+                                                Height="14"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+                                                <StackPanel Orientation="Vertical" Spacing="3">
+                                                    <Ellipse Width="2.5" Height="2.5" Fill="{StaticResource TextSecondaryBrush}" />
+                                                    <Ellipse Width="2.5" Height="2.5" Fill="{StaticResource TextSecondaryBrush}" />
+                                                    <Ellipse Width="2.5" Height="2.5" Fill="{StaticResource TextSecondaryBrush}" />
+                                                </StackPanel>
+                                            </Viewbox>
                                         </Button>
                                     </Grid>
                                 </DataTemplate>
