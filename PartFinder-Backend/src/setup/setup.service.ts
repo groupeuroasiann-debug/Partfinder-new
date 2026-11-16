@@ -24,8 +24,11 @@ import { SetupInviteLoginDto } from './dto/setup-invite-login.dto';
 import { SetupInviteUserDto } from './dto/setup-invite-user.dto';
 import { SetupOrgAdminDto } from './dto/setup-org-admin.dto';
 import { SetupChangePasswordDto } from './dto/setup-change-password.dto';
+import { SetupForgotPasswordDto } from './dto/setup-forgot-password.dto';
+import { SetupResetPasswordDto } from './dto/setup-reset-password.dto';
 import { replaceMongoDatabasePath } from './org-database-uri.util';
 import { resolveInviteDownloadLink } from '../common/invite-download-link.util';
+import { buildPasswordResetLink } from '../common/password-reset-link.util';
 import { TenantMongoService } from './tenant-mongo.service';
 import { CasbinService } from '../casbin/casbin.service';
 import { JwtService } from '@nestjs/jwt';
@@ -704,6 +707,217 @@ export class SetupService {
       return { sent: true, error: null as string | null };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to send invite email.';
+      return { sent: false, error: msg };
+    }
+  }
+
+  private static readonly FORGOT_PASSWORD_ACK_MESSAGE =
+    'If the organisation code and email match our records, we sent a password reset link. The link works for 10 minutes only.';
+
+  private async issuePasswordResetToken(
+    orgCode: string,
+    email: string,
+  ): Promise<string> {
+    const normalized = email.trim().toLowerCase();
+    return this.jwtService.signAsync(
+      {
+        purpose: 'password-reset',
+        orgCode: orgCode.trim(),
+        email: normalized,
+      },
+      { expiresIn: '10m' },
+    );
+  }
+
+  private async findAccountForReset(
+    org: OrganizationDocument,
+    email: string,
+  ): Promise<{ kind: 'first-admin' | 'org-admin' | 'app-user'; uri: string } | null> {
+    const normalized = email.trim().toLowerCase();
+    const uri = org.orgDatabaseUri?.trim() ?? '';
+
+    if (uri) {
+      const orgAdmin = await this.tenant.findOrgAdminByEmail(uri, normalized);
+      if (orgAdmin) {
+        return { kind: 'org-admin', uri };
+      }
+
+      const appUser = await this.tenant.findOrgAppUserByEmail(uri, normalized);
+      if (appUser) {
+        return { kind: 'app-user', uri };
+      }
+    }
+
+    const firstEmail = (org.firstAdminEmailNormalized ?? '').trim();
+    if (firstEmail && firstEmail === normalized) {
+      return { kind: 'first-admin', uri };
+    }
+
+    return null;
+  }
+
+  async requestPasswordReset(dto: SetupForgotPasswordDto) {
+    let org: OrganizationDocument | null = null;
+    try {
+      await this.loadLicensedOrg(dto.orgCode);
+      org = await this.orgs.findByOrgCode(dto.orgCode);
+    } catch {
+      org = null;
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    const account =
+      org !== null ? await this.findAccountForReset(org, email) : null;
+
+    if (account && org) {
+      const token = await this.issuePasswordResetToken(dto.orgCode, email);
+      const resetLink = buildPasswordResetLink(this.config, token);
+      await this.sendPasswordResetEmail(email, dto.orgCode.trim(), resetLink);
+    }
+
+    return {
+      ok: true as const,
+      message: SetupService.FORGOT_PASSWORD_ACK_MESSAGE,
+    };
+  }
+
+  async resetPasswordWithToken(dto: SetupResetPasswordDto) {
+    let payload: {
+      purpose?: string;
+      orgCode?: string;
+      email?: string;
+    };
+
+    try {
+      payload = await this.jwtService.verifyAsync(dto.token);
+    } catch {
+      throw new BadRequestException(
+        'This reset link is invalid or has expired. Request a new link from PartFinder (links work for 10 minutes).',
+      );
+    }
+
+    if (
+      payload.purpose !== 'password-reset' ||
+      typeof payload.orgCode !== 'string' ||
+      typeof payload.email !== 'string'
+    ) {
+      throw new BadRequestException(
+        'This reset link is invalid or has expired. Request a new link from PartFinder (links work for 10 minutes).',
+      );
+    }
+
+    await this.loadLicensedOrg(payload.orgCode);
+    const org = await this.orgs.findByOrgCode(payload.orgCode);
+    if (!org) {
+      throw new BadRequestException(
+        'This reset link is invalid or has expired. Request a new link from PartFinder (links work for 10 minutes).',
+      );
+    }
+
+    const email = payload.email.trim().toLowerCase();
+    const account = await this.findAccountForReset(org, email);
+    if (!account) {
+      throw new BadRequestException(
+        'This reset link is invalid or has expired. Request a new link from PartFinder (links work for 10 minutes).',
+      );
+    }
+
+    if (account.kind === 'first-admin' && !account.uri) {
+      org.firstAdminTemporaryPasswordHash = this.hashTemporaryPassword(
+        dto.newPassword,
+      );
+      await org.save();
+      return { ok: true as const, message: 'Password updated successfully.' };
+    }
+
+    if (!account.uri) {
+      throw new BadRequestException(
+        'Organization database is not configured yet. Complete setup or contact your administrator.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    await this.storeReplacedPassword(
+      org,
+      account.uri,
+      email,
+      passwordHash,
+      account.kind,
+    );
+
+    return { ok: true as const, message: 'Password updated successfully.' };
+  }
+
+  private async sendPasswordResetEmail(
+    email: string,
+    orgCode: string,
+    resetLink: string,
+  ) {
+    const host =
+      this.config.get<string>('INVITE_SMTP_HOST')?.trim() ||
+      this.config.get<string>('EMAIL_HOST')?.trim() ||
+      '';
+    const port = Number(
+      this.config.get<string>('INVITE_SMTP_PORT') ??
+        this.config.get<string>('EMAIL_PORT') ??
+        '587',
+    );
+    const user =
+      this.config.get<string>('INVITE_SMTP_USER')?.trim() ||
+      this.config.get<string>('EMAIL_USER')?.trim() ||
+      '';
+    const pass =
+      this.config.get<string>('INVITE_SMTP_PASS') ??
+      this.config.get<string>('EMAIL_PASS') ??
+      '';
+    const from =
+      this.config.get<string>('INVITE_FROM_EMAIL')?.trim() ||
+      this.config.get<string>('SMTP_FROM')?.trim() ||
+      '';
+    const fromName =
+      this.config.get<string>('INVITE_FROM_NAME')?.trim() || 'PartFinder';
+    const secureEnv =
+      this.config.get<string>('INVITE_SMTP_SECURE') ??
+      (port === 465 ? 'true' : 'false');
+    const secure = secureEnv.toLowerCase().trim() === 'true';
+
+    if (!host || !user || !pass || !from) {
+      console.warn(
+        '[sendPasswordResetEmail] SMTP not configured; reset link not emailed.',
+      );
+      return { sent: false, error: 'SMTP configuration is missing.' };
+    }
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host,
+        port: Number.isFinite(port) && port > 0 ? port : 587,
+        secure,
+        auth: { user, pass },
+      });
+
+      await transporter.sendMail({
+        from: `"${fromName}" <${from}>`,
+        to: email,
+        subject: 'PartFinder password reset',
+        text:
+          `Hello,\n\n` +
+          `We received a request to reset the PartFinder password for organisation ${orgCode} and this email address.\n\n` +
+          `Create a new password using this link (valid for 10 minutes only):\n${resetLink}\n\n` +
+          `If you did not request this, you can ignore this email. Your password will not change.\n\n` +
+          `— PartFinder`,
+        html:
+          `<p>Hello,</p>` +
+          `<p>We received a request to reset your <strong>PartFinder</strong> password for organisation <strong>${orgCode}</strong>.</p>` +
+          `<p><a href="${resetLink}">Create a new password</a></p>` +
+          `<p><strong>This link expires 10 minutes</strong> after it was sent. If it expires, use <em>Forgot password</em> in the PartFinder app to request a new link.</p>` +
+          `<p>If you did not request this, you can ignore this email.</p>`,
+      });
+
+      return { sent: true, error: null as string | null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to send reset email.';
+      console.error('[sendPasswordResetEmail]', msg);
       return { sent: false, error: msg };
     }
   }

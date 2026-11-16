@@ -941,6 +941,72 @@
                                                  <FontIcon x:Name="InviteLoginPasswordRevealIcon" Glyph="&#xE890;" FontSize="14" Foreground="#7B8DA8" />
                                              </Button>
                                          </Grid>
+
+                                        <Button
+                                            x:Name="ForgotPasswordButton"
+                                            Content="Forgot password?"
+                                            Click="OnForgotPasswordClicked"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,10,0,0"
+                                            Padding="0"
+                                            BorderThickness="0"
+                                            Background="Transparent"
+                                            Foreground="#1F7AE0"
+                                            FontSize="13" />
+                                    </StackPanel>
+
+                                    <!-- ========================= -->
+                                    <!-- Forgot password           -->
+                                    <!-- ========================= -->
+                                    <StackPanel x:Name="ForgotPasswordPanel" Spacing="0" Visibility="Collapsed">
+                                        <TextBlock
+                                            Text="Enter the organisation code and email for your PartFinder account. If they match our records, we will email a link to set a new password. The link works for 10 minutes."
+                                            TextWrapping="WrapWholeWords"
+                                            Foreground="#7B8DA8"
+                                            FontSize="12"
+                                            LineHeight="18"
+                                            Margin="0,0,0,20" />
+
+                                        <TextBlock Text="ORGANIZATION CODE" Style="{StaticResource FieldLabelStyle}" />
+                                        <TextBox
+                                            x:Name="ForgotPasswordOrgCodeBox"
+                                            MaxLength="6"
+                                            PlaceholderText="6-digit code"
+                                            InputScope="Number"
+                                            Style="{StaticResource DarkInputStyle}"
+                                            Margin="0,0,0,16" />
+
+                                        <TextBlock Text="EMAIL ADDRESS" Style="{StaticResource FieldLabelStyle}" />
+                                        <TextBox
+                                            x:Name="ForgotPasswordEmailBox"
+                                            PlaceholderText="your@email.com"
+                                            InputScope="EmailSmtpAddress"
+                                            IsSpellCheckEnabled="False"
+                                            IsTextPredictionEnabled="False"
+                                            Style="{StaticResource DarkInputStyle}"
+                                            Margin="0,0,0,8" />
+
+                                        <Button
+                                            x:Name="ForgotPasswordSendButton"
+                                            Content="Send reset link"
+                                            Click="OnForgotPasswordSendClicked"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            HorizontalAlignment="Stretch"
+                                            Margin="0,12,0,0" />
+
+                                        <Button
+                                            x:Name="ForgotPasswordBackButton"
+                                            Content="Back to sign in"
+                                            Click="OnForgotPasswordBackClicked"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,16,0,0"
+                                            Padding="0"
+                                            BorderThickness="0"
+                                            Background="Transparent"
+                                            Foreground="#AAB8CA"
+                                            FontSize="13" />
                                     </StackPanel>
 
                                     <!-- ========================= -->

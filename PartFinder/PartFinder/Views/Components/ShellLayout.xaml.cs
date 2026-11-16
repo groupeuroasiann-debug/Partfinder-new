@@ -7,6 +7,7 @@ using PartFinder.Services;
 using PartFinder.ViewModels;
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using Windows.Foundation;
 using Windows.Graphics;
@@ -15,11 +16,14 @@ namespace PartFinder.Views.Components;
 
 public sealed partial class ShellLayout : UserControl
 {
+    private const double TopNavScrollStep = 140;
+
     public ShellLayout()
     {
         InitializeComponent();
         var vm = App.Services.GetRequiredService<ShellViewModel>();
         DataContext = vm;
+        vm.NavigationItems.CollectionChanged += OnNavigationItemsCollectionChanged;
         Loaded += OnShellLayoutLoaded;
         AppTitleBarLayout.LayoutUpdated += OnAppTitleBarLayoutUpdated;
     }
@@ -171,11 +175,72 @@ public sealed partial class ShellLayout : UserControl
         App.Services.GetRequiredService<INavigationService>().Initialize(ContentFrame);
 
         NotifyTitleBarRegionsChanged();
+        ScheduleTopNavScrollAffordanceUpdate();
+    }
+
+    private void OnNavigationItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        ScheduleTopNavScrollAffordanceUpdate();
+    }
+
+    private void OnTopNavScrollViewerSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        ScheduleTopNavScrollAffordanceUpdate();
+    }
+
+    private void OnTopNavScrollViewerViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (e.IsIntermediate)
+        {
+            return;
+        }
+
+        UpdateTopNavScrollAffordances();
+    }
+
+    private void OnTopNavScrollLeftButtonClick(object sender, RoutedEventArgs e)
+    {
+        var offset = Math.Max(0, TopNavScrollViewer.HorizontalOffset - TopNavScrollStep);
+        TopNavScrollViewer.ChangeView(offset, null, 1.0f);
+    }
+
+    private void OnTopNavScrollRightButtonClick(object sender, RoutedEventArgs e)
+    {
+        var maxOffset = TopNavScrollViewer.ScrollableWidth;
+        var offset = Math.Min(maxOffset, TopNavScrollViewer.HorizontalOffset + TopNavScrollStep);
+        TopNavScrollViewer.ChangeView(offset, null, 1.0f);
+    }
+
+    private void ScheduleTopNavScrollAffordanceUpdate()
+    {
+        _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            UpdateTopNavScrollAffordances();
+            _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, UpdateTopNavScrollAffordances);
+        });
+    }
+
+    private void UpdateTopNavScrollAffordances()
+    {
+        if (TopNavScrollViewer is null)
+        {
+            return;
+        }
+
+        var canScroll = TopNavScrollViewer.ScrollableWidth > 1;
+        var atStart = TopNavScrollViewer.HorizontalOffset <= 1;
+        var atEnd = TopNavScrollViewer.HorizontalOffset >= TopNavScrollViewer.ScrollableWidth - 1;
+
+        TopNavScrollLeftButton.Visibility = canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed;
+        TopNavScrollRightButton.Visibility = canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed;
+        TopNavFadeLeft.Visibility = canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed;
+        TopNavFadeRight.Visibility = canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnAppTitleBarLayoutUpdated(object? sender, object e)
     {
         NotifyTitleBarRegionsChanged();
+        ScheduleTopNavScrollAffordanceUpdate();
     }
 
     private void NotifyTitleBarRegionsChanged()

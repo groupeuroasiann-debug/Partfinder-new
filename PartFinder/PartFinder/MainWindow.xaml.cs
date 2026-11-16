@@ -33,6 +33,7 @@ public sealed partial class MainWindow : Window
     private bool _signedInThisSession;
     private bool _loginTotpVerifiedThisSession;
     private SetupStatusResult? _lastStatus;
+    private bool _showForgotPasswordPanel;
 
     private Microsoft.UI.Xaml.DispatcherTimer? _maintenanceTimer;
     private DateTimeOffset? _maintenanceUntilUtc;
@@ -713,6 +714,9 @@ public sealed partial class MainWindow : Window
         if (SetupConfirmPasswordRevealIcon != null) SetupConfirmPasswordRevealIcon.Glyph = "\uE890";
         ValidationText.Text = "";
         LicenseSummaryPanel.Visibility = Visibility.Collapsed;
+        _showForgotPasswordPanel = false;
+        ForgotPasswordOrgCodeBox.Text = "";
+        ForgotPasswordEmailBox.Text = "";
         UpdateStepUi();
     }
 
@@ -1507,11 +1511,25 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStepUi()
     {
-        Step1Panel.Visibility = _step == 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (_step != 1)
+        {
+            _showForgotPasswordPanel = false;
+        }
+
+        var showForgotOnStep1 = _step == 1 && _showForgotPasswordPanel;
+        Step1Panel.Visibility = _step == 1 && !showForgotOnStep1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ForgotPasswordPanel.Visibility = showForgotOnStep1 ? Visibility.Visible : Visibility.Collapsed;
+        ForgotPasswordButton.Visibility = _step == 1 && !showForgotOnStep1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         Step2Panel.Visibility = _step == 2 ? Visibility.Visible : Visibility.Collapsed;
         Step3Panel.Visibility = _step == 3 ? Visibility.Visible : Visibility.Collapsed;
         Step4Panel.Visibility = _step == 4 ? Visibility.Visible : Visibility.Collapsed;
-        NavigationRow.Visibility = _step == 4 ? Visibility.Collapsed : Visibility.Visible;
+        NavigationRow.Visibility = _step == 4 || showForgotOnStep1
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         BackButton.IsEnabled = _step > 1;
         if (_step == 2)
         {
@@ -1529,7 +1547,9 @@ public sealed partial class MainWindow : Window
             NextButton.IsEnabled = true;
         }
 
-        StepTitle.Text = _step switch
+        StepTitle.Text = showForgotOnStep1
+            ? "Forgot password"
+            : _step switch
         {
             1 => "Step 1 of 4: Organisation",
             2 => "Step 2 of 4: Database",
@@ -1607,6 +1627,63 @@ public sealed partial class MainWindow : Window
             circleText.Text       = stepNum.ToString();
             circleText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 123, 141, 168));
             label.Opacity         = 0.4;
+        }
+    }
+
+    private void OnForgotPasswordClicked(object sender, RoutedEventArgs e)
+    {
+        ValidationText.Text = string.Empty;
+        _showForgotPasswordPanel = true;
+        ForgotPasswordOrgCodeBox.Text = OrgCodeBox.Text.Trim();
+        ForgotPasswordEmailBox.Text = InviteLoginEmailBox.Text.Trim();
+        UpdateStepUi();
+    }
+
+    private void OnForgotPasswordBackClicked(object sender, RoutedEventArgs e)
+    {
+        ValidationText.Text = string.Empty;
+        _showForgotPasswordPanel = false;
+        UpdateStepUi();
+    }
+
+    private async void OnForgotPasswordSendClicked(object sender, RoutedEventArgs e)
+    {
+        ValidationText.Text = string.Empty;
+        var orgCode = ForgotPasswordOrgCodeBox.Text.Trim();
+        var email = ForgotPasswordEmailBox.Text.Trim();
+
+        if (orgCode.Length != 6 || !orgCode.All(char.IsDigit))
+        {
+            ShowValidationMessage("Organisation code must be exactly 6 digits.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || !IsValidEmail(email))
+        {
+            ShowValidationMessage("Enter a valid email address.");
+            return;
+        }
+
+        ForgotPasswordSendButton.IsEnabled = false;
+        try
+        {
+            var (ok, err, message) = await SetupApiClient
+                .RequestForgotPasswordAsync(orgCode, email)
+                .ConfigureAwait(true);
+
+            if (!ok)
+            {
+                ShowValidationMessage(err ?? "Could not send reset email. Check your connection and try again.");
+                return;
+            }
+
+            ShowValidationMessage(
+                message ??
+                "If the organisation code and email match our records, we sent a password reset link. The link works for 10 minutes only.");
+        }
+        finally
+        {
+            ForgotPasswordSendButton.IsEnabled = true;
         }
     }
 

@@ -457,6 +457,42 @@ public static class SetupApiClient
         return (false, err ?? ParseApiError(text), null);
     }
 
+    public sealed class SetupForgotPasswordResponse
+    {
+        public bool Ok { get; set; }
+        public string? Message { get; set; }
+    }
+
+    public static async Task<(bool ok, string? error, string? message)> RequestForgotPasswordAsync(
+        string orgCode,
+        string email,
+        CancellationToken ct = default)
+    {
+        var (success, err, text) = await RawPostAsync(
+            "/api/public/setup/forgot-password",
+            new { orgCode, email },
+            ct).ConfigureAwait(true);
+
+        if (!success || string.IsNullOrWhiteSpace(text))
+        {
+            return (false, err ?? "Request failed.", null);
+        }
+
+        try
+        {
+            var o = JsonSerializer.Deserialize<SetupForgotPasswordResponse>(text, ReadJson);
+            if (o?.Ok == true)
+            {
+                return (true, null, o.Message);
+            }
+        }
+        catch
+        {
+        }
+
+        return (false, err ?? ParseApiError(text), null);
+    }
+
     public static async Task<(bool ok, string? error)> ChangePasswordAsync(
         string orgCode,
         string email,
@@ -532,7 +568,24 @@ public static class SetupApiClient
             return (true, null, text);
         }
 
-        return (false, ParseApiError(text), text);
+        return (false, ParseHttpError(text, resp.StatusCode), text);
+    }
+
+    private static string ParseHttpError(string? body, System.Net.HttpStatusCode statusCode)
+    {
+        if (statusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            var snippet = body?.Trim();
+            if (!string.IsNullOrEmpty(snippet) &&
+                (snippet.Contains("Cannot POST", StringComparison.OrdinalIgnoreCase) ||
+                 snippet.Contains("Cannot GET", StringComparison.OrdinalIgnoreCase)))
+            {
+                return
+                    "The license API does not support forgot-password yet. Deploy the latest PartFinder-Backend to backend.partfinder.store, then try again.";
+            }
+        }
+
+        return ParseApiError(body);
     }
 
     private static string ParseApiError(string? json)
@@ -540,6 +593,13 @@ public static class SetupApiClient
         if (string.IsNullOrWhiteSpace(json))
         {
             return "Request failed.";
+        }
+
+        var trimmed = json.Trim();
+        if (trimmed.StartsWith("Cannot POST", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Cannot GET", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
         }
 
         try
