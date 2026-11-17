@@ -22,22 +22,43 @@ public sealed class LoginCredentialStore
     };
 
     private readonly string _indexPath;
+    private readonly string _logPath;
 
     public LoginCredentialStore()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PartFinder");
+        var dir = ResolveStorageDirectory();
         _indexPath = Path.Combine(dir, "login-credential-index.json");
+        _logPath = Path.Combine(dir, "Logs", "login-save.log");
     }
 
-    public void Save(string email, string password, string? orgCode)
+    public static string ResolveStorageDirectory()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA") ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "AppData", "Local");
+        }
+
+        var dir = Path.Combine(localAppData, "PartFinder");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <returns>false if org/email/password was invalid or the index could not be written.</returns>
+    public bool Save(string email, string password, string? orgCode)
     {
         var normalizedEmail = NormalizeEmail(email);
         var normalizedOrg = NormalizeOrgCode(orgCode);
         if (normalizedEmail is null || string.IsNullOrEmpty(password) || normalizedOrg is null)
         {
-            return;
+            System.Diagnostics.Debug.WriteLine(
+                $"[LoginCredentialStore] Save skipped: emailOk={normalizedEmail is not null}, orgOk={normalizedOrg is not null}, pwdLen={password.Length}");
+            return false;
         }
 
         var vaultUser = VaultUserName(normalizedOrg, normalizedEmail);
@@ -52,7 +73,18 @@ public sealed class LoginCredentialStore
         row.OrgCode = normalizedOrg;
         row.Email = normalizedEmail;
 
-        PersistIndex(index);
+        try
+        {
+            PersistIndex(index);
+            AppendLoginLog($"Saved login for org {normalizedOrg}, email {normalizedEmail}.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppendLoginLog($"Save failed for org {normalizedOrg}, email {normalizedEmail}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[LoginCredentialStore] PersistIndex failed: {ex.Message}");
+            return false;
+        }
     }
 
     public bool TryGetPassword(string orgCode, string email, out string password)
@@ -397,7 +429,28 @@ public sealed class LoginCredentialStore
         Directory.CreateDirectory(dir);
         var tmp = _indexPath + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(index, Json));
-        File.Move(tmp, _indexPath, overwrite: true);
+        if (File.Exists(_indexPath))
+        {
+            File.Replace(tmp, _indexPath, null);
+        }
+        else
+        {
+            File.Move(tmp, _indexPath, overwrite: true);
+        }
+    }
+
+    private void AppendLoginLog(string message)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_logPath)!;
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(_logPath, $"[{DateTimeOffset.UtcNow:O}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // best effort
+        }
     }
 
     private static string? NormalizeEmail(string? email)
