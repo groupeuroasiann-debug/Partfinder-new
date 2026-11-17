@@ -696,19 +696,23 @@ public sealed partial class InventoryPage : Page
         }
 
         var content = new StackPanel { Spacing = 8 };
+        var primaryText = (Brush)Application.Current.Resources["TextOnAccentBrush"];
+        var secondaryText = (Brush)Application.Current.Resources["TextOnAccentBrush"];
         content.Children.Add(new TextBlock
         {
             Text = summary,
             TextWrapping = TextWrapping.WrapWholeWords,
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = primaryText,
         });
         content.Children.Add(new TextBlock
         {
             Text = detail,
             TextWrapping = TextWrapping.WrapWholeWords,
             FontSize = 13,
-            Foreground = (Brush)Application.Current.Resources["TextSecondaryBrush"],
+            Foreground = secondaryText,
+            Opacity = 0.88,
         });
 
         var dialog = new ContentDialog
@@ -717,6 +721,7 @@ public sealed partial class InventoryPage : Page
             Content = content,
             CloseButtonText = "OK",
             XamlRoot = XamlRoot,
+            RequestedTheme = ElementTheme.Dark,
         };
         _ = await dialog.ShowAsync();
     }
