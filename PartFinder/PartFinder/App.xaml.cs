@@ -74,6 +74,7 @@ namespace PartFinder
             services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<LocalUserSecurityStore>();
             services.AddSingleton<AdminSessionStore>();
+            services.AddSingleton<LoginCredentialStore>();
             services.AddSingleton<SavedLoginCredentialStore>();
             services.AddSingleton<QuickLoginService>();
             services.AddSingleton<ILocalSetupContext, LocalSetupContext>();

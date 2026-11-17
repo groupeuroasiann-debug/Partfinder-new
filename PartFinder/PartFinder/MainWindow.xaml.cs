@@ -341,7 +341,6 @@ public sealed partial class MainWindow : Window
 
     private void ShowManualLoginAfterQuickLoginFailure(string? message)
     {
-        // Do not pre-fill org code or email — user must enter them each sign-in (privacy).
         _workingOrgCode = string.Empty;
         _lastStatus = null;
         OrgCodeBox.Text = string.Empty;
@@ -353,7 +352,11 @@ public sealed partial class MainWindow : Window
         SetupRoot.Visibility = Visibility.Visible;
         ShellRoot.Visibility = Visibility.Collapsed;
         ValidationText.Text = message ?? string.Empty;
-        UpdateStepUi();
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            ApplySavedLoginFromStore();
+            UpdateStepUi();
+        });
     }
 
     private async Task PromptSaveLoginInformationIfOfferedAsync(
@@ -438,6 +441,8 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _inviteLoginEmailLowercaseGuard;
+    private bool _suppressCredentialAutofill;
+    private bool _suppressSavedLoginCombo;
 
     private void OnInviteLoginEmailBoxTextChanged(object sender, TextChangedEventArgs e)
     {
@@ -448,16 +453,191 @@ public sealed partial class MainWindow : Window
 
         var text = box.Text;
         var lower = text.ToLowerInvariant();
-        if (string.Equals(text, lower, StringComparison.Ordinal))
+        if (!string.Equals(text, lower, StringComparison.Ordinal))
+        {
+            _inviteLoginEmailLowercaseGuard = true;
+            var caret = box.SelectionStart;
+            box.Text = lower;
+            box.SelectionStart = Math.Clamp(caret, 0, lower.Length);
+            _inviteLoginEmailLowercaseGuard = false;
+        }
+
+        if (!_suppressCredentialAutofill)
+        {
+            ApplySavedPasswordForEmail(lower);
+        }
+    }
+
+    private void ApplySavedLoginFromStore()
+    {
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        var (orgCode, email, password) = store.GetLastUsed();
+
+        var setup = LoadSetupState();
+        if (string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(setup.adminEmail))
+        {
+            email = setup.adminEmail.Trim().ToLowerInvariant();
+        }
+
+        if (string.IsNullOrWhiteSpace(orgCode) && !string.IsNullOrWhiteSpace(setup.orgCode))
+        {
+            orgCode = setup.orgCode.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(password) &&
+            !string.IsNullOrWhiteSpace(email) &&
+            !string.IsNullOrWhiteSpace(orgCode) &&
+            orgCode.Length == 6)
+        {
+            store.TryGetPassword(orgCode, email, out password);
+        }
+
+        RefreshSavedLoginsCombo(orgCode, email);
+
+        if (string.IsNullOrWhiteSpace(email) &&
+            string.IsNullOrWhiteSpace(orgCode) &&
+            string.IsNullOrWhiteSpace(password))
         {
             return;
         }
 
-        _inviteLoginEmailLowercaseGuard = true;
-        var caret = box.SelectionStart;
-        box.Text = lower;
-        box.SelectionStart = Math.Clamp(caret, 0, lower.Length);
-        _inviteLoginEmailLowercaseGuard = false;
+        ApplySavedLoginFields(orgCode, email, password);
+    }
+
+    private void ApplySavedLoginFields(string? orgCode, string? email, string? password)
+    {
+        _suppressCredentialAutofill = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(orgCode))
+            {
+                OrgCodeBox.Text = orgCode;
+            }
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                InviteLoginEmailBox.Text = email;
+            }
+
+            if (!string.IsNullOrWhiteSpace(password))
+            {
+                InviteLoginPasswordBox.Password = password;
+            }
+            else if (!string.IsNullOrWhiteSpace(email))
+            {
+                ApplySavedPasswordForEmail(email);
+            }
+        }
+        finally
+        {
+            _suppressCredentialAutofill = false;
+        }
+    }
+
+    private void RefreshSavedLoginsCombo(string? selectOrg = null, string? selectEmail = null)
+    {
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        var entries = store.GetAll();
+        if (entries.Count == 0)
+        {
+            SavedLoginsPanel.Visibility = Visibility.Collapsed;
+            SavedLoginsCombo.ItemsSource = null;
+            return;
+        }
+
+        SavedLoginsPanel.Visibility = Visibility.Visible;
+        _suppressSavedLoginCombo = true;
+        try
+        {
+            SavedLoginsCombo.ItemsSource = entries;
+
+            var (lastOrg, lastEmail, _) = store.GetLastUsed();
+            var targetOrg = selectOrg?.Trim() ?? lastOrg;
+            var targetEmail = selectEmail?.Trim().ToLowerInvariant() ?? lastEmail;
+            SavedLoginEntry? selected = null;
+            if (!string.IsNullOrWhiteSpace(targetOrg) && !string.IsNullOrWhiteSpace(targetEmail))
+            {
+                selected = entries.FirstOrDefault(e =>
+                    string.Equals(e.OrgCode, targetOrg, StringComparison.Ordinal) &&
+                    string.Equals(e.Email, targetEmail, StringComparison.OrdinalIgnoreCase));
+            }
+
+            selected ??= entries.FirstOrDefault();
+            if (selected is not null)
+            {
+                SavedLoginsCombo.SelectedItem = selected;
+            }
+        }
+        finally
+        {
+            _suppressSavedLoginCombo = false;
+        }
+    }
+
+    private void OnSavedLoginsComboSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSavedLoginCombo || SavedLoginsCombo.SelectedItem is not SavedLoginEntry entry)
+        {
+            return;
+        }
+
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        store.TryGetPassword(entry.OrgCode, entry.Email, out var password);
+        store.TouchLastUsed(entry.OrgCode, entry.Email);
+        ApplySavedLoginFields(entry.OrgCode, entry.Email, string.IsNullOrEmpty(password) ? null : password);
+    }
+
+    private void ApplySavedPasswordForEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || !IsValidEmail(email))
+        {
+            return;
+        }
+
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        var org = OrgCodeBox.Text.Trim();
+        string password;
+        if (org.Length == 6 && org.All(char.IsDigit) && store.TryGetPassword(org, email, out password))
+        {
+            // matched current org
+        }
+        else if (!store.TryGetPassword(email, out password))
+        {
+            return;
+        }
+
+        _suppressCredentialAutofill = true;
+        try
+        {
+            InviteLoginPasswordBox.Password = password;
+            if (org.Length != 6 || !org.All(char.IsDigit))
+            {
+                var savedOrg = store.GetOrgCodeForEmail(email);
+                if (!string.IsNullOrWhiteSpace(savedOrg))
+                {
+                    OrgCodeBox.Text = savedOrg;
+                }
+            }
+        }
+        finally
+        {
+            _suppressCredentialAutofill = false;
+        }
+    }
+
+    private void PersistLoginCredential(string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            return;
+        }
+
+        var org = string.IsNullOrWhiteSpace(_workingOrgCode)
+            ? OrgCodeBox.Text.Trim()
+            : _workingOrgCode;
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        store.Save(email, password, org);
+        RefreshSavedLoginsCombo(org, email);
     }
 
     private void OnOrgCodeBoxTextChanged(object sender, TextChangedEventArgs e)
@@ -475,6 +655,42 @@ public sealed partial class MainWindow : Window
         }
 
         LicenseSummaryPanel.Visibility = Visibility.Collapsed;
+
+        if (!_suppressCredentialAutofill && text.Length == 6 && text.All(char.IsDigit))
+        {
+            TryAutofillSavedLoginForOrg(text);
+        }
+    }
+
+    private void TryAutofillSavedLoginForOrg(string orgCode)
+    {
+        var store = App.Services.GetRequiredService<LoginCredentialStore>();
+        var forOrg = store.GetForOrg(orgCode);
+        if (forOrg.Count == 0)
+        {
+            return;
+        }
+
+        SavedLoginEntry pick;
+        var email = InviteLoginEmailBox.Text.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(email) && IsValidEmail(email))
+        {
+            pick = forOrg.FirstOrDefault(e =>
+                string.Equals(e.Email, email, StringComparison.OrdinalIgnoreCase)) ?? forOrg[0];
+        }
+        else if (forOrg.Count == 1)
+        {
+            pick = forOrg[0];
+        }
+        else
+        {
+            RefreshSavedLoginsCombo(orgCode, email);
+            return;
+        }
+
+        store.TryGetPassword(pick.OrgCode, pick.Email, out var password);
+        ApplySavedLoginFields(pick.OrgCode, pick.Email, string.IsNullOrEmpty(password) ? null : password);
+        RefreshSavedLoginsCombo(pick.OrgCode, pick.Email);
     }
 
     private async void OnRootGridLoadedPostSetupValidate(object sender, RoutedEventArgs e)
@@ -486,6 +702,7 @@ public sealed partial class MainWindow : Window
             _step = 1;
             SetupRoot.Visibility = Visibility.Visible;
             ShellRoot.Visibility = Visibility.Collapsed;
+            ApplySavedLoginFromStore();
             UpdateStepUi();
             return;
         }
@@ -500,6 +717,7 @@ public sealed partial class MainWindow : Window
             _step = 1;
             SetupRoot.Visibility = Visibility.Visible;
             ShellRoot.Visibility = Visibility.Collapsed;
+            ApplySavedLoginFromStore();
             UpdateStepUi();
             return;
         }
@@ -837,6 +1055,7 @@ public sealed partial class MainWindow : Window
         _showForgotPasswordPanel = false;
         ForgotPasswordOrgCodeBox.Text = "";
         ForgotPasswordEmailBox.Text = "";
+        ApplySavedLoginFromStore();
         UpdateStepUi();
     }
 
@@ -933,6 +1152,7 @@ public sealed partial class MainWindow : Window
             _step = 1;
             SetupRoot.Visibility = Visibility.Visible;
             ShellRoot.Visibility = Visibility.Collapsed;
+            ApplySavedLoginFromStore();
             UpdateStepUi();
             return;
         }
@@ -1045,6 +1265,7 @@ public sealed partial class MainWindow : Window
         LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
         SetupRoot.Visibility = Visibility.Visible;
         _step = 1;
+        ApplySavedLoginFromStore();
         UpdateStepUi();
     }
 
@@ -1200,6 +1421,7 @@ public sealed partial class MainWindow : Window
                         _mustChangePassword = inviteLoginResponse?.MustChangePassword ?? true;
                         _resolvedSignedInRole = inviteLoginResponse?.Role;
                         _signedInThisSession = true;
+                        PersistLoginCredential(invitedEmail, tempPassword);
 
                         if (!string.IsNullOrWhiteSpace(inviteLoginResponse?.AccessToken))
                         {
@@ -1505,6 +1727,11 @@ public sealed partial class MainWindow : Window
                 }
 
                 _signedInThisSession = true;
+                if (!string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
+                {
+                    PersistLoginCredential(_resolvedSignedInEmail, NewPasswordBox.Password);
+                }
+
                 SaveCompletedSetup();
                 _step = 4;
             }
@@ -1697,6 +1924,11 @@ public sealed partial class MainWindow : Window
             3 => "● ● ● ○",
             _ => "● ● ● ●",
         };
+
+        if (_step == 1 && !showForgotOnStep1)
+        {
+            RefreshSavedLoginsCombo(OrgCodeBox.Text.Trim(), InviteLoginEmailBox.Text.Trim());
+        }
 
         // Update left panel step circles
         UpdateStepCircle(Step1Circle, Step1CircleText, Step1Label, stepNum: 1);
