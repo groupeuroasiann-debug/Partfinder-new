@@ -712,6 +712,12 @@ public static class SetupApiClient
         if (statusCode == System.Net.HttpStatusCode.NotFound)
         {
             var snippet = body?.Trim();
+            if (string.IsNullOrEmpty(snippet))
+            {
+                return
+                    "The API at backend.partfinder.store returned 404 (not deployed). In Vercel, set Root Directory to PartFinder-Backend, add MONGODB_URI and JWT_SECRET, deploy the latest main branch, then try again.";
+            }
+
             if (!string.IsNullOrEmpty(snippet) &&
                 (snippet.Contains("Cannot POST", StringComparison.OrdinalIgnoreCase) ||
                  snippet.Contains("Cannot GET", StringComparison.OrdinalIgnoreCase)))
