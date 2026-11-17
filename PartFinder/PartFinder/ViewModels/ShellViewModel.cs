@@ -398,6 +398,18 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
                 });
         }
 
+        if (c.CanAccessWmsWorkbook)
+        {
+            NavigationItems.Add(
+                new NavItemViewModel
+                {
+                    Label = "WMS Setup",
+                    IconGlyph = "\uE7B8",
+                    Page = AppPage.WmsWorkbook,
+                    IsEnabled = true,
+                });
+        }
+
         if ((c.CanAccessMasterData || c.CanAccessParts) && hasMasterData)
         {
             NavigationItems.Add(

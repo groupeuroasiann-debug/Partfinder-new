@@ -6,6 +6,7 @@ public enum AppPage
     Dashboard,
     Parts,
     Inventory,
+    WmsWorkbook,
     Alerts,
     Audit,
     Templates,
