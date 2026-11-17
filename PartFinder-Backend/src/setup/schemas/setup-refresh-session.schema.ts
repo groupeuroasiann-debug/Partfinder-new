@@ -20,7 +20,7 @@ export class SetupRefreshSession {
   @Prop({ required: true })
   refreshTokenHash!: string;
 
-  @Prop()
+  @Prop({ type: String, default: null })
   previousRefreshTokenHash?: string | null;
 
   @Prop({ default: true })
