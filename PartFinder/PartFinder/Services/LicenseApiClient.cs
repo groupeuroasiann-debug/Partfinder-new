@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PartFinder.Helpers;
 
 namespace PartFinder.Services;
 
@@ -31,34 +32,7 @@ public static class LicenseApiClient
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("PartFinder-WinUI/1.0");
     }
 
-    public static string GetBaseUrl()
-    {
-        try
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (File.Exists(path))
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                if (doc.RootElement.TryGetProperty("LicenseApi", out var licenseApi) &&
-                    licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
-                {
-                    var s = baseUrlEl.GetString();
-                    if (!string.IsNullOrWhiteSpace(s) &&
-                        !s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase) &&
-                        !s.Contains("localhost", StringComparison.OrdinalIgnoreCase) &&
-                        !s.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return s.TrimEnd('/');
-                    }
-                }
-            }
-        }
-        catch
-        {
-        }
-
-        return "https://backend.partfinder.store";
-    }
+    public static string GetBaseUrl() => AppConfiguration.GetLicenseApiBaseUrl();
 
     public static async Task<LicenseVerifyResponse?> VerifyAsync(string orgCode, CancellationToken ct = default)
     {

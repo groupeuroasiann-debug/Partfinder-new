@@ -741,10 +741,7 @@ public sealed partial class MainWindow : Window
         var (status, statusErr) = await SetupApiClient.StatusAsync(orgCode);
         if (status is null)
         {
-            var api = LicenseApiClient.GetBaseUrl();
-            var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
-            ShowSubscriptionBlocked(
-                $"Active internet is required. Cannot reach the API at {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
+            ShowSubscriptionBlocked(SetupApiClient.FormatSetupStatusFailureMessage(statusErr));
             return;
         }
 
@@ -1363,10 +1360,7 @@ public sealed partial class MainWindow : Window
                 var (status, statusErr) = await SetupApiClient.StatusAsync(trimmed);
                 if (status is null)
                 {
-                    var api = LicenseApiClient.GetBaseUrl();
-                    var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
-                    ShowValidationMessage(
-                        $"Active internet is required. Cannot reach {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
+                    ShowValidationMessage(SetupApiClient.FormatSetupStatusFailureMessage(statusErr));
                     return;
                 }
 

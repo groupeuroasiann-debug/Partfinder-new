@@ -448,11 +448,27 @@ public static class SetupApiClient
         var e = error.Trim();
         return e.Contains("actively refused", StringComparison.OrdinalIgnoreCase)
                || e.Contains("No such host", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("Name or service not known", StringComparison.OrdinalIgnoreCase)
                || e.Contains("timed out", StringComparison.OrdinalIgnoreCase)
                || e.Contains("timeout", StringComparison.OrdinalIgnoreCase)
                || e.Contains("network", StringComparison.OrdinalIgnoreCase)
                || e.Contains("connection", StringComparison.OrdinalIgnoreCase)
                || e.Contains("Could not reach", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string FormatSetupStatusFailureMessage(string? statusErr)
+    {
+        var api = LicenseApiClient.GetBaseUrl();
+        var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
+
+        if (LooksLikeNetworkError(statusErr))
+        {
+            return
+                $"Active internet is required. Cannot reach {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (next to the PartFinder.exe), or appsettings.local.json for a temporary override.";
+        }
+
+        return
+            $"The licence API at {api} did not respond successfully.{detail} If this persists, your admin must fix the backend deployment or give you the correct API URL for appsettings.local.json.";
     }
 
     public static async Task<(bool ok, string? error, SetupRefreshSessionResponse? body)> RefreshSessionAsync(
@@ -675,6 +691,21 @@ public static class SetupApiClient
 
     private static string ParseHttpError(string? body, System.Net.HttpStatusCode statusCode)
     {
+        if ((int)statusCode >= 500)
+        {
+            var snippet = body?.Trim();
+            if (!string.IsNullOrEmpty(snippet))
+            {
+                var firstLine = snippet.Split('\n', '\r')[0].Trim();
+                if (!string.IsNullOrEmpty(firstLine))
+                {
+                    return $"Server error ({(int)statusCode}): {firstLine}";
+                }
+            }
+
+            return $"Server error ({(int)statusCode}). The API host is reachable but the backend failed.";
+        }
+
         if (statusCode == System.Net.HttpStatusCode.NotFound)
         {
             var snippet = body?.Trim();

@@ -4,6 +4,7 @@
 !.vscode/extensions.json
 
 # Secrets
+**appsettings.local.json
 .env
 .env.local
 .env.development
