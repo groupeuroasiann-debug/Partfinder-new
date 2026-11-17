@@ -33,31 +33,50 @@ public static class LicenseApiClient
 
     public static string GetBaseUrl()
     {
+        var baseDir = AppContext.BaseDirectory;
+#if DEBUG
+        var fromDev = TryReadLicenseApiBaseUrl(Path.Combine(baseDir, "appsettings.Development.json"));
+        if (!string.IsNullOrWhiteSpace(fromDev))
+        {
+            return fromDev;
+        }
+#endif
+        var fromDefault = TryReadLicenseApiBaseUrl(Path.Combine(baseDir, "appsettings.json"));
+        if (!string.IsNullOrWhiteSpace(fromDefault))
+        {
+            return fromDefault;
+        }
+
+        return "https://backend.partfinder.store";
+    }
+
+    private static string? TryReadLicenseApiBaseUrl(string path)
+    {
         try
         {
-            var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (File.Exists(path))
+            if (!File.Exists(path))
             {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                if (doc.RootElement.TryGetProperty("LicenseApi", out var licenseApi) &&
-                    licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            if (doc.RootElement.TryGetProperty("LicenseApi", out var licenseApi) &&
+                licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
+            {
+                var s = baseUrlEl.GetString();
+                if (!string.IsNullOrWhiteSpace(s) &&
+                    !s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase))
                 {
-                    var s = baseUrlEl.GetString();
-                    if (!string.IsNullOrWhiteSpace(s) &&
-                        !s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase) &&
-                        !s.Contains("localhost", StringComparison.OrdinalIgnoreCase) &&
-                        !s.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return s.TrimEnd('/');
-                    }
+                    return s.TrimEnd('/');
                 }
             }
         }
         catch
         {
+            // fall through
         }
 
-        return "https://backend.partfinder.store";
+        return null;
     }
 
     public static async Task<LicenseVerifyResponse?> VerifyAsync(string orgCode, CancellationToken ct = default)

@@ -673,8 +673,42 @@ public static class SetupApiClient
         return (false, ParseHttpError(text, resp.StatusCode), text);
     }
 
+    public static string FormatStatusFailureMessage(string? statusErr)
+    {
+        var api = LicenseApiClient.GetBaseUrl();
+        var detail = string.IsNullOrWhiteSpace(statusErr) ? "Request failed." : statusErr.Trim();
+
+        if (LooksLikeNetworkError(detail))
+        {
+            return
+                $"Cannot reach the PartFinder API at {api}. {detail} Check your internet connection and LicenseApi:BaseUrl in appsettings.json.";
+        }
+
+        if (detail.Contains("server error", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("FUNCTION_INVOCATION", StringComparison.OrdinalIgnoreCase) ||
+            detail.Contains("(50", StringComparison.Ordinal))
+        {
+            return
+                $"The PartFinder API at {api} returned an error: {detail} The hosted backend may need redeploying, or run PartFinder-Backend locally and set LicenseApi:BaseUrl to http://127.0.0.1:3000 in appsettings.json.";
+        }
+
+        return
+            $"Cannot complete setup against {api}. {detail} Check LicenseApi:BaseUrl in appsettings.json (use http://127.0.0.1:3000 when running the API locally).";
+    }
+
     private static string ParseHttpError(string? body, System.Net.HttpStatusCode statusCode)
     {
+        if ((int)statusCode >= 500)
+        {
+            var snippet = body?.Trim();
+            if (!string.IsNullOrEmpty(snippet) && snippet.Length <= 280)
+            {
+                return $"Server error ({(int)statusCode}): {snippet}";
+            }
+
+            return $"Server error ({(int)statusCode}). The API at {LicenseApiClient.GetBaseUrl()} may be down or misconfigured.";
+        }
+
         if (statusCode == System.Net.HttpStatusCode.NotFound)
         {
             var snippet = body?.Trim();

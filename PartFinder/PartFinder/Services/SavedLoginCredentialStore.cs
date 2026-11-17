@@ -56,6 +56,9 @@ public sealed class SavedLoginCredentialStore
         return true;
     }
 
+    private bool WasSaveLoginPromptAnswered(string normalizedEmail) =>
+        LoadPromptState().AnsweredEmails.Contains(normalizedEmail, StringComparer.Ordinal);
+
     public void MarkSaveLoginPromptAnswered(string email)
     {
         var normalized = NormalizeEmail(email);
@@ -104,6 +107,11 @@ public sealed class SavedLoginCredentialStore
 
     public string? TryReadRefreshToken(SavedLoginProfile profile)
     {
+        if (string.IsNullOrWhiteSpace(profile.OrgCode) || string.IsNullOrWhiteSpace(profile.Email))
+        {
+            return null;
+        }
+
         try
         {
             var vault = new PasswordVault();
