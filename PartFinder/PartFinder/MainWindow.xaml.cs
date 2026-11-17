@@ -398,6 +398,12 @@ public sealed partial class MainWindow : Window
             }
 
             store.Save(orgCode, email, refreshToken);
+
+            var password = InviteLoginPasswordBox.Password;
+            if (!string.IsNullOrWhiteSpace(password))
+            {
+                PersistLoginCredential(orgCode, email, password);
+            }
         }
         catch
         {
@@ -625,19 +631,54 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void PersistLoginCredential(string email, string password)
+    private void MaybePersistStep1Credentials(string orgCode)
     {
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        var email = InviteLoginEmailBox.Text.Trim();
+        var password = InviteLoginPasswordBox.Password;
+        if (!IsValidEmail(email) || string.IsNullOrEmpty(password))
         {
             return;
         }
 
-        var org = string.IsNullOrWhiteSpace(_workingOrgCode)
-            ? OrgCodeBox.Text.Trim()
-            : _workingOrgCode;
+        if (PersistLoginCredential(orgCode, email, password))
+        {
+            System.Diagnostics.Debug.WriteLine($"[Login] Saved credentials for org {orgCode} / {email}");
+        }
+    }
+
+    private void PersistLoginCredential(string email, string password) =>
+        PersistLoginCredential(null, email, password);
+
+    private bool PersistLoginCredential(string? orgCode, string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            return false;
+        }
+
+        var org = orgCode?.Trim();
+        if (string.IsNullOrWhiteSpace(org))
+        {
+            org = !string.IsNullOrWhiteSpace(_workingOrgCode)
+                ? _workingOrgCode.Trim()
+                : OrgCodeBox.Text.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(org))
+        {
+            org = TryReadOrgCodeFromSetup();
+        }
+
         var store = App.Services.GetRequiredService<LoginCredentialStore>();
-        store.Save(email, password, org);
+        if (!store.Save(email, password, org))
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[Login] Credential not saved (org={org ?? "missing"}, email={email}).");
+            return false;
+        }
+
         RefreshSavedLoginsCombo(org, email);
+        return true;
     }
 
     private void OnOrgCodeBoxTextChanged(object sender, TextChangedEventArgs e)
@@ -1393,7 +1434,11 @@ public sealed partial class MainWindow : Window
                         _signedInThisSession &&
                         string.Equals(_resolvedSignedInEmail, invitedEmail, StringComparison.OrdinalIgnoreCase);
 
-                    if (!alreadySignedInThisStep)
+                    if (alreadySignedInThisStep)
+                    {
+                        MaybePersistStep1Credentials(trimmed);
+                    }
+                    else
                     {
                         if (string.IsNullOrWhiteSpace(invitedEmail) || string.IsNullOrWhiteSpace(tempPassword))
                         {
@@ -1421,7 +1466,7 @@ public sealed partial class MainWindow : Window
                         _mustChangePassword = inviteLoginResponse?.MustChangePassword ?? true;
                         _resolvedSignedInRole = inviteLoginResponse?.Role;
                         _signedInThisSession = true;
-                        PersistLoginCredential(invitedEmail, tempPassword);
+                        PersistLoginCredential(trimmed, invitedEmail, tempPassword);
 
                         if (!string.IsNullOrWhiteSpace(inviteLoginResponse?.AccessToken))
                         {
@@ -1453,6 +1498,15 @@ public sealed partial class MainWindow : Window
                             }
                         }
                     }
+                }
+                else
+                {
+                    MaybePersistStep1Credentials(trimmed);
+                }
+
+                if (_signedInThisSession)
+                {
+                    MaybePersistStep1Credentials(trimmed);
                 }
 
                 SaveProgressOrgCodeOnly(trimmed);
@@ -1729,7 +1783,7 @@ public sealed partial class MainWindow : Window
                 _signedInThisSession = true;
                 if (!string.IsNullOrWhiteSpace(_resolvedSignedInEmail))
                 {
-                    PersistLoginCredential(_resolvedSignedInEmail, NewPasswordBox.Password);
+                    PersistLoginCredential(_workingOrgCode, _resolvedSignedInEmail!, NewPasswordBox.Password);
                 }
 
                 SaveCompletedSetup();
@@ -1769,6 +1823,16 @@ public sealed partial class MainWindow : Window
         }
 
         _signedInThisSession = true;
+
+        var launchOrg = TryReadOrgCodeFromSetup() ?? _workingOrgCode ?? OrgCodeBox.Text.Trim();
+        var launchEmail = _resolvedSignedInEmail ?? InviteLoginEmailBox.Text.Trim();
+        var launchPassword = InviteLoginPasswordBox.Password;
+        if (!string.IsNullOrWhiteSpace(launchPassword) &&
+            !string.IsNullOrWhiteSpace(launchEmail) &&
+            !string.IsNullOrWhiteSpace(launchOrg))
+        {
+            PersistLoginCredential(launchOrg, launchEmail, launchPassword);
+        }
 
         // Fetch and store org display name + plan before showing shell
         // so Settings page ORGANIZATION section is never blank after login.
