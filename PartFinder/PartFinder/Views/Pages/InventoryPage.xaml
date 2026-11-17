@@ -9,6 +9,17 @@
     <Page.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+        <Style x:Key="WarehouseBlueQuickActionButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="88" />
+        </Style>
     </Page.Resources>
 
     <Grid Background="Transparent" Transitions="{StaticResource LuxuryPanelTransitions}" DataContext="{x:Bind ViewModel, Mode=OneWay}">
@@ -271,19 +282,43 @@
                         Spacing="10"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top">
-                        <Border x:Name="WarehouseQuickActionTemplates" Width="148" MinHeight="88" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Translation="0,0,12">
+                        <Border x:Name="WarehouseQuickActionTemplates" Width="148" MinHeight="88" Background="{StaticResource AccentHeroBrush}" BorderBrush="{StaticResource AccentPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="0" Translation="0,0,12">
                             <Border.Shadow><ThemeShadow/></Border.Shadow>
-                            <Button Style="{StaticResource PrimaryButtonStyle}" FontSize="12" Padding="10,8" MinHeight="68" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Click="OnWarehouseTemplatesClick">
+                            <Button Style="{StaticResource WarehouseBlueQuickActionButtonStyle}" Click="OnWarehouseTemplatesClick">
+                                <Button.Resources>
+                                    <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="Transparent" />
+                                </Button.Resources>
                                 <StackPanel Spacing="4" HorizontalAlignment="Center">
                                     <FontIcon Glyph="&#xE8A5;" FontSize="14" HorizontalAlignment="Center" />
                                     <TextBlock Text="Templates" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextWrapping="WrapWholeWords" TextAlignment="Center" />
                                 </StackPanel>
                             </Button>
                         </Border>
-                        <Border x:Name="WarehouseQuickActionOrder" Width="148" MinHeight="88" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource BorderDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Translation="0,0,12"
+                        <Border x:Name="WarehouseQuickActionOrder" Width="148" MinHeight="88" Background="{StaticResource AccentHeroBrush}" BorderBrush="{StaticResource AccentPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="0" Translation="0,0,12"
                                 Visibility="{x:Bind ViewModel.ShowWarehouseOrderQuickAction, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Border.Shadow><ThemeShadow/></Border.Shadow>
-                            <Button Style="{StaticResource PrimaryButtonStyle}" FontSize="12" Padding="10,8" MinHeight="68" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Click="OnWarehouseOrderClick">
+                            <Button Style="{StaticResource WarehouseBlueQuickActionButtonStyle}" Click="OnWarehouseOrderClick">
+                                <Button.Resources>
+                                    <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackground" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="Transparent" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="Transparent" />
+                                </Button.Resources>
                                 <StackPanel Spacing="4" HorizontalAlignment="Center">
                                     <FontIcon Glyph="&#xE7BF;" FontSize="14" HorizontalAlignment="Center" />
                                     <TextBlock Text="Order" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextWrapping="WrapWholeWords" TextAlignment="Center" />
