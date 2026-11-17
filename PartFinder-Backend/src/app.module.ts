@@ -23,6 +23,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { UsersModule } from './users/users.module';
 import { ViewDataModule } from './view-data/view-data.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { WmsModule } from './wms/wms.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ViewDataModule,
     ImportModule,
     SetupModule,
+    WmsModule,
     DebugModule,
   ],
   controllers: [AppController],

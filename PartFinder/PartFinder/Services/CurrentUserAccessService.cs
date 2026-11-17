@@ -86,6 +86,7 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
 
                     CanViewInventory = true,
                     CanManageInventory = true,
+                    CanAccessWmsWorkbook = true,
                 };
                 return;
             }

@@ -80,6 +80,16 @@ public sealed class SetupInviteLoginResponse
     public string? Role { get; set; }
     public bool MustChangePassword { get; set; }
     public string? AccessToken { get; set; }
+    public string? RefreshToken { get; set; }
+}
+
+public sealed class SetupRefreshSessionResponse
+{
+    public bool Ok { get; set; }
+    public string? Email { get; set; }
+    public string? AccessToken { get; set; }
+    public string? RefreshToken { get; set; }
+    public string? Message { get; set; }
 }
 
 public static class SetupApiClient
@@ -421,12 +431,84 @@ public static class SetupApiClient
         };
     }
 
+    private static bool ShouldRetryInviteLoginWithoutDeviceId(string? err, string? text)
+    {
+        var blob = $"{err}\n{text}";
+        return blob.Contains("deviceId", StringComparison.OrdinalIgnoreCase)
+               && blob.Contains("should not exist", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool LooksLikeNetworkError(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return false;
+        }
+
+        var e = error.Trim();
+        return e.Contains("actively refused", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("No such host", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("network", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("connection", StringComparison.OrdinalIgnoreCase)
+               || e.Contains("Could not reach", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static async Task<(bool ok, string? error, SetupRefreshSessionResponse? body)> RefreshSessionAsync(
+        string orgCode,
+        string email,
+        string deviceId,
+        string refreshToken,
+        CancellationToken ct = default)
+    {
+        var (success, err, text) = await RawPostAsync(
+            "/api/public/setup/refresh-session",
+            new { orgCode, email, deviceId, refreshToken },
+            ct).ConfigureAwait(true);
+
+        if (!success)
+        {
+            return (false, err ?? ParseApiError(text), null);
+        }
+
+        try
+        {
+            var o = JsonSerializer.Deserialize<SetupRefreshSessionResponse>(text, ReadJson);
+            if (o?.Ok == true && !string.IsNullOrWhiteSpace(o.AccessToken))
+            {
+                return (true, null, o);
+            }
+        }
+        catch
+        {
+        }
+
+        return (false, err ?? ParseApiError(text), null);
+    }
+
+    public static async Task<(bool ok, string? error)> RevokeSessionAsync(
+        string orgCode,
+        string email,
+        string deviceId,
+        string? refreshToken = null,
+        CancellationToken ct = default)
+    {
+        var (success, err, text) = await RawPostAsync(
+            "/api/public/setup/revoke-session",
+            new { orgCode, email, deviceId, refreshToken },
+            ct).ConfigureAwait(true);
+
+        return success ? (true, null) : (false, err ?? ParseApiError(text));
+    }
+
     public static async Task<(bool ok, string? error, SetupInviteLoginResponse? body)> ValidateInviteLoginAsync(
         string orgCode,
         string email,
         string temporaryPassword,
         CancellationToken ct = default)
     {
+        var deviceId = DeviceIdentityService.GetDeviceId();
         var (success, err, text) = await RawPostAsync(
             "/api/public/setup/invite-login",
             new
@@ -434,10 +516,30 @@ public static class SetupApiClient
                 orgCode,
                 email,
                 temporaryPassword,
+                deviceId,
             },
             ct).ConfigureAwait(true);
 
-        if (!success || string.IsNullOrWhiteSpace(text))
+        // Older license APIs reject unknown fields (forbidNonWhitelisted) before deviceId was added.
+        if (!success && ShouldRetryInviteLoginWithoutDeviceId(err, text))
+        {
+            (success, err, text) = await RawPostAsync(
+                "/api/public/setup/invite-login",
+                new
+                {
+                    orgCode,
+                    email,
+                    temporaryPassword,
+                },
+                ct).ConfigureAwait(true);
+        }
+
+        if (!success)
+        {
+            return (false, err ?? "Request failed.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
         {
             return (false, err ?? "Request failed.", null);
         }

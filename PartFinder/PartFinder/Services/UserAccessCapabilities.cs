@@ -37,6 +37,9 @@ public sealed class UserAccessCapabilities
     /// <summary>Admin inventory tools: KPIs, export, bulk import, add/edit stock, row actions.</summary>
     public bool CanManageInventory { get; init; }
 
+    /// <summary>Warehouse Workbook setup (NestJS WMS API — Phase 02A).</summary>
+    public bool CanAccessWmsWorkbook { get; init; }
+
     public static UserAccessCapabilities FullAdmin { get; } = new()
     {
         CanAccessMasterData = true,
@@ -62,5 +65,6 @@ public sealed class UserAccessCapabilities
 
         CanViewInventory = true,
         CanManageInventory = true,
+        CanAccessWmsWorkbook = true,
     };
 }

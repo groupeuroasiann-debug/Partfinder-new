@@ -32,6 +32,11 @@ import { buildPasswordResetLink } from '../common/password-reset-link.util';
 import { TenantMongoService } from './tenant-mongo.service';
 import { CasbinService } from '../casbin/casbin.service';
 import { JwtService } from '@nestjs/jwt';
+import { SetupRefreshSessionService } from './setup-refresh-session.service';
+import {
+  SetupRefreshSessionDto,
+  SetupRevokeSessionDto,
+} from './dto/setup-refresh-session.dto';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -44,11 +49,72 @@ export class SetupService {
     private readonly config: ConfigService,
     private readonly casbin: CasbinService,
     private readonly jwtService: JwtService,
+    private readonly refreshSessions: SetupRefreshSessionService,
   ) {}
 
-  private async issueInviteAccessToken(email: string): Promise<string> {
+  private async issueInviteAccessToken(
+    email: string,
+    orgCode: string,
+  ): Promise<string> {
     const normalized = email.trim().toLowerCase();
-    return this.jwtService.signAsync({ sub: normalized, email: normalized });
+    return this.jwtService.signAsync(
+      { sub: normalized, email: normalized, orgCode: orgCode.trim() },
+      { expiresIn: '1h' },
+    );
+  }
+
+  private async finalizeInviteLoginSuccess(
+    dto: SetupInviteLoginDto,
+    email: string,
+    role: string,
+    mustChangePassword: boolean,
+  ) {
+    const deviceId = dto.deviceId?.trim() ?? '';
+    if (deviceId.length >= 8) {
+      const session = await this.refreshSessions.createSession(
+        dto.orgCode,
+        email,
+        deviceId,
+      );
+      return {
+        ok: true as const,
+        email,
+        role,
+        mustChangePassword,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    }
+
+    return {
+      ok: true as const,
+      email,
+      role,
+      mustChangePassword,
+      accessToken: await this.issueInviteAccessToken(email, dto.orgCode),
+    };
+  }
+
+  async refreshDeviceSession(dto: SetupRefreshSessionDto) {
+    await this.loadLicensedOrg(dto.orgCode);
+    const result = await this.refreshSessions.refreshSession(
+      dto.orgCode,
+      dto.email,
+      dto.deviceId,
+      dto.refreshToken,
+    );
+    return { ok: true as const, ...result };
+  }
+
+  async revokeDeviceSession(dto: SetupRevokeSessionDto) {
+    await this.loadLicensedOrg(dto.orgCode);
+    await this.refreshSessions.revokeSession(
+      dto.orgCode,
+      dto.email,
+      dto.deviceId,
+      dto.refreshToken,
+    );
+    return { ok: true as const };
   }
 
   @OnEvent('admin.password.changed')
@@ -539,13 +605,7 @@ export class SetupService {
       reqEmail === firstAdminEmail &&
       (await this.passwordAccepted(dto.temporaryPassword, firstAdminTempHash, 'pbkdf2'))
     ) {
-      return {
-        ok: true as const,
-        email: reqEmail,
-        role: 'Admin',
-        mustChangePassword: true,
-        accessToken: await this.issueInviteAccessToken(reqEmail),
-      };
+      return this.finalizeInviteLoginSuccess(dto, reqEmail, 'Admin', true);
     }
 
     if (!org.orgDatabaseUri?.trim()) {
@@ -561,13 +621,7 @@ export class SetupService {
       (await this.passwordAccepted(dto.temporaryPassword, orgAdmin.passwordHash, 'bcrypt'))
     ) {
       const adminEmail = dto.email.trim().toLowerCase();
-      return {
-        ok: true as const,
-        email: adminEmail,
-        role: 'Admin',
-        mustChangePassword: false,
-        accessToken: await this.issueInviteAccessToken(adminEmail),
-      };
+      return this.finalizeInviteLoginSuccess(dto, adminEmail, 'Admin', false);
     }
 
     const doc = await this.tenant.findOrgAppUserByEmail(uri, dto.email);
@@ -596,13 +650,14 @@ export class SetupService {
         return { ok: false as const, message: 'Invalid credentials.' };
       }
       const employeeEmail = dto.email.trim().toLowerCase();
-      return {
-        ok: true as const,
-        email: employeeEmail,
-        role: typeof doc.role === 'string' ? doc.role : 'Employee',
-        mustChangePassword: false,
-        accessToken: await this.issueInviteAccessToken(employeeEmail),
-      };
+      const employeeRole =
+        typeof doc.role === 'string' ? doc.role : 'Employee';
+      return this.finalizeInviteLoginSuccess(
+        dto,
+        employeeEmail,
+        employeeRole,
+        false,
+      );
     }
 
     // User still has temporary password — verify it
@@ -612,13 +667,13 @@ export class SetupService {
     }
 
     const pendingEmail = dto.email.trim().toLowerCase();
-    return {
-      ok: true as const,
-      email: pendingEmail,
-      role: typeof doc.role === 'string' ? doc.role : 'Employee',
-      mustChangePassword: true,
-      accessToken: await this.issueInviteAccessToken(pendingEmail),
-    };
+    const pendingRole = typeof doc.role === 'string' ? doc.role : 'Employee';
+    return this.finalizeInviteLoginSuccess(
+      dto,
+      pendingEmail,
+      pendingRole,
+      true,
+    );
   }
 
   private generateTemporaryPassword() {
@@ -827,6 +882,7 @@ export class SetupService {
         dto.newPassword,
       );
       await org.save();
+      await this.refreshSessions.revokeAllForUser(payload.orgCode, email);
       return { ok: true as const, message: 'Password updated successfully.' };
     }
 
@@ -844,6 +900,7 @@ export class SetupService {
       passwordHash,
       account.kind,
     );
+    await this.refreshSessions.revokeAllForUser(payload.orgCode, email);
 
     return { ok: true as const, message: 'Password updated successfully.' };
   }
@@ -943,6 +1000,7 @@ export class SetupService {
       passwordHash,
       match,
     );
+    await this.refreshSessions.revokeAllForUser(dto.orgCode, email);
     return { ok: true as const };
   }
 

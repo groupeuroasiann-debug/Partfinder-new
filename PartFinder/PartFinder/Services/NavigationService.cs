@@ -13,6 +13,7 @@ public sealed class NavigationService : INavigationService
         [AppPage.Dashboard]          = typeof(DashboardPage),
         [AppPage.Parts]              = typeof(PartsPage),
         [AppPage.Inventory]          = typeof(InventoryPage),
+        [AppPage.WmsWorkbook]        = typeof(WmsWorkbookPage),
         [AppPage.Alerts]             = typeof(AlertsPage),
         [AppPage.Audit]              = typeof(AuditPage),
         [AppPage.Templates]          = typeof(TemplatesPage),

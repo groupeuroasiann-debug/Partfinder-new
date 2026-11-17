@@ -75,9 +75,12 @@ namespace PartFinder
             services.AddSingleton<LocalUserSecurityStore>();
             services.AddSingleton<AdminSessionStore>();
             services.AddSingleton<LoginCredentialStore>();
+            services.AddSingleton<SavedLoginCredentialStore>();
+            services.AddSingleton<QuickLoginService>();
             services.AddSingleton<ILocalSetupContext, LocalSetupContext>();
             services.AddSingleton<LocalProfileStore>();
             services.AddSingleton<BackendApiClient>();
+            services.AddSingleton<WmsApiClient>();
             services.AddSingleton<WorksheetRelationCleanupService>();
             services.AddSingleton<IOrgUserDirectoryService, MongoOrgUserDirectoryService>();
             services.AddSingleton<ICurrentUserAccessService, CurrentUserAccessService>();
@@ -116,12 +119,14 @@ namespace PartFinder
             services.AddTransient<AlertsViewModel>();
             services.AddTransient<AuditViewModel>();
             services.AddTransient<InventoryViewModel>();
+            services.AddTransient<WmsWorkbookViewModel>();
             services.AddTransient<FavouritesViewModel>();
 
             services.AddTransient<MasterDataPage>();
             services.AddTransient<DashboardPage>();
             services.AddTransient<PartsPage>();
             services.AddTransient<InventoryPage>();
+            services.AddTransient<WmsWorkbookPage>();
             services.AddTransient<AlertsPage>();
             services.AddTransient<AuditPage>();
             services.AddTransient<TemplatesPage>();
