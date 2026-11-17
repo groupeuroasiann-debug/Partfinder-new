@@ -48,6 +48,16 @@ internal static class ApiErrorFormatter
             return "Session expired. Sign out and sign in again.";
         }
 
+        if (trimmed.Contains("/api/wms/", StringComparison.OrdinalIgnoreCase) &&
+            (trimmed.Contains("Cannot GET", StringComparison.OrdinalIgnoreCase) ||
+             trimmed.Contains("Cannot POST", StringComparison.OrdinalIgnoreCase) ||
+             trimmed.Contains("Not Found", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "The license API does not include Warehouse Management routes yet. " +
+                   "Deploy the latest PartFinder-Backend (with the wms module) to the server in LicenseApi:BaseUrl, " +
+                   "or point appsettings.json to a local backend (e.g. http://localhost:3000) while developing.";
+        }
+
         return BritishEnglish.ForDisplay(trimmed.Length > 120 ? trimmed[..120] + "…" : trimmed);
     }
 

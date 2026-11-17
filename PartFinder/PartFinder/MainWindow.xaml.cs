@@ -297,13 +297,50 @@ public sealed partial class MainWindow : Window
 
     private string? TryReadDbUriFromSetup() => LoadSetupState().dbUri?.Trim();
 
-    private void OnRootGridLoadedResumeWizard(object sender, RoutedEventArgs e)
+    private async void OnRootGridLoadedResumeWizard(object sender, RoutedEventArgs e)
     {
         RootGrid.Loaded -= OnRootGridLoadedResumeWizard;
         ApplySetupTitleBarChrome();
+        SetupRoot.Opacity = 1;
+        SetupRoot.Visibility = Visibility.Collapsed;
+        ShellRoot.Visibility = Visibility.Collapsed;
 
         _signedInThisSession = false;
 
+        if (IsSetupCompleted())
+        {
+            var quickLogin = App.Services.GetRequiredService<QuickLoginService>();
+            var result = await quickLogin.TryQuickLoginAsync().ConfigureAwait(true);
+            if (result.Kind == QuickLoginResultKind.Success)
+            {
+                _signedInThisSession = true;
+                _resolvedSignedInEmail = result.Email;
+                _resolvedSignedInRole = null;
+                _loginTotpVerifiedThisSession = false;
+                await ValidateAndShowShellAsync().ConfigureAwait(true);
+                return;
+            }
+
+            if (result.Kind == QuickLoginResultKind.NetworkError)
+            {
+                ShowManualLoginAfterQuickLoginFailure(
+                    "Could not verify saved sign-in. Check your internet connection, then sign in with your password.");
+                return;
+            }
+
+            if (result.Kind == QuickLoginResultKind.InvalidSession)
+            {
+                ShowManualLoginAfterQuickLoginFailure(
+                    "Saved sign-in is no longer valid. Enter your organisation code and password.");
+                return;
+            }
+        }
+
+        ShowManualLoginAfterQuickLoginFailure(null);
+    }
+
+    private void ShowManualLoginAfterQuickLoginFailure(string? message)
+    {
         // Do not pre-fill org code or email — user must enter them each sign-in (privacy).
         _workingOrgCode = string.Empty;
         _lastStatus = null;
@@ -313,10 +350,91 @@ public sealed partial class MainWindow : Window
         InviteLoginEmailBox.Text = string.Empty;
         InviteLoginPasswordBox.Password = string.Empty;
         _step = 1;
-        SetupRoot.Opacity = 1;
         SetupRoot.Visibility = Visibility.Visible;
         ShellRoot.Visibility = Visibility.Collapsed;
+        ValidationText.Text = message ?? string.Empty;
         UpdateStepUi();
+    }
+
+    private async Task PromptSaveLoginInformationIfOfferedAsync(
+        string orgCode,
+        string email,
+        string? refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Save Login Information?",
+            Content =
+                "Would you like PartFinder to securely remember your login on this device so you can access your account automatically next time?",
+            PrimaryButtonText = "Save Login",
+            CloseButtonText = "Not Now",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = RootGrid.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = App.Services.GetRequiredService<SavedLoginCredentialStore>();
+            var existing = store.LoadProfile();
+            if (existing is not null
+                && (!string.Equals(existing.OrgCode, orgCode, StringComparison.Ordinal)
+                    || !string.Equals(existing.Email, email, StringComparison.OrdinalIgnoreCase)))
+            {
+                await RevokeSavedLoginIfAnyAsync().ConfigureAwait(true);
+            }
+
+            store.Save(orgCode, email, refreshToken);
+        }
+        catch
+        {
+            // Saving failed — user can sign in normally next time.
+        }
+    }
+
+    private static async Task RevokeSavedLoginIfAnyAsync()
+    {
+        try
+        {
+            var store = App.Services.GetRequiredService<SavedLoginCredentialStore>();
+            var profile = store.LoadProfile();
+            if (profile?.OrgCode is null || profile.Email is null)
+            {
+                store.Clear();
+                return;
+            }
+
+            var refreshToken = store.TryReadRefreshToken(profile);
+            var deviceId = DeviceIdentityService.GetDeviceId();
+            if (!string.IsNullOrWhiteSpace(refreshToken))
+            {
+                _ = await SetupApiClient
+                    .RevokeSessionAsync(profile.OrgCode, profile.Email, deviceId, refreshToken)
+                    .ConfigureAwait(false);
+            }
+
+            store.Clear();
+        }
+        catch
+        {
+            try
+            {
+                App.Services.GetRequiredService<SavedLoginCredentialStore>().Clear();
+            }
+            catch
+            {
+            }
+        }
     }
 
     private bool _inviteLoginEmailLowercaseGuard;
@@ -668,6 +786,8 @@ public sealed partial class MainWindow : Window
         StopMaintenanceTimer();
         DisableShellTitleBar();
         MaintenanceBlockedRoot.Visibility = Visibility.Collapsed;
+
+        _ = RevokeSavedLoginIfAnyAsync();
 
         // Clear ALL cached state from previous session
         try
@@ -1086,6 +1206,20 @@ public sealed partial class MainWindow : Window
                             var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
                             adminSession.Save(inviteLoginResponse.AccessToken, invitedEmail);
                         }
+
+                        var savedLoginStore = App.Services.GetRequiredService<SavedLoginCredentialStore>();
+                        var existingSaved = savedLoginStore.LoadProfile();
+                        if (existingSaved is not null
+                            && (!string.Equals(existingSaved.OrgCode, trimmed, StringComparison.Ordinal)
+                                || !string.Equals(existingSaved.Email, invitedEmail, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _ = RevokeSavedLoginIfAnyAsync();
+                        }
+
+                        await PromptSaveLoginInformationIfOfferedAsync(
+                            trimmed,
+                            invitedEmail,
+                            inviteLoginResponse?.RefreshToken).ConfigureAwait(true);
 
                         if (!_mustChangePassword)
                         {

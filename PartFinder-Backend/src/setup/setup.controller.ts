@@ -9,6 +9,10 @@ import { SetupTestDatabaseDto } from './dto/setup-test-database.dto';
 import { SetupChangePasswordDto } from './dto/setup-change-password.dto';
 import { SetupForgotPasswordDto } from './dto/setup-forgot-password.dto';
 import { SetupResetPasswordDto } from './dto/setup-reset-password.dto';
+import {
+  SetupRefreshSessionDto,
+  SetupRevokeSessionDto,
+} from './dto/setup-refresh-session.dto';
 import { buildPasswordResetHtmlPage } from '../common/password-reset-page.util';
 import { resolvePasswordResetApiUrl } from '../common/password-reset-link.util';
 import { ConfigService } from '@nestjs/config';
@@ -60,6 +64,16 @@ export class SetupController {
   @Post('invite-login')
   inviteLogin(@Body() dto: SetupInviteLoginDto) {
     return this.setupService.validateInviteLogin(dto);
+  }
+
+  @Post('refresh-session')
+  refreshSession(@Body() dto: SetupRefreshSessionDto) {
+    return this.setupService.refreshDeviceSession(dto);
+  }
+
+  @Post('revoke-session')
+  revokeSession(@Body() dto: SetupRevokeSessionDto) {
+    return this.setupService.revokeDeviceSession(dto);
   }
 
   @Post('change-password')

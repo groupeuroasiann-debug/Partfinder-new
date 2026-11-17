@@ -159,6 +159,9 @@ export class OrganizationsService {
       validUntil: validity.toISOString(),
       maxUsers: org.maxUsers ?? 50,
       maxParts: org.maxParts ?? 100000,
+      wmsEnabled: org.wmsEnabled !== false,
+      maxWmsWarehouses: org.maxWmsWarehouses ?? 10,
+      maxStockOwners: org.maxStockOwners ?? 50,
     };
   }
 
