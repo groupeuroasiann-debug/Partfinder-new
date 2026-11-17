@@ -18,6 +18,7 @@ public sealed class SavedLoginCredentialStore
     };
 
     private readonly string _profilePath;
+    private readonly string _promptStatePath;
 
     public SavedLoginCredentialStore()
     {
@@ -25,6 +26,55 @@ public sealed class SavedLoginCredentialStore
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PartFinder");
         _profilePath = Path.Combine(dir, "saved-login-profile.json");
+        _promptStatePath = Path.Combine(dir, "saved-login-prompt-state.json");
+    }
+
+    /// <summary>
+    /// Whether to show the "Save Login Information?" dialog for this email (once per device).
+    /// </summary>
+    public bool ShouldOfferSaveLoginPrompt(string email)
+    {
+        var normalized = NormalizeEmail(email);
+        if (normalized is null)
+        {
+            return false;
+        }
+
+        if (WasSaveLoginPromptAnswered(normalized))
+        {
+            return false;
+        }
+
+        var profile = LoadProfile();
+        if (profile is not null
+            && string.Equals(NormalizeEmail(profile.Email), normalized, StringComparison.Ordinal)
+            && TryReadRefreshToken(profile) is not null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool WasSaveLoginPromptAnswered(string normalizedEmail) =>
+        LoadPromptState().AnsweredEmails.Contains(normalizedEmail, StringComparer.Ordinal);
+
+    public void MarkSaveLoginPromptAnswered(string email)
+    {
+        var normalized = NormalizeEmail(email);
+        if (normalized is null)
+        {
+            return;
+        }
+
+        var state = LoadPromptState();
+        if (state.AnsweredEmails.Contains(normalized, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        state.AnsweredEmails.Add(normalized);
+        PersistPromptState(state);
     }
 
     public bool HasSavedProfile()
@@ -57,6 +107,11 @@ public sealed class SavedLoginCredentialStore
 
     public string? TryReadRefreshToken(SavedLoginProfile profile)
     {
+        if (string.IsNullOrWhiteSpace(profile.OrgCode) || string.IsNullOrWhiteSpace(profile.Email))
+        {
+            return null;
+        }
+
         try
         {
             var vault = new PasswordVault();
@@ -175,6 +230,46 @@ public sealed class SavedLoginCredentialStore
 
     private static string BuildCredentialUserName(string orgCode, string email) =>
         $"{orgCode.Trim()}|{email.Trim().ToLowerInvariant()}";
+
+    private static string? NormalizeEmail(string? email)
+    {
+        var trimmed = email?.Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private SaveLoginPromptState LoadPromptState()
+    {
+        try
+        {
+            if (!File.Exists(_promptStatePath))
+            {
+                return new SaveLoginPromptState();
+            }
+
+            return JsonSerializer.Deserialize<SaveLoginPromptState>(
+                       File.ReadAllText(_promptStatePath),
+                       Json)
+                   ?? new SaveLoginPromptState();
+        }
+        catch
+        {
+            return new SaveLoginPromptState();
+        }
+    }
+
+    private void PersistPromptState(SaveLoginPromptState state)
+    {
+        var dir = Path.GetDirectoryName(_promptStatePath)!;
+        Directory.CreateDirectory(dir);
+        var tmp = _promptStatePath + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(state, Json));
+        File.Move(tmp, _promptStatePath, overwrite: true);
+    }
+
+    private sealed class SaveLoginPromptState
+    {
+        public List<string> AnsweredEmails { get; set; } = [];
+    }
 }
 
 public sealed class SavedLoginProfile
