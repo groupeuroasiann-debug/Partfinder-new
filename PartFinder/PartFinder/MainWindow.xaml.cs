@@ -369,6 +369,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var store = App.Services.GetRequiredService<SavedLoginCredentialStore>();
+        if (!store.ShouldOfferSaveLoginPrompt(email))
+        {
+            return;
+        }
+
         var dialog = new ContentDialog
         {
             Title = "Save Login Information?",
@@ -381,6 +387,8 @@ public sealed partial class MainWindow : Window
         };
 
         var result = await dialog.ShowAsync();
+        store.MarkSaveLoginPromptAnswered(email);
+
         if (result != ContentDialogResult.Primary)
         {
             return;
@@ -388,7 +396,6 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var store = App.Services.GetRequiredService<SavedLoginCredentialStore>();
             var existing = store.LoadProfile();
             if (existing is not null
                 && (!string.Equals(existing.OrgCode, orgCode, StringComparison.Ordinal)
@@ -782,10 +789,7 @@ public sealed partial class MainWindow : Window
         var (status, statusErr) = await SetupApiClient.StatusAsync(orgCode);
         if (status is null)
         {
-            var api = LicenseApiClient.GetBaseUrl();
-            var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
-            ShowSubscriptionBlocked(
-                $"Active internet is required. Cannot reach the API at {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
+            ShowSubscriptionBlocked(SetupApiClient.FormatStatusFailureMessage(statusErr));
             return;
         }
 
@@ -1404,10 +1408,7 @@ public sealed partial class MainWindow : Window
                 var (status, statusErr) = await SetupApiClient.StatusAsync(trimmed);
                 if (status is null)
                 {
-                    var api = LicenseApiClient.GetBaseUrl();
-                    var detail = string.IsNullOrWhiteSpace(statusErr) ? "" : " " + statusErr.Trim();
-                    ShowValidationMessage(
-                        $"Active internet is required. Cannot reach {api}.{detail} Check your connection and LicenseApi:BaseUrl in appsettings.json (default: https://backend.partfinder.store).");
+                    ShowValidationMessage(SetupApiClient.FormatStatusFailureMessage(statusErr));
                     return;
                 }
 

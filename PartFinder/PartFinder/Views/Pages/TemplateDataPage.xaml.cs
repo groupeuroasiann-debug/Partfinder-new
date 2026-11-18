@@ -20,6 +20,8 @@ public sealed partial class TemplateDataPage : Page
     private const double WidthSafetyMargin = 10;
 
     private readonly TemplateDataViewModel _viewModel;
+    private readonly CatalogBrowseSessionStore _catalogSession;
+    private int _gridPageIndex;
     private readonly TextBlock _measureHeader = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap };
     private readonly TextBlock _measureCell = new() { FontSize = 12, TextWrapping = TextWrapping.NoWrap };
     private string? _pendingTemplateId;
@@ -34,7 +36,9 @@ public sealed partial class TemplateDataPage : Page
     {
         InitializeComponent();
         _viewModel = App.Services.GetRequiredService<TemplateDataViewModel>();
+        _catalogSession = App.Services.GetRequiredService<CatalogBrowseSessionStore>();
         DataContext = _viewModel;
+        Unloaded += (_, _) => PersistPageIndex();
         Loaded += (_, _) =>
         {
             if (!_viewModel.IsLoading && _viewModel.Columns.Count > 0)
@@ -61,7 +65,23 @@ public sealed partial class TemplateDataPage : Page
                 }
             }
         };
-        _viewModel.ColumnFiltersChanged += (_, _) => RefreshDataRowsOnly();
+        _viewModel.ColumnFiltersChanged += OnColumnFiltersChanged;
+    }
+
+    private async void OnColumnFiltersChanged(object? sender, EventArgs e)
+    {
+        _gridPageIndex = 0;
+        PersistPageIndex();
+        var templateId = _pendingTemplateId ?? _viewModel.TemplateId;
+        if (!string.IsNullOrWhiteSpace(templateId))
+        {
+            await _viewModel.LoadRowsPageAsync(
+                templateId,
+                _gridPageIndex,
+                TemplateDataViewModel.PageSize).ConfigureAwait(true);
+        }
+
+        RebuildGrid();
     }
 
     private void ScheduleColumnFilterApply(string fieldKey, string text)
@@ -96,7 +116,122 @@ public sealed partial class TemplateDataPage : Page
         _pendingTemplateId = templateId;
         _columnFilterDrafts.Clear();
         _columnFilterFocusKey = null;
-        _ = _viewModel.LoadAsync(templateId);
+        RestorePageIndexFromSession(templateId);
+        _ = _viewModel.LoadAsync(templateId, _gridPageIndex);
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        PersistPageIndex();
+        base.OnNavigatedFrom(e);
+    }
+
+    private void RestorePageIndexFromSession(string templateId)
+    {
+        var state = _catalogSession.GetTemplateDataBrowseState(templateId);
+        _gridPageIndex = Math.Max(0, state.PageIndex);
+    }
+
+    private void PersistPageIndex()
+    {
+        var templateId = _pendingTemplateId ?? _viewModel.TemplateId;
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return;
+        }
+
+        _catalogSession.GetTemplateDataBrowseState(templateId).PageIndex = _gridPageIndex;
+    }
+
+    private async void OnTemplateDataPrevPageClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanGoToAdjacentPage(forward: false))
+        {
+            return;
+        }
+
+        var templateId = _pendingTemplateId ?? _viewModel.TemplateId;
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return;
+        }
+
+        _gridPageIndex--;
+        await _viewModel.LoadRowsPageAsync(templateId, _gridPageIndex, TemplateDataViewModel.PageSize)
+            .ConfigureAwait(true);
+        PersistPageIndex();
+        RebuildGrid();
+    }
+
+    private async void OnTemplateDataNextPageClick(object sender, RoutedEventArgs e)
+    {
+        if (!CanGoToAdjacentPage(forward: true))
+        {
+            return;
+        }
+
+        var templateId = _pendingTemplateId ?? _viewModel.TemplateId;
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return;
+        }
+
+        _gridPageIndex++;
+        await _viewModel.LoadRowsPageAsync(templateId, _gridPageIndex, TemplateDataViewModel.PageSize)
+            .ConfigureAwait(true);
+        PersistPageIndex();
+        RebuildGrid();
+    }
+
+    private bool CanGoToAdjacentPage(bool forward)
+    {
+        var visibleCount = _viewModel.FilteredRows.Count;
+        var totalRows = _viewModel.GetPagerTotalRowCount(visibleCount);
+        if (totalRows <= 0)
+        {
+            return false;
+        }
+
+        var pageCount = Math.Max(1, (totalRows + TemplateDataViewModel.PageSize - 1) / TemplateDataViewModel.PageSize);
+        return forward
+            ? _gridPageIndex < pageCount - 1
+            : _gridPageIndex > 0;
+    }
+
+    private void UpdatePager(int visibleCount)
+    {
+        if (TemplateDataPageStatusText is null
+            || TemplateDataPrevPageButton is null
+            || TemplateDataNextPageButton is null)
+        {
+            return;
+        }
+
+        var totalRows = _viewModel.GetPagerTotalRowCount(visibleCount);
+        var pageCount = Math.Max(1, (totalRows + TemplateDataViewModel.PageSize - 1) / TemplateDataViewModel.PageSize);
+        if (visibleCount > 0 && _gridPageIndex >= pageCount)
+        {
+            _gridPageIndex = pageCount - 1;
+        }
+
+        if (_gridPageIndex < 0)
+        {
+            _gridPageIndex = 0;
+        }
+
+        if (totalRows == 0)
+        {
+            TemplateDataPageStatusText.Text = "No rows";
+        }
+        else
+        {
+            var start = _gridPageIndex * TemplateDataViewModel.PageSize + 1;
+            var end = Math.Min(totalRows, (_gridPageIndex + 1) * TemplateDataViewModel.PageSize);
+            TemplateDataPageStatusText.Text = $"Showing {start}–{end} of {totalRows:N0}";
+        }
+
+        TemplateDataPrevPageButton.IsEnabled = _gridPageIndex > 0;
+        TemplateDataNextPageButton.IsEnabled = totalRows > 0 && _gridPageIndex < pageCount - 1;
     }
 
     private void OnBackClick(object sender, RoutedEventArgs e)
@@ -226,12 +361,14 @@ public sealed partial class TemplateDataPage : Page
                 Foreground = (Brush)Application.Current.Resources["TextSecondaryBrush"],
                 IsTextSelectionEnabled = true,
             };
+            UpdatePager(0);
             return;
         }
 
         var colCount = _viewModel.Columns.Count;
         var visibleRows = _viewModel.FilteredRows;
         var rowCount = visibleRows.Count;
+        UpdatePager(rowCount);
         var columnWidths = _viewModel.Columns
             .Select(c => ComputeColumnWidth(c, visibleRows))
             .ToArray();

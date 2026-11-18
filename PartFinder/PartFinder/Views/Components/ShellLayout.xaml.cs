@@ -18,13 +18,16 @@ public sealed partial class ShellLayout : UserControl
 {
     private const double TopNavScrollStep = 140;
 
+    private readonly ShellViewModel _shellViewModel;
+
     public ShellLayout()
     {
         InitializeComponent();
-        var vm = App.Services.GetRequiredService<ShellViewModel>();
-        DataContext = vm;
-        vm.NavigationItems.CollectionChanged += OnNavigationItemsCollectionChanged;
+        _shellViewModel = App.Services.GetRequiredService<ShellViewModel>();
+        DataContext = _shellViewModel;
+        _shellViewModel.NavigationItems.CollectionChanged += OnNavigationItemsCollectionChanged;
         Loaded += OnShellLayoutLoaded;
+        Unloaded += OnShellLayoutUnloaded;
         AppTitleBarLayout.LayoutUpdated += OnAppTitleBarLayoutUpdated;
     }
 
@@ -160,6 +163,13 @@ public sealed partial class ShellLayout : UserControl
         _ = navigation.Navigate(page);
     }
 
+    private void OnShellLayoutUnloaded(object sender, RoutedEventArgs e)
+    {
+        Unloaded -= OnShellLayoutUnloaded;
+        AppTitleBarLayout.LayoutUpdated -= OnAppTitleBarLayoutUpdated;
+        _shellViewModel.NavigationItems.CollectionChanged -= OnNavigationItemsCollectionChanged;
+    }
+
     private void OnShellLayoutLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnShellLayoutLoaded;
@@ -190,7 +200,7 @@ public sealed partial class ShellLayout : UserControl
 
     private void OnTopNavScrollViewerViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
     {
-        if (e.IsIntermediate)
+        if (e.IsIntermediate || !CanUpdateTopNavScrollAffordances())
         {
             return;
         }
@@ -213,16 +223,31 @@ public sealed partial class ShellLayout : UserControl
 
     private void ScheduleTopNavScrollAffordanceUpdate()
     {
+        if (!CanUpdateTopNavScrollAffordances())
+        {
+            return;
+        }
+
         _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
-            UpdateTopNavScrollAffordances();
-            _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, UpdateTopNavScrollAffordances);
+            if (CanUpdateTopNavScrollAffordances())
+            {
+                UpdateTopNavScrollAffordances();
+            }
         });
+    }
+
+    private bool CanUpdateTopNavScrollAffordances()
+    {
+        return IsLoaded
+            && XamlRoot is not null
+            && Visibility == Visibility.Visible
+            && TopNavScrollViewer is not null;
     }
 
     private void UpdateTopNavScrollAffordances()
     {
-        if (TopNavScrollViewer is null)
+        if (!CanUpdateTopNavScrollAffordances())
         {
             return;
         }
@@ -231,14 +256,36 @@ public sealed partial class ShellLayout : UserControl
         var atStart = TopNavScrollViewer.HorizontalOffset <= 1;
         var atEnd = TopNavScrollViewer.HorizontalOffset >= TopNavScrollViewer.ScrollableWidth - 1;
 
-        TopNavScrollLeftButton.Visibility = canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed;
-        TopNavScrollRightButton.Visibility = canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed;
-        TopNavFadeLeft.Visibility = canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed;
-        TopNavFadeRight.Visibility = canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed;
+        SetChromeVisibility(TopNavScrollLeftButton, canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed);
+        SetChromeVisibility(TopNavScrollRightButton, canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed);
+        SetChromeVisibility(TopNavFadeLeft, canScroll && !atStart ? Visibility.Visible : Visibility.Collapsed);
+        SetChromeVisibility(TopNavFadeRight, canScroll && !atEnd ? Visibility.Visible : Visibility.Collapsed);
+    }
+
+    private static void SetChromeVisibility(FrameworkElement element, Visibility visibility)
+    {
+        if (element.Visibility == visibility)
+        {
+            return;
+        }
+
+        try
+        {
+            element.Visibility = visibility;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // WinUI may throw if a deferred update runs while the shell is being torn down.
+        }
     }
 
     private void OnAppTitleBarLayoutUpdated(object? sender, object e)
     {
+        if (!CanUpdateTopNavScrollAffordances())
+        {
+            return;
+        }
+
         NotifyTitleBarRegionsChanged();
         ScheduleTopNavScrollAffordanceUpdate();
     }
