@@ -24,7 +24,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
     private const double GridCellTextWidth = 160d;
     private const double GridCellHorizontalPadding = 10d;
     private const double ActionPanelWidth = 360;
-    private const int MasterDataPageSize = 50;
+    private const int MasterDataPageSize = MasterDataViewModel.CatalogPageSize;
     private int _gridPageIndex;
     private bool _rebuildSpreadsheetScheduled;
     private bool _connectorUpdateQueued;
@@ -238,6 +238,12 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         }
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        PersistGridBrowseState();
+        base.OnNavigatedFrom(e);
+    }
+
     public void ReceiveNavigationParameter(object? parameter)
     {
         if (parameter is MasterDataNavigationArgs args)
@@ -285,7 +291,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
         await _viewModel.ApplyLinkedBrowseTemplateAsync(templateId).ConfigureAwait(true);
         _displayedTemplateId = templateId;
-        _gridPageIndex = 0;
+        RestorePageIndexFromSession();
         RebuildSpreadsheet();
     }
 
@@ -376,15 +382,22 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
                 return;
             }
 
-            RestorePageIndexFromSession();
+            // Do not RestorePageIndexFromSession here — it races with Next/Prev and snaps the
+            // grid back to the previous saved page while a new page load is completing.
             RebuildSpreadsheet();
         }
     }
 
-    private void OnColumnFiltersChanged(object? sender, EventArgs e)
+    private async void OnColumnFiltersChanged(object? sender, EventArgs e)
     {
         _gridPageIndex = 0;
+        WriteBrowseState(includeScrollOffsets: false);
         _refreshDataRowsOnly = _viewModel is { IsEditMode: false };
+        if (_viewModel?.IsCatalogReadOnly == true)
+        {
+            await _viewModel.LoadCatalogRowsPageAsync(0, MasterDataPageSize).ConfigureAwait(true);
+        }
+
         ScheduleRebuildSpreadsheet();
     }
 
@@ -504,33 +517,58 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
     private async void OnMasterDataPrevPageClick(object sender, RoutedEventArgs e)
     {
-        if (_gridPageIndex <= 0)
+        if (!CanGoToAdjacentPage(forward: false))
         {
             return;
         }
 
         _gridPageIndex--;
+        WriteBrowseState(includeScrollOffsets: false);
         if (_viewModel?.IsCatalogReadOnly == true)
         {
             await _viewModel.LoadCatalogRowsPageAsync(_gridPageIndex, MasterDataPageSize).ConfigureAwait(true);
         }
 
         _suspendBrowsePersist = false;
-        WriteBrowseState(includeScrollOffsets: true);
         RebuildSpreadsheet();
     }
 
     private async void OnMasterDataNextPageClick(object sender, RoutedEventArgs e)
     {
+        if (!CanGoToAdjacentPage(forward: true))
+        {
+            return;
+        }
+
         _gridPageIndex++;
+        WriteBrowseState(includeScrollOffsets: false);
         if (_viewModel?.IsCatalogReadOnly == true)
         {
             await _viewModel.LoadCatalogRowsPageAsync(_gridPageIndex, MasterDataPageSize).ConfigureAwait(true);
         }
 
         _suspendBrowsePersist = false;
-        WriteBrowseState(includeScrollOffsets: true);
         RebuildSpreadsheet();
+    }
+
+    private bool CanGoToAdjacentPage(bool forward)
+    {
+        if (_viewModel is null)
+        {
+            return false;
+        }
+
+        var visibleCount = _viewModel.Rows.Count(_viewModel.IsRowVisible);
+        var totalRows = _viewModel.GetPagerTotalRowCount(visibleCount);
+        if (totalRows <= 0)
+        {
+            return false;
+        }
+
+        var pageCount = Math.Max(1, (totalRows + MasterDataPageSize - 1) / MasterDataPageSize);
+        return forward
+            ? _gridPageIndex < pageCount - 1
+            : _gridPageIndex > 0;
     }
 
     private void ScheduleRebuildSpreadsheet()

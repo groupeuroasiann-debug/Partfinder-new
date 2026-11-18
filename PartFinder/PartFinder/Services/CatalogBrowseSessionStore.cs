@@ -37,6 +37,19 @@ public sealed class CatalogBrowseSessionStore
         return state;
     }
 
+    /// <summary>Template Data view-only grid (per template id).</summary>
+    public CatalogGridBrowseState GetTemplateDataBrowseState(string templateId)
+    {
+        var key = $"template-data:{templateId}";
+        if (!_templateBrowse.TryGetValue(key, out var state))
+        {
+            state = new CatalogGridBrowseState { TemplateId = templateId };
+            _templateBrowse[key] = state;
+        }
+
+        return state;
+    }
+
     private static string SheetCacheKey(MasterDataSurfaceMode mode, string templateId) =>
         $"{(int)mode}:{templateId}";
 
