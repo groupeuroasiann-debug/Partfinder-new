@@ -1,3 +1,4 @@
+import './test-utils/mongodb-atlas-dns';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
