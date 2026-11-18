@@ -10,6 +10,7 @@ namespace PartFinder.ViewModels;
 
 public sealed partial class MasterDataViewModel : ViewModelBase
 {
+    public const int CatalogPageSize = 50;
     private readonly ITemplateSchemaService _templateSchema;
     private readonly IMasterDataRecordsService _records;
     private readonly IContextActionsService _contextActions;
@@ -870,7 +871,9 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
             if (IsCatalogReadOnly)
             {
-                await LoadCatalogRowsPageAsync(0, 50, loadCt).ConfigureAwait(true);
+                var browse = _catalogSession.GetTemplateBrowseState(SurfaceMode, loadForId);
+                var pageIndex = Math.Max(0, browse.PageIndex);
+                await LoadCatalogRowsPageAsync(pageIndex, CatalogPageSize, loadCt).ConfigureAwait(true);
             }
             else
             {

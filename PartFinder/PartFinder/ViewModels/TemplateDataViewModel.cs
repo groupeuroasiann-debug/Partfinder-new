@@ -6,6 +6,8 @@ namespace PartFinder.ViewModels;
 
 public sealed partial class TemplateDataViewModel : ViewModelBase
 {
+    public const int PageSize = 50;
+
     private readonly ITemplateSchemaService _templateSchema;
     private readonly IMasterDataRecordsService _records;
     private readonly Dictionary<string, string> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
@@ -30,6 +32,9 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? _statusMessage;
+
+    [ObservableProperty]
+    private int _totalRowCount;
 
     public IReadOnlyList<TemplateFieldDefinition> Columns { get; private set; } = [];
 
@@ -89,10 +94,9 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
         return true;
     }
 
-    public async Task LoadAsync(string templateId, CancellationToken cancellationToken = default)
+    public async Task LoadAsync(string templateId, int pageIndex = 0, CancellationToken cancellationToken = default)
     {
         TemplateId = templateId;
-        _columnFilters.Clear();
         IsLoading = true;
         StatusMessage = null;
         try
@@ -104,6 +108,7 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
                 TemplateName = "Template";
                 Columns = [];
                 _rows = [];
+                TotalRowCount = 0;
                 StatusMessage = "Template not found.";
                 OnPropertyChanged(nameof(Columns));
                 OnPropertyChanged(nameof(Rows));
@@ -115,22 +120,7 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
             Columns = template.Fields.ToList();
             OnPropertyChanged(nameof(Columns));
 
-            var rowRecords = await _records.GetStoredRowsAsync(templateId, cancellationToken).ConfigureAwait(true);
-            if (rowRecords.Count == 0)
-            {
-                rowRecords = await _records.GetRowsAsync(templateId, cancellationToken).ConfigureAwait(true);
-            }
-            _rows = rowRecords
-                .OrderBy(r => r.RowOrder)
-                .Select(r => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(r.Values, StringComparer.Ordinal))
-                .ToList();
-            OnPropertyChanged(nameof(Rows));
-            OnPropertyChanged(nameof(FilteredRows));
-
-            if (Rows.Count == 0)
-            {
-                StatusMessage = "No rows yet for this template.";
-            }
+            await LoadRowsPageAsync(templateId, pageIndex, PageSize, cancellationToken).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -138,6 +128,7 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
             StatusMessage = "Could not load template data.";
             Columns = [];
             _rows = [];
+            TotalRowCount = 0;
             OnPropertyChanged(nameof(Columns));
             OnPropertyChanged(nameof(Rows));
             OnPropertyChanged(nameof(FilteredRows));
@@ -147,4 +138,41 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
             IsLoading = false;
         }
     }
+
+    public async Task LoadRowsPageAsync(
+        string templateId,
+        int pageIndex,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageSize <= 0)
+        {
+            return;
+        }
+
+        var skip = Math.Max(0, pageIndex) * pageSize;
+        var (rowRecords, total) = await _records
+            .GetRowsPageAsync(templateId, skip, pageSize, cancellationToken)
+            .ConfigureAwait(true);
+
+        TotalRowCount = total;
+        _rows = rowRecords
+            .OrderBy(r => r.RowOrder)
+            .Select(r => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(r.Values, StringComparer.Ordinal))
+            .ToList();
+        OnPropertyChanged(nameof(Rows));
+        OnPropertyChanged(nameof(FilteredRows));
+
+        if (TotalRowCount == 0)
+        {
+            StatusMessage = "No rows yet for this template.";
+        }
+        else
+        {
+            StatusMessage = null;
+        }
+    }
+
+    public int GetPagerTotalRowCount(int visibleRowCount) =>
+        TotalRowCount > 0 ? TotalRowCount : visibleRowCount;
 }
