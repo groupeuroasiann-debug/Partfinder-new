@@ -150,7 +150,11 @@ describe('WmsSessionGuard', () => {
   it('rejects employee with no operator grants', async () => {
     const { guard } = makeGuard({
       admin: false,
-      grants: { warehouseIds: [], ownerIds: [] },
+      grants: {
+  warehouseIds: [],
+  ownerIds: [],
+  raw: null,
+},
     });
     await expect(
       guard.canActivate(

@@ -1,3 +1,4 @@
+
 /**
  * Phase 03A.2 staging LAB evidence (MongoMemoryReplSet + in-process services).
  * NOT a named production/staging host — satisfies math, idempotency, preflight probes only.
@@ -22,6 +23,9 @@ import { WmsInventoryReadService } from './services/wms-inventory-read.service';
 import type { WmsRequestContext } from './wms.types';
 
 describe('03A.2 staging lab evidence', () => {
+  // The lab replica set may take time to start or shut down.
+  jest.setTimeout(240_000);
+
   let replSet: MongoMemoryReplSet;
   let moduleRef: TestingModule;
   let tenantMongo: TenantMongoService;
@@ -113,17 +117,22 @@ describe('03A.2 staging lab evidence', () => {
     skuId = '01HWMSSTAGINGFILTER';
 
     const conn = await collections.connection(tenantUri);
-    await conn.db.collection('wms_warehouses').insertOne({
+    const tenantDb = conn.db;
+    if (!tenantDb) {
+      throw new Error('Tenant MongoDB database handle is unavailable');
+    }
+
+    await tenantDb.collection('wms_warehouses').insertOne({
       _id: new Types.ObjectId(whId),
       code: 'WH-STG-LAB',
       name: 'Staging Lab',
       isActive: true,
     });
-    await conn.db.collection('wms_stock_owners').insertMany([
+    await tenantDb.collection('wms_stock_owners').insertMany([
       { _id: new Types.ObjectId(ownerA), code: 'CLIENT-A', name: 'Client A', isActive: true },
       { _id: new Types.ObjectId(ownerB), code: 'CLIENT-B', name: 'Client B', isActive: true },
     ]);
-    await conn.db.collection('wms_locations').insertMany([
+    await tenantDb.collection('wms_locations').insertMany([
       {
         _id: new Types.ObjectId(recvLoc),
         warehouseId: whId,
@@ -139,14 +148,14 @@ describe('03A.2 staging lab evidence', () => {
         isActive: true,
       },
     ]);
-    await conn.db.collection('wms_skus').insertOne({
+    await tenantDb.collection('wms_skus').insertOne({
       skuId,
       displayName: 'Filter',
       primaryUom: 'EA',
       status: 'active',
     });
 
-    await conn.db.collection('wms_operator_grants').insertMany([
+    await tenantDb.collection('wms_operator_grants').insertMany([
       {
         email: 'operator-a@staging-lab.test',
         warehouseIds: [whId],
@@ -327,4 +336,4 @@ describe('03A.2 staging lab evidence', () => {
     const outPath = join(outDir, '03a2-lab-acceptance-evidence.json');
     writeFileSync(outPath, JSON.stringify(evidence, null, 2), 'utf8');
   }, 120_000);
-}, 240_000);
+});

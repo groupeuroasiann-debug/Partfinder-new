@@ -55,7 +55,7 @@ describe('WmsSetupService operator scope lists', () => {
       [],
     );
     const result = await service.listWarehouses(ctxBase());
-    expect(result.items.map((w) => w.id)).toEqual(['wh-a']);
+    expect(result.items.map((w: { id: string }) => w.id)).toEqual(['wh-a']);
   });
 
   it('filters stock owners to granted ids for operators', async () => {
@@ -67,6 +67,6 @@ describe('WmsSetupService operator scope lists', () => {
       ],
     );
     const result = await service.listStockOwners(ctxBase());
-    expect(result.items.map((o) => o.id)).toEqual(['own-a']);
+    expect(result.items.map((o: { id: string }) => o.id)).toEqual(['own-a']);
   });
 });
