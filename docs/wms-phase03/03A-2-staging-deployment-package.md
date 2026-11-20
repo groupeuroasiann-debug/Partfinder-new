@@ -27,6 +27,46 @@
 
 ---
 
+## 1.1 Vercel staging backend (2026-11-19)
+
+| Field | Value |
+|-------|--------|
+| Vercel team | `groupeuroasiann-debug` |
+| Project | **`partfinder-backend-staging`** (≠ `partfinder-new`) |
+| Linked directory | `PartFinder-Staging-Deploy\PartFinder-Backend` |
+| Entry | `api/index.js` → `dist/main.js` (Nest global prefix `/api`) |
+| Node | **24.x** (match production) |
+| Framework | NestJS (not static `public/` output) |
+
+**Initial deploy env (staging project only):**
+
+```env
+WMS_DEPLOYMENT_TIER=staging
+WMS_STAGING_STOCK_POSTING=false
+WMS_LIVE_STOCK_POSTING=false
+JWT_SECRET=<staging-only secret — not production>
+MONGODB_URI=<platform Atlas URI — org routing unchanged>
+```
+
+After isolation verified: set `WMS_STAGING_STOCK_POSTING=true` on **this project only**, redeploy.
+
+**Bootstrap (PowerShell, from repo):**
+
+```powershell
+$env:WMS_STAGING_BACKEND_DIR = 'C:\Users\user\Desktop\PartFinder-Staging-Deploy\PartFinder-Backend'
+.\PartFinder-Backend\scripts\vercel-staging-env-bootstrap.ps1
+cd $env:WMS_STAGING_BACKEND_DIR
+vercel project update partfinder-backend-staging --framework nestjs --auto-detect output-directory --node-version 24.x -y
+vercel deploy --yes
+# then: vercel deploy --prod --yes  (staging project production alias only)
+```
+
+**WinUI:** set `LicenseApi:BaseUrl` to the staging deployment URL (not `backend.partfinder.store`). Optional template: `PartFinder/PartFinder/appsettings.Staging.json` (copy beside exe or merge into Development for QA).
+
+**Deployment protection:** Vercel SSO on `*.vercel.app` blocks WinUI until SSO is disabled for this project or a custom domain is attached.
+
+---
+
 ## 2. NestJS staging environment (template)
 
 Copy from `PartFinder-Backend/.env.example`. Set on the **staging host only**:

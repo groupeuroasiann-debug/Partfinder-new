@@ -14,6 +14,12 @@ public partial class WmsWorkbookViewModel
     {
         var profile = await _wms.GetSessionProfileAsync().ConfigureAwait(true);
         if (!profile.Ok || profile.Data is null) return;
+        HeaderRoleDisplay = profile.Data.IsWmsAdmin
+            ? "WMS Administrator"
+            : string.IsNullOrWhiteSpace(profile.Data.Role)
+                ? "Operator"
+                : profile.Data.Role;
+        OnPropertyChanged(nameof(HeaderRoleDisplay));
         CanOperateReceiving = profile.Data.IsWmsAdmin || profile.Data.OperatorPermissions.Receiving;
         CanOperateQc = profile.Data.IsWmsAdmin || profile.Data.OperatorPermissions.Qc;
         CanOperatePutaway = profile.Data.IsWmsAdmin || profile.Data.OperatorPermissions.Putaway;

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.Input;
 using PartFinder.Models;
 using PartFinder.Services;
@@ -31,7 +32,13 @@ public partial class WmsWorkbookViewModel
     {
         NavItems.Clear();
         AddNavGroup("Overview");
-        AddNav(WmsWorkbookSections.Dashboard, "Dashboard", "Connection & diagnostics", true);
+        AddNav(
+            WmsWorkbookSections.Dashboard,
+            "Dashboard",
+            "Overview & connectivity",
+            true,
+            iconGlyph: "\uE9F9",
+            tooltip: "Warehouse overview, API health, and receiving workload counts.");
 
         AddNavGroup("Warehouse Setup");
         AddNav(WmsWorkbookSections.WarehouseMaster, "Warehouse Master", "Sites & codes", true);
@@ -61,14 +68,62 @@ public partial class WmsWorkbookViewModel
         AddNav(WmsWorkbookSections.MappingErrors, "SKU mapping errors", "Unmapped legacy rows", true);
 
         AddNavGroup("Receiving (03A)");
-        AddNav(WmsWorkbookSections.ExpectedReceipts, "Expected receipts", "ASN / PO expected", true);
-        AddNav(WmsWorkbookSections.GoodsReceiving, "Goods receiving", "Physical receipt", true);
-        AddNav(WmsWorkbookSections.ReceivedItemDetails, "Received item details", "Lots & serials", true);
-        AddNav(WmsWorkbookSections.QualityControl, "Quality control", "Pending / accept / reject", true);
-        AddNav(WmsWorkbookSections.PutawayTasks, "Put-away tasks", "Receiving → storage", true);
-        AddNav(WmsWorkbookSections.LocationAssignment, "Location assignment", "Bin targets", true);
-        AddNav(WmsWorkbookSections.ReceivingHistory, "Receiving history", "Audit trail", true);
-        AddNav(WmsWorkbookSections.ReceivingDiscrepancies, "Discrepancies", "Short / over / damage", true);
+        AddNav(
+            WmsWorkbookSections.ExpectedReceipts,
+            "Expected Receipts",
+            "Register inbound ASNs",
+            true,
+            iconGlyph: "\uE8F1",
+            tooltip: "Create a record of goods expected to arrive at the selected warehouse.");
+        AddNav(
+            WmsWorkbookSections.GoodsReceiving,
+            "Goods Receiving",
+            "Confirm physical receipt",
+            true,
+            iconGlyph: "\uE7B8",
+            tooltip: "Record quantities received against an expected receipt.");
+        AddNav(
+            WmsWorkbookSections.ReceivedItemDetails,
+            "Received Item Details",
+            "Lines, lots, serials",
+            true,
+            iconGlyph: "\uE8FD",
+            tooltip: "Inspect receipt lines and identifiers.");
+        AddNav(
+            WmsWorkbookSections.QualityControl,
+            "Quality Control",
+            "Accept or block stock",
+            true,
+            iconGlyph: "\uE73E",
+            tooltip: "Record QC accepted and rejected quantities (SKU = stock keeping unit).");
+        AddNav(
+            WmsWorkbookSections.PutawayTasks,
+            "Put-away Tasks",
+            "Move stock to bins",
+            true,
+            iconGlyph: "\uE8C8",
+            tooltip: "Complete put-away from receiving to storage.");
+        AddNav(
+            WmsWorkbookSections.LocationAssignment,
+            "Location Assignment",
+            "Choose storage bins",
+            true,
+            iconGlyph: "\uE707",
+            tooltip: "Assign accepted stock to authorized storage locations.");
+        AddNav(
+            WmsWorkbookSections.ReceivingHistory,
+            "Receiving History",
+            "Read-only audit",
+            true,
+            iconGlyph: "\uE81C",
+            tooltip: "History of receiving transactions.");
+        AddNav(
+            WmsWorkbookSections.ReceivingDiscrepancies,
+            "Discrepancies",
+            "Short, over, damage",
+            true,
+            iconGlyph: "\uE783",
+            tooltip: "Flagged shortages, overages, and damaged goods.");
 
         AddNavGroup("Operations (roadmap)");
         AddNav(WmsWorkbookSections.Orders, "Orders", "", false, "Phase 03B");
@@ -80,7 +135,15 @@ public partial class WmsWorkbookViewModel
         AddNav(WmsWorkbookSections.Reports, "Reports", "", false, "Phase 06");
 
         AddNavGroup("Administration");
-        AddNav(WmsWorkbookSections.Administration, "Administration", "Health & access (Phase 07)", true);
+        AddNav(
+            WmsWorkbookSections.Administration,
+            "Administration",
+            "Health & operator grants",
+            true,
+            iconGlyph: "\uE716",
+            tooltip: "Staging gate, health probes, and WMS operator permissions.");
+        UpdateNavSelection();
+        UpdateSectionChrome(SelectedSectionId);
     }
 
     private void AddNavGroup(string title) =>
@@ -92,7 +155,9 @@ public partial class WmsWorkbookViewModel
         string subtitle,
         bool operational,
         string? roadmapPhase = null,
-        string? description = null)
+        string? description = null,
+        string iconGlyph = "\uE81C",
+        string? tooltip = null)
     {
         NavItems.Add(new WmsWorkbookNavItem
         {
@@ -101,6 +166,8 @@ public partial class WmsWorkbookViewModel
             Subtitle = subtitle,
             IsOperational = operational,
             RoadmapPhase = roadmapPhase,
+            IconGlyph = iconGlyph,
+            TooltipText = string.IsNullOrWhiteSpace(tooltip) ? title : tooltip,
         });
         if (!operational && roadmapPhase is not null)
         {
@@ -113,6 +180,19 @@ public partial class WmsWorkbookViewModel
 
     private readonly Dictionary<string, (string Title, string Phase, string Desc)> _roadmapCopy = new();
 
+    private void UpdateNavSelection()
+    {
+        foreach (var nav in NavItems)
+        {
+            if (nav.IsGroupHeader || string.IsNullOrEmpty(nav.SectionId))
+            {
+                continue;
+            }
+
+            nav.IsSelected = string.Equals(nav.SectionId, SelectedSectionId, StringComparison.Ordinal);
+        }
+    }
+
     [RelayCommand]
     private async Task SelectSectionAsync(WmsWorkbookNavItem? item)
     {
@@ -121,7 +201,14 @@ public partial class WmsWorkbookViewModel
             return;
         }
 
-        SelectedSectionId = item.SectionId;
+        try
+        {
+            SelectedSectionId = item.SectionId;
+            UpdateNavSelection();
+            OnPropertyChanged(nameof(SelectedSectionId));
+            UpdateSectionChrome(item.SectionId);
+            StatusMessage = $"Workbook: {item.Title}";
+            Debug.WriteLine($"[WmsWorkbook] Navigate section {item.SectionId} ({item.Title})");
         if (!item.IsOperational)
         {
             IsRoadmapSection = true;
@@ -148,14 +235,34 @@ public partial class WmsWorkbookViewModel
         IsRoadmapSection = false;
         OnPropertyChanged(nameof(ShowOperationalWorksheet));
         await LoadSectionAsync(item.SectionId).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[WmsWorkbook] Navigation failed: {ex}");
+            StatusMessage = $"Navigation failed ({item.Title}): {ex.Message}";
+        }
     }
 
     public bool ShowOperationalWorksheet => !IsRoadmapSection;
 
     private async Task LoadSectionAsync(string sectionId)
     {
+        IsBusy = true;
+        try
+        {
         switch (sectionId)
         {
+            case WmsWorkbookSections.Dashboard:
+                break;
+            case WmsWorkbookSections.WarehouseMaster:
+            case WmsWorkbookSections.Locations:
+            case WmsWorkbookSections.StockOwners:
+                await ReloadMastersAsync(default).ConfigureAwait(true);
+                break;
+            case WmsWorkbookSections.Administration:
+                await RefreshStagingGateSummaryAsync().ConfigureAwait(true);
+                await LoadSessionProfileAsync().ConfigureAwait(true);
+                break;
             case WmsWorkbookSections.StockBalances:
             case WmsWorkbookSections.LocationStock:
                 await ReloadBalancesAsync().ConfigureAwait(true);
@@ -196,6 +303,17 @@ public partial class WmsWorkbookViewModel
             case WmsWorkbookSections.ReceivingDiscrepancies:
                 await ReloadDiscrepanciesAsync().ConfigureAwait(true);
                 break;
+        }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[WmsWorkbook] LoadSection {sectionId} failed: {ex}");
+            ApplyApiError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            RefreshDashboardCounts();
         }
     }
 

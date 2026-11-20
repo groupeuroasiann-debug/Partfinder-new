@@ -7,6 +7,8 @@ Disposable integration tests in CI are **not** a substitute for steps on a **nam
 
 ## 1. Provision staging stack
 
+**Vercel (preferred 2026-11-19):** project `partfinder-backend-staging`, API **`https://partfinder-backend-staging.vercel.app`**. Bootstrap env: `PartFinder-Backend/scripts/vercel-staging-env-bootstrap.ps1`. Hosted identities: `npm run wms:staging-hosted-identities` (password via `WMS_STAGING_TEST_PASSWORD`, not in git). WinUI launcher: `PartFinder-Backend/scripts/winui-staging-acceptance.ps1`.
+
 | Component | Requirement |
 |-----------|-------------|
 | API host | Separate from production; `WMS_DEPLOYMENT_TIER=staging`, `WMS_STAGING_STOCK_POSTING=true`, `WMS_LIVE_STOCK_POSTING=false` |

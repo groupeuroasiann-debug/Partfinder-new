@@ -1,30 +1,78 @@
 {
   "phase": "03A.2",
-  "executedAt": "2026-11-18T11:30:23.888Z",
-  "orgCode": "900152",
-  "tenantDatabase": "wms_staging_acceptance_900152",
-  "winuiManual": "NOT_EXECUTED",
-  "preflight": {
-    "orgCode": "900152",
-    "tenantDatabase": "wms_staging_acceptance_900152",
-    "replicaSetName": "atlas-52zzyo-shard-0",
+  "executedAt": "2026-11-19T10:48:10.351Z",
+  "executionEnvironment": "in-process-nest-application-context-platform-mongo",
+  "hostedHttpPreflight": {
+    "status": "EXECUTED_PARTIAL",
+    "stagingVercelProject": "partfinder-backend-staging",
+    "stagingAliases": [
+      "https://partfinder-backend-staging.vercel.app"
+    ],
+    "detailFile": "03a2-hosted-http-preflight.json",
+    "executedAt": "2026-11-19T12:01:03.341Z",
     "supported": true,
     "commitProbe": true,
     "rollbackProbe": true,
     "deploymentTier": "staging",
+    "stagingStockPosting": false,
+    "liveStockPosting": false,
+    "postingGateOpen": false,
+    "note": "Transactions verified on hosted API. Set WMS_STAGING_STOCK_POSTING=true on staging Vercel project + redeploy to reach postingGateOpen true before WinUI stock POSTs."
+  },
+  "hostedAuthentication": {
+    "detailFile": "03a2-hosted-auth-evidence.json",
+    "executedAt": "2026-11-19T12:01:00.000Z"
+  },
+  "winuiManual": "NOT_EXECUTED",
+  "orgCode": "900152",
+  "tenantDatabase": "wms_staging_acceptance_900152",
+  "platformHost": "part-finder-admindb.semhy39.mongodb.net/<redacted-db>",
+  "deploymentTier": "staging",
+  "stagingPostingEffective": true,
+  "livePostingEffective": false,
+  "stockPostingAllowed": true,
+  "productionIsolationCheck": {
+    "tierProductionIgnoresStagingFlag": true,
+    "note": "When WMS_DEPLOYMENT_TIER=production, staging flag is ignored (unit-tested)."
+  },
+  "preflight": {
+    "orgCode": "900152",
+    "organizationName": "WMS Staging Acceptance",
+    "tenantDatabase": "wms_staging_acceptance_900152",
+    "replicaSetName": "atlas-52zzyo-shard-0",
+    "commitProbe": true,
+    "rollbackProbe": true,
+    "supported": true,
+    "deploymentTier": "staging",
     "stagingStockPosting": true,
     "liveStockPosting": false,
-    "postingGateOpen": true
+    "postingGateOpen": true,
+    "recordedAt": "2026-11-19T10:48:33.943Z"
   },
   "scenario": {
-    "idempotencyKey": "03a2-staging-900152-1795001452995",
+    "idempotencyKey": "03a2-staging-900152-1795085327984",
     "duplicateSecondPost": true,
     "onHandWarehouseTotal": 60,
     "onHandReceiving": 5,
     "onHandStorage": 55,
     "blockedAtReceiving": 5,
+    "availableAtStorage": 55,
     "qtyExpectedRemaining": 40,
     "expectedStatus": "partially_received",
+    "ledgerTransactionTypes": [],
     "crossOwner403": true
+  },
+  "pass": {
+    "preflightSupported": true,
+    "reconciliation60_55_5_40": true,
+    "idempotency": true,
+    "crossOwner": true
+  },
+  "testAccounts": {
+    "orgCode": "900152",
+    "adminEmail": "wms-admin-staging@partfinder.acceptance",
+    "operatorAEmail": "operator-a-staging@partfinder.acceptance",
+    "operatorBEmail": "operator-b-staging@partfinder.acceptance",
+    "passwordNote": "Password was set for this run only — store in your password manager, not in git."
   }
 }

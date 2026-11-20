@@ -12,6 +12,10 @@ const backendRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const jestBin = join(backendRoot, 'node_modules', 'jest', 'bin', 'jest.js');
 
 process.env.WMS_RUN_STAGING_ACCEPTANCE = 'true';
+process.env.WMS_DEPLOYMENT_TIER = 'staging';
+process.env.WMS_STAGING_STOCK_POSTING = 'true';
+process.env.WMS_LIVE_STOCK_POSTING = 'false';
+process.env.WMS_ACCEPTANCE_ALLOW_WRITES = 'YES_900152';
 
 const result = spawnSync(
   process.execPath,

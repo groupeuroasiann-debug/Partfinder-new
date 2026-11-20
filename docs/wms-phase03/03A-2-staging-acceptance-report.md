@@ -1,8 +1,44 @@
 # Phase 03A.2 — Staging Acceptance Report
 
-**Verdict:** **NOT ACCEPTED** (full gate) — **Named-tenant API acceptance: PASS** (org **900152**, 2026-11-18); **WinUI manual + hosted staging API: pending**.  
-**Production stock posting:** **OFF** — `liveStockPosting: false` in acceptance evidence; production tier ignores staging flag.  
-**Phase 03B:** **Do not start** until WinUI checklist complete and §11 sign-off (or explicit PO waiver).
+**Verdict:** **NOT ACCEPTED** (full gate) — **Hosted staging API verified** (`https://partfinder-backend-staging.vercel.app`); **hosted txn preflight PASS** with `postingGateOpen: false` until `WMS_STAGING_STOCK_POSTING=true` on staging Vercel; **WinUI 100-filter checklist not executed**; §11 sign-off pending.  
+**Production stock posting:** **OFF** — staging + production evidence show `liveStockPosting: false`; production remains `https://backend.partfinder.store` (unchanged).  
+**Phase 03B:** **Do not start** until WinUI checklist complete, staging posting flag enabled for stock POSTs, and §11 sign-off.
+
+---
+
+## Phase 03A.2 closure attempt — 2026-11-19
+
+Engineering re-ran automated gates from a workstation with platform `MONGODB_URI` in `PartFinder-Backend/.env.local`. **No further WMS module code** was required for this attempt.
+
+| # | Task (closure request) | Status | Evidence / notes |
+|---|----------------------|--------|------------------|
+| 1 | Isolated **staging NestJS** (≠ production hostname) | **PASS (verify)** | Vercel project **`partfinder-backend-staging`** — aliases `https://partfinder-backend-staging.vercel.app` (≠ `backend.partfinder.store`). Maintenance + license verify **200/201** (**2026-11-19**). |
+| 2 | Isolated MongoDB tenant + transactions + staging org | **PASS** | Org **900152**, tenant DB `wms_staging_acceptance_900152`, RS `atlas-52zzyo-shard-0`. Hosted preflight `supported/commit/rollback: true` — [`evidence/03a2-hosted-http-preflight.json`](./evidence/03a2-hosted-http-preflight.json). |
+| 3 | Staging admin + operator A/B (hosted login) | **PASS (auth)** / **PARTIAL (grants UI)** | `npm run wms:staging-hosted-identities` upserts admin + operators; [`evidence/03a2-hosted-auth-evidence.json`](./evidence/03a2-hosted-auth-evidence.json). Operator warehouse scope **1** each on hosted API. Master data grants for checklist — confirm in WinUI Administration. |
+| 4 | Transaction preflight + `wms:03a2-staging-acceptance` | **PASS** | `npm run wms:mongodb-dns-preflight` **PASS** (2026-11-19). `npm run wms:03a2-staging-acceptance` **PASS** (~93s; harness sets staging env). `run-03a2-automated-gate.ps1` **PASS** (~91s). |
+| 5 | WinUI 100-filter scenario (real app) | **NOT EXECUTED** | Cannot drive interactive WinUI inside Cursor. Checklist remains open — **operator QA required**. |
+| 6 | Reconcile 60 / 55 / 5 blocked / 40 expected / ledger / idempotency | **PASS (API harness only)** | See [`evidence/03a2-staging-evidence.json`](./evidence/03a2-staging-evidence.json) `scenario` — **2026-11-19T10:26:56Z** (`onHandWarehouseTotal: 60`, `onHandStorage: 55`, `blockedAtReceiving: 5`, `qtyExpectedRemaining: 40`, `duplicateSecondPost: true`, `crossOwner403: true`). Not WinUI-attested. |
+| 7 | Cross-client 403 + production isolation | **PASS (API harness)** / **UNVERIFIED (prod host)** | `crossOwner403: true` in evidence. Production API `WMS_*` effective flags **not** read from `backend.partfinder.store` (no ops access). Code enforces production tier ignores staging posting. |
+| 8 | Evidence + sign-off in this report | **UPDATED** | This section + refreshed JSON. §11 **Pending** — no engineering/QA signatures. |
+
+### Defects / tooling notes (2026-11-19)
+
+| ID | Issue | Impact |
+|----|-------|--------|
+| D-01 | ~~No dedicated staging API~~ | **Resolved (verify)** — Vercel staging aliases live; hosted preflight recorded (**2026-11-19T12:01Z**). **Remaining:** set `WMS_STAGING_STOCK_POSTING=true` on **staging project only** + redeploy before stock POST acceptance. |
+| D-02 | ~~`staging-org-lookup.mjs` env path~~ | **Resolved** — script loads `.env` then `.env.local`. |
+| D-03 | WinUI localhost vs hosted staging | **Mitigated** — `appsettings.Staging.json` + `PARTFINDER_STAGING_API=1` for Debug QA against Vercel staging (see `PartFinder-Backend/scripts/winui-staging-acceptance.ps1`). |
+| D-05 | Hosted `postingGateOpen: false` | Staging Vercel env still has `WMS_STAGING_STOCK_POSTING=false` at preflight time — ops flip per deployment package §1.1. |
+
+### Interim WinUI path (lab — **not** full 03A.2 acceptance)
+
+For **manual** checklist while ops provisions staging:
+
+1. Backend `.env.local`: `WMS_DEPLOYMENT_TIER=staging`, `WMS_STAGING_STOCK_POSTING=true`, `WMS_LIVE_STOCK_POSTING=false`, valid `JWT_SECRET`.
+2. WinUI Debug: `appsettings.Development.json` → `http://127.0.0.1:3000`.
+3. Org **900152** sign-in; follow [`03A-2-winui-acceptance-checklist.md`](./03A-2-winui-acceptance-checklist.md).
+
+Lab uses **development/staging tier on localhost** — **does not satisfy** deployment package requirement for a **separate staging hostname** unless PO waives.
 
 ---
 
@@ -24,16 +60,26 @@
 | 900152 | WMS Staging Acceptance | true | `wms_staging_acceptance_900152` |
 | 111111 | Euroasiann Group | false | `111111` |
 
-### Latest execution (2026-11-18)
+### Latest execution (2026-11-19 — Phase 03A.2 closure attempt, local engineering)
 
 | Activity | Result |
 |----------|--------|
-| DNS root cause | **Identified** — Node used `127.0.0.1` only; see [`03A-2-database-connectivity.md`](./03A-2-database-connectivity.md) |
-| DNS fix | **Applied** — `mongodb-atlas-dns` + `npm run wms:mongodb-dns-preflight` **PASS** |
-| `wms-03a2-staging-acceptance` (org **900152**, Atlas tenant DB) | **PASS** — evidence in [`evidence/03a2-staging-evidence.json`](./evidence/03a2-staging-evidence.json) |
-| WinUI 100-filter checklist | **NOT EXECUTED** — checklist **prepared** for operator QA |
-| Hosted staging NestJS | **NOT IN REPO** — test ran **local Jest** with staging posting flags |
+| Dokploy staging API search (`partfinder`) | **0 apps** — no isolated staging NestJS hostname to provision from this workspace |
+| DNS preflight | **PASS** — `npm run wms:mongodb-dns-preflight` (Google DNS `8.8.8.8`) |
+| Staging org lookup **900152** | **PASS** — `wmsEnabled: true`, tenant DB `wms_staging_acceptance_900152` (redacted host) |
+| `npm run wms:03a2-staging-acceptance` | **PASS** — ~93s; evidence **2026-11-19T10:26:56.543Z** |
+| `run-03a2-automated-gate.ps1` | **PASS** — 14 WMS suites (42 tests), receiving integration (3), WinUI x64 build |
+| Scenario reconciliation (API) | **60** on-hand WH, **55** storage, **5** blocked at receiving, **40** expected remain, idempotency + cross-owner **403** |
+| HTTP `POST /api/wms/v1/staging-gate/preflight` on **dedicated staging host** | **NOT EXECUTED** — `hostedHttpPreflight: NOT_EXECUTED` in evidence JSON |
+| WinUI 100-filter checklist (P/M/S/1–11) | **NOT EXECUTED** — requires operator QA on staging or signed lab waiver |
 | Production `WMS_LIVE_STOCK_POSTING` | **Not enabled** |
+
+### Prior execution (2026-11-18)
+
+| Activity | Result |
+|----------|--------|
+| DNS root cause / fix | See [`03A-2-database-connectivity.md`](./03A-2-database-connectivity.md) |
+| First harness PASS on org **900152** | Evidence archived same JSON file (prior idempotency key superseded) |
 
 **Next:** WinUI against an API with `WMS_DEPLOYMENT_TIER=staging` and `WMS_STAGING_STOCK_POSTING=true`, org **900152** — [`03A-2-winui-acceptance-checklist.md`](./03A-2-winui-acceptance-checklist.md). Prefer **`npm run wms:03a2-staging-acceptance`** to re-run API harness (sets env + DNS).
 
@@ -248,9 +294,9 @@ Source: `evidence/03a2-staging-evidence.json` → `scenario`.
 | Integration teardown (`TenantMongoService.onModuleDestroy`) | **Fixed** |
 | `dotnet build` PartFinder x64 | **Pass** (re-verified 03A.2 cont.) |
 | `PartFinder.Tests` | **Pass** — 23/23 (re-verified 03A.2 cont.) |
-| `run-03a2-automated-gate.ps1` | **Pass** (local, 2026-11-18) |
-| `wms-03a2-staging-acceptance` (Atlas org 900152) | **Pass** (2026-11-18) |
-| `npm run wms:mongodb-dns-preflight` | **Pass** |
+| `run-03a2-automated-gate.ps1` | **Pass** (2026-11-19 re-run) |
+| `wms-03a2-staging-acceptance` (Atlas org 900152) | **Pass** (2026-11-19 re-run) |
+| `npm run wms:mongodb-dns-preflight` | **Pass** (2026-11-19) |
 | Staging WinUI manual | **Not executed** |
 | Staging preflight on real tenant | **Not executed** |
 
@@ -258,12 +304,13 @@ Source: `evidence/03a2-staging-evidence.json` → `scenario`.
 
 ## 8. Outstanding blockers
 
-1. **No dedicated staging NestJS host** in repo — production WinUI still defaults to `backend.partfinder.store`.
-2. **WinUI manual checklist** — all rows **Pending** (API ≠ WinUI sign-off).
-3. **HTTP preflight** on deployed API not executed — only in-tenant evidence from Jest.
+1. **No dedicated staging NestJS host** — **blocking acceptance** (ops: DNS + TLS + env per deployment package §2).
+2. **WinUI manual checklist** — **all Pending** (operator QA; screenshots/exports §12 empty).
+3. **HTTP preflight on staging hostname** — not executed (Jest in-tenant only).
 4. **Engineering / QA sign-off** (§11) — **Pending**.
-5. ~~Atlas DNS `querySrv ECONNREFUSED`~~ — **resolved** (`mongodb-atlas-dns`).
-6. ~~Org **900152** / isolated tenant~~ — **provisioned** and exercised.
+5. **Staging operator personas** — runbook emails/grants not verified on hosted API.
+6. ~~Atlas DNS `querySrv ECONNREFUSED`~~ — **resolved** (`mongodb-atlas-dns`).
+7. ~~Org **900152** / API harness scenario~~ — **re-passed 2026-11-19** (not WinUI substitute).
 
 ---
 

@@ -1,25 +1,29 @@
-# Phase 03A.2 — Staging provisioning blockers (2026-11-18)
+# Phase 03A.2 — Staging provisioning blockers
 
-## What was attempted
+**Updated:** 2026-11-19 (Vercel staging verification)
+
+## Resolved in engineering session
 
 | Action | Result |
 |--------|--------|
-| Dokploy `application-search` / `project-all` | No PartFinder staging app; **no application servers** registered (`server-all` empty) |
-| `PartFinder-Backend/.env` | **Missing** — cannot run NestJS against platform Mongo |
-| Docker / `mongod` on PATH | **Not available** on agent workstation |
-| WinUI manual 100-filter run | **Not executed** (no interactive session + no staging API on QA machine) |
-| HTTP `wms:03a2-acceptance-harness` | **Exit 2** — `WMS_*` secrets not configured |
+| Vercel **`partfinder-backend-staging`** | **Ready** — `https://partfinder-backend-staging.vercel.app` (public API, no SSO block on smoke tests) |
+| Platform org **900152** | **PASS** — `wms_staging_acceptance_900152`, `wmsEnabled: true` |
+| Hosted `POST …/staging-gate/preflight` | **PASS** txn probes — `stagingStockPosting: false` until env flip |
+| Hosted `invite-login` (admin + A/B) | **PASS** — see [`evidence/03a2-hosted-auth-evidence.json`](./evidence/03a2-hosted-auth-evidence.json) |
+| `npm run wms:mongodb-dns-preflight` | **PASS** |
+| `npm run wms:03a2-staging-acceptance` | **PASS** (in-process harness) |
 
-## Minimum ops checklist to unblock **hosted** acceptance
+## Still blocking **ACCEPTED**
 
-1. Deploy NestJS to a **non-production** hostname with `WMS_DEPLOYMENT_TIER=staging`, `WMS_STAGING_STOCK_POSTING=true`.
-2. Provision **Atlas replica set** or dedicated Mongo RS; set platform org `orgDatabaseUri` (isolated DB).
-3. Create org `900200` (or assigned code) with `wmsEnabled: true`.
-4. Create admin + Operator A/B; grants per runbook.
-5. Point WinUI `LicenseApi.BaseUrl` at staging host.
-6. Run `npm run wms:staging-preflight` + `npm run wms:03a2-acceptance-harness` + WinUI checklist.
-7. Paste evidence into `03A-2-staging-acceptance-report.md` and sign §11.
+| # | Blocker | Owner action |
+|---|---------|--------------|
+| 1 | `WMS_STAGING_STOCK_POSTING=true` on **staging Vercel only** + redeploy | From linked `PartFinder-Staging-Deploy\PartFinder-Backend`: `vercel env rm/add` then `vercel deploy --prod --yes` |
+| 2 | WinUI **100-filter** checklist | Run `PartFinder-Backend/scripts/winui-staging-acceptance.ps1`; `PARTFINDER_STAGING_API=1`; attach §12 screenshots |
+| 3 | §11 engineering / QA sign-off | Names and dates in acceptance report |
 
-## Lab evidence (engineering only)
+**Do not** enable `WMS_LIVE_STOCK_POSTING` on production `partfinder-new`.
 
-`docs/wms-phase03/evidence/03a2-lab-acceptance-evidence.json` — in-process MongoMemoryReplSet; **does not replace** hosted staging + WinUI sign-off.
+## Reference
+
+- Deployment: [`03A-2-staging-deployment-package.md`](./03A-2-staging-deployment-package.md)
+- Identity bootstrap: `npm run wms:staging-hosted-identities` (requires `WMS_STAGING_TEST_PASSWORD`)

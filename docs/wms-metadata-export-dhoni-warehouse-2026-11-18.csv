@@ -1,0 +1,323 @@
+record_type,category,subcategory,name,value,branch,phase,commit_short,commit_date,author,file_path,status,notes
+summary,program,scope,report_period_start,2026-11-16,dhoni/wms; dhoni/warehouse,,,,,,,Monday through Wednesday reporting window
+summary,program,scope,report_period_end,2026-11-18,dhoni/wms; dhoni/warehouse,,,,,,,
+summary,program,verdict,phase_03a2_gate,NOT_ACCEPTED,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-staging-acceptance-report.md,API acceptance PASS; WinUI manual pending,
+summary,program,posting,production_live_stock_posting,OFF,dhoni/warehouse,,,,,,,WMS_LIVE_STOCK_POSTING not enabled
+summary,program,posting,staging_stock_posting,ON_IN_HARNESS_ONLY,dhoni/warehouse,,,,,,,Jest acceptance with WMS_STAGING_STOCK_POSTING=true
+summary,git,delta,dhoni_warehouse_ahead_of_dhoni_wms_commits,1,dhoni/warehouse,,,,,,,99cc562 contains 02B-03A.2 stack
+summary,git,delta,commit_99cc562_files_changed,136,dhoni/warehouse,,99cc562,2026-11-18,,,,
+summary,git,delta,commit_99cc562_insertions,15975,dhoni/warehouse,,99cc562,,,,,
+summary,git,delta,commit_99537b0_files_changed,50,dhoni/wms,02A,99537b0,2026-11-17,,,,
+summary,git,delta,commit_99537b0_insertions,4348,dhoni/wms,02A,99537b0,,,,,
+summary,github,merge,pr_48_dhoni_wms_to_main,2026-11-17,dhoni/wms,02A,,,,,,Merge pull request #48 from jayandra06/dhoni/wms
+branch,git,ref,dhoni/wms,8ca00df,dhoni/wms,,,,,,,origin/dhoni/wms — 02A merged to main via PR48; base before warehouse mega-commit
+branch,git,ref,dhoni/warehouse,99cc562,dhoni/warehouse,,,,,,,origin/dhoni/warehouse — Full WMS 02A-03A.2 + docs + acceptance
+branch,git,ref,main,f1920ef,main,,,,,,,origin/main — Production line; includes 02A from PR48 when merged
+commit,git,history,Add WMS warehouse phases 02–03A with WinUI workbook and Atlas SRV DNS fix.,99cc562,dhoni/warehouse ancestry,,99cc562,Wed Nov 18 18:27:44 2026 +0530,surjith-02,,wms_related,Included in WMS program narrative
+commit,git,history,Sync PartFinder WinUI with origin/main.,8ca00df,dhoni/warehouse ancestry,,8ca00df,Tue Nov 17 15:27:22 2026 +0530,surjith-02,,branch_context,Merge/support on same branch timeline
+commit,git,history,Merge origin/main into dhoni/wms (PartFinder login and credential fixes).,e86aabb,dhoni/warehouse ancestry,,e86aabb,Tue Nov 17 15:24:47 2026 +0530,surjith-02,,wms_related,Included in WMS program narrative
+commit,git,history,CHanging branch,358e9c3,dhoni/warehouse ancestry,,358e9c3,Tue Nov 17 15:12:59 2026 +0530,surjith-02,,branch_context,Merge/support on same branch timeline
+commit,git,history,Merge pull request #51 from jayandra06/Harshith,9d9983f,dhoni/warehouse ancestry,,9d9983f,Tue Nov 17 14:59:01 2026 +0530,VIDIYALA NAGA HARSHITH,,branch_context,Merge/support on same branch timeline
+commit,git,history,"Fix saved logins for all teammates: robust save paths, logging, and tests",4fdf7e1,dhoni/warehouse ancestry,,4fdf7e1,Tue Nov 17 14:45:28 2026 +0530,VIDIYALA NAGA HARSHITH,,branch_context,Merge/support on same branch timeline
+commit,git,history,Merge pull request #50 from jayandra06/akhil/partfnder-17-11-26,ccbb07b,dhoni/warehouse ancestry,,ccbb07b,Tue Nov 17 13:23:23 2026 +0530,akhil-euroasiann,,branch_context,Merge/support on same branch timeline
+commit,git,history,Merge pull request #49 from jayandra06/Harshith,f1920ef,dhoni/warehouse ancestry,,f1920ef,Tue Nov 17 13:21:17 2026 +0530,Surjith,,branch_context,Merge/support on same branch timeline
+commit,git,history,Merge origin/main into Harshith; combine quick login with multi-org credential autofill,6782167,dhoni/warehouse ancestry,,6782167,Tue Nov 17 13:20:13 2026 +0530,VIDIYALA NAGA HARSHITH,,branch_context,Merge/support on same branch timeline
+commit,git,history,warehouse management cards UI modification,6624269,dhoni/warehouse ancestry,,6624269,Tue Nov 17 13:20:07 2026 +0530,akhil-euroasiann,,wms_related,Included in WMS program narrative
+commit,git,history,Merge pull request #48 from jayandra06/dhoni/wms,eaa3e39,dhoni/warehouse ancestry,,eaa3e39,Tue Nov 17 13:15:46 2026 +0530,Surjith,,wms_related,Included in WMS program narrative
+commit,git,history,Implemented password saving option,75c4e07,dhoni/warehouse ancestry,,75c4e07,Tue Nov 17 13:12:21 2026 +0530,VIDIYALA NAGA HARSHITH,,branch_context,Merge/support on same branch timeline
+commit,git,history,Add WMS Phase 02A setup API and WinUI workbook.,99537b0,dhoni/warehouse ancestry,,99537b0,Tue Nov 17 12:37:47 2026 +0530,surjith-02,,wms_related,Included in WMS program narrative
+commit,git,history,Initialize README.md file,8d1f137,dhoni/warehouse ancestry,,8d1f137,Tue Nov 17 11:33:42 2026 +0530,jayandra06,,branch_context,Merge/support on same branch timeline
+api_endpoint,backend,http,GET /api/wms/v1/health,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/diagnostics/transactions,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/warehouses,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/warehouses,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,PATCH /api/wms/v1/warehouses/:id,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/stock-owners,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/stock-owners,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,PATCH /api/wms/v1/stock-owners/:id,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/zones,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/zones,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,PATCH /api/wms/v1/zones/:id,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/locations,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/locations,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,PATCH /api/wms/v1/locations/:id,WmsSetupController,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms-Setup.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/catalog/status,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/uom,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/uom/template-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/uom/template-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/uom/resolve-template,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/uom,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/skus,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/skus,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/skus/:skuId,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,PATCH /api/wms/v1/skus/:skuId,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/skus/:skuId/identifiers,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/skus/identifiers/check,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/skus/:skuId/merge,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/skus/:skuId/retire,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/ledger/opening-balance-dry-run,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/inventory/post,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/inventory/balances,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/inventory/transactions,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/inventory/atp,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/erp/connectors,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/erp/connectors,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/erp/inbound/stub,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/erp/sku-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/erp/sku-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/erp/location-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/erp/location-mappings,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/erp/outbox,WmsPhase02Controller,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms-Phase02.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/staging-gate/preflight,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/staging-gate/latest,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/expected,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/expected,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/expected/:expectedReceiptId/lines,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/goods-receipts,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/goods-receipts,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/goods-receipts/:goodsReceiptId/lines,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/disposition/:receiptLineId,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/qc/:receiptLineId,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/qc,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/putaway,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,POST /api/wms/v1/receiving/putaway/:putawayTaskId/complete,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/discrepancies,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+api_endpoint,backend,http,GET /api/wms/v1/receiving/history,WmsPhase03aController,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms-Phase03a.controller.ts,,JWT + WmsSessionGuard; headers Authorization + X-Org-Id
+mongodb_collection,data,tenant,wms_warehouses,Setup master,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_stock_owners,3PL / owner master,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_zones,Warehouse zones,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_locations,Bin / location paths,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_operator_grants,Operator scope + permissions,dhoni/warehouse,02A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_skus,SKU registry,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_sku_identifiers,Barcodes / customer PNs,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_sku_audit_log,SKU audit trail,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_uom_definitions,Custom UOM,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_uom_template_mappings,Excel UOM mapping,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_stock_balances,On-hand balances,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_stock_transactions,Append-only ledger,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_idempotency_keys,Posting idempotency,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_erp_connectors,ERP connector stub,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_erp_sku_mappings,ERP SKU map,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_erp_location_mappings,ERP location map,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_inbound_messages,Inbound stub,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_outbox_events,Outbox stub,dhoni/warehouse,02B,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_expected_receipts,ASN / expected,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_goods_receipts,Posted receipts,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_receipt_lines,Receipt lines,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_qc_inspections,QC records,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_putaway_tasks,Put-away tasks,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_receiving_audit_log,Receiving audit,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+mongodb_collection,data,tenant,wms_staging_gate_evidence,Transaction preflight evidence,dhoni/warehouse,03A,,,,PartFinder-Backend/src/wms/wms.types.ts,,Per-tenant orgDatabaseUri
+env_variable,deployment,required,MONGODB_URI,Platform MongoDB connection,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,required,JWT_SECRET,API authentication,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,optional,WMS_DEPLOYMENT_TIER,production|staging|development; default development,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,flag,WMS_STAGING_STOCK_POSTING,Must be true for staging stock/receiving posts,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,flag,WMS_LIVE_STOCK_POSTING,Production posting; default off,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,harness,STAGING_ORG_CODE,Acceptance org e.g. 900152,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,harness,WMS_RUN_STAGING_ACCEPTANCE,Enable Jest staging acceptance spec,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,ops,WMS_API_BASE,Hosted API for HTTP preflight script,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,ops,WMS_JWT,Bearer for staging preflight recording,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,server,CORS_ORIGIN,Browser CORS origins,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+env_variable,deployment,server,PORT,Nest listen port default 3000,dhoni/warehouse,,,,,PartFinder-Backend/.env.example,,
+npm_script,tooling,package.json,wms:mongodb-dns-preflight,Atlas SRV DNS verify,dhoni/warehouse,,,,,PartFinder-Backend/package.json,,
+npm_script,tooling,package.json,wms:03a2-staging-acceptance,Run 03A2 Jest harness,dhoni/warehouse,,,,,PartFinder-Backend/package.json,,
+npm_script,tooling,package.json,wms:staging-acceptance,staging-03a2-acceptance-execute.ts,dhoni/warehouse,,,,,PartFinder-Backend/package.json,,
+npm_script,tooling,package.json,wms:staging-preflight,Record HTTP preflight to staging API,dhoni/warehouse,,,,,PartFinder-Backend/package.json,,
+npm_script,tooling,package.json,config:diagnostics,Print env presence (no secrets),dhoni/warehouse,,,,,PartFinder-Backend/package.json,,
+ops_script,tooling,automation,scripts/mongodb-atlas-dns.mjs,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/mongodb-atlas-dns.mjs,,
+ops_script,tooling,automation,scripts/mongodb-dns-preflight.mjs,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/mongodb-dns-preflight.mjs,,
+ops_script,tooling,automation,scripts/list-wms-staging-orgs.mjs,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/list-wms-staging-orgs.mjs,,
+ops_script,tooling,automation,scripts/list-wms-staging-orgs.ts,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/list-wms-staging-orgs.ts,,
+ops_script,tooling,automation,scripts/staging-org-lookup.mjs,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/staging-org-lookup.mjs,,
+ops_script,tooling,automation,scripts/run-03a2-staging-acceptance.mjs,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/run-03a2-staging-acceptance.mjs,,
+ops_script,tooling,automation,scripts/run-03a2-automated-gate.ps1,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/run-03a2-automated-gate.ps1,,
+ops_script,tooling,automation,scripts/staging-03a2-acceptance-execute.ts,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/staging-03a2-acceptance-execute.ts,,
+ops_script,tooling,automation,scripts/wms-03a2-provision-and-acceptance.ts,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/wms-03a2-provision-and-acceptance.ts,,
+ops_script,tooling,automation,scripts/wms-03a2-staging-acceptance-harness.ts,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/wms-03a2-staging-acceptance-harness.ts,,
+ops_script,tooling,automation,scripts/wms-record-staging-preflight.ts,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/scripts/wms-record-staging-preflight.ts,,
+ops_script,tooling,automation,docker/wms-staging-mongo-compose.yml,PartFinder-Backend,dhoni/warehouse,03A.2,,,,PartFinder-Backend/docker/wms-staging-mongo-compose.yml,,
+winui_section,client,Dashboard,dashboard,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Setup,warehouse_master,WmsWorkbookSections,dhoni/warehouse,02A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Setup,locations,WmsWorkbookSections,dhoni/warehouse,02A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Setup,stock_owners,WmsWorkbookSections,dhoni/warehouse,02A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,SKU,sku_registry,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,SKU,sku_identifiers,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,UOM,uom,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Inventory,stock_balances,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Inventory,location_stock,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Inventory,movement_ledger,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Ledger dry-run UI,opening_preview,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,ERP mapping,mapping_errors,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Help,master_data_guide,WmsWorkbookSections,dhoni/warehouse,02B,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Admin,administration,WmsWorkbookSections,dhoni/warehouse,02A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,expected_receipts,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,goods_receiving,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,received_item_details,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,quality_control,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,putaway_tasks,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,location_assignment,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,receiving_history,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Receiving,receiving_discrepancies,WmsWorkbookSections,dhoni/warehouse,03A,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,orders,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,picking,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,packing,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,printing,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,dispatch,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,procurement,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_section,client,Future phase placeholder,reports,WmsWorkbookSections,dhoni/warehouse,roadmap,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+acceptance_evidence,qa,03A.2,executedAt,2026-11-18T11:30:23.888Z,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,orgCode,900152,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,tenantDatabase,wms_staging_acceptance_900152,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,winuiManual,NOT_EXECUTED,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.supported,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.commitProbe,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.rollbackProbe,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.deploymentTier,staging,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.stagingStockPosting,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.liveStockPosting,false,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,preflight.postingGateOpen,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.onHandWarehouseTotal,60,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.onHandReceiving,5,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.onHandStorage,55,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.blockedAtReceiving,5,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.qtyExpectedRemaining,40,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.expectedStatus,partially_received,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.crossOwner403,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+acceptance_evidence,qa,03A.2,scenario.duplicateSecondPost,true,dhoni/warehouse,03A.2,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,PASS_API_HARNESS,
+blocker,program,ops,WinUI 100-filter checklist,NOT_EXECUTED,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-winui-acceptance-checklist.md,,03A-2-winui-acceptance-checklist.md
+blocker,program,ops,Hosted staging NestJS API,NOT_IN_REPO,dhoni/warehouse,,,,,docs/wms-phase03/Ops must provision WMS_* env,,Ops must provision WMS_* env
+blocker,program,ops,Phase 03A.2 formal sign-off,PENDING,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-staging-acceptance-report.md,,03A-2-staging-acceptance-report.md
+blocker,program,ops,Phase 03B,BLOCKED,dhoni/warehouse,,,,,docs/wms-phase03/Until sign-off or PO waiver,,Until sign-off or PO waiver
+blocker,program,ops,Production WMS env on backend.partfinder.store,UNVERIFIED,dhoni/warehouse,,,,,docs/wms-phase03/Run config:diagnostics on server,,Run config:diagnostics on server
+blocker,program,ops,.env.example live Atlas URI,SECURITY_RISK,dhoni/warehouse,,,,,docs/wms-phase03/Rotate credentials; use placeholders,,Rotate credentials; use placeholders
+documentation,docs,03,PartFinder-Backend/docs/wms-phase03/evidence/03a2-staging-evidence.json,markdown_or_json_or_html,dhoni/warehouse,,,,,PartFinder-Backend/docs/wms-phase03/evidence/03a2-staging-evidence.json,,
+documentation,docs,flow,docs/wms-flow/FLOW-01-end-to-end-workflow.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-01-end-to-end-workflow.md,,
+documentation,docs,flow,docs/wms-flow/FLOW-02-user-roles-and-journeys.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-02-user-roles-and-journeys.md,,
+documentation,docs,flow,docs/wms-flow/FLOW-03-navigation-and-screen-transitions.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-03-navigation-and-screen-transitions.md,,
+documentation,docs,flow,docs/wms-flow/FLOW-04-exceptions-and-approvals.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-04-exceptions-and-approvals.md,,
+documentation,docs,flow,docs/wms-flow/FLOW-05-visual-flowcharts.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-05-visual-flowcharts.md,,
+documentation,docs,flow,docs/wms-flow/FLOW-06-ux-handoff.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-flow/FLOW-06-ux-handoff.md,,
+documentation,docs,01,docs/wms-phase01/01-existing-system-audit.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/01-existing-system-audit.md,,
+documentation,docs,01,docs/wms-phase01/02-wms-gap-analysis.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/02-wms-gap-analysis.md,,
+documentation,docs,01,docs/wms-phase01/03-wms-architecture.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/03-wms-architecture.md,,
+documentation,docs,01,docs/wms-phase01/04-wms-database-proposal.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/04-wms-database-proposal.md,,
+documentation,docs,01,docs/wms-phase01/05-wms-development-roadmap.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/05-wms-development-roadmap.md,,
+documentation,docs,01,docs/wms-phase01/06-wms-risks-and-questions.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/06-wms-risks-and-questions.md,,
+documentation,docs,01,docs/wms-phase01/07-blueprint-traceability.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/07-blueprint-traceability.md,,
+documentation,docs,01,docs/wms-phase01/08-architecture-decisions.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase01/08-architecture-decisions.md,,
+documentation,docs,02,docs/wms-phase02/02A-1-security-readiness-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02A-1-security-readiness-report.md,,
+documentation,docs,02,docs/wms-phase02/02A-gate-signoff.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02A-gate-signoff.md,,
+documentation,docs,02,docs/wms-phase02/02A-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02A-implementation-report.md,,
+documentation,docs,02,docs/wms-phase02/02B-1-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-1-implementation-report.md,,
+documentation,docs,02,docs/wms-phase02/02B-2-frontend-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-2-frontend-implementation-report.md,,
+documentation,docs,02,docs/wms-phase02/02B-acceptance-test-plan.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-acceptance-test-plan.md,,
+documentation,docs,02,docs/wms-phase02/02B-database-proposal.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-database-proposal.md,,
+documentation,docs,02,docs/wms-phase02/02B-final-readiness-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-final-readiness-report.md,,
+documentation,docs,02,docs/wms-phase02/02B-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-implementation-report.md,,
+documentation,docs,02,docs/wms-phase02/02B-sku-approval-summary.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-sku-approval-summary.md,,
+documentation,docs,02,docs/wms-phase02/02B-sku-key-mapping.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-sku-key-mapping.md,,
+documentation,docs,02,docs/wms-phase02/02B-technical-specification.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/02B-technical-specification.md,,
+documentation,docs,02,docs/wms-phase02/mongodb-transaction-preflight.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase02/mongodb-transaction-preflight.md,,
+documentation,docs,03,docs/wms-phase03/.gitignore,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/.gitignore,,
+documentation,docs,03,docs/wms-phase03/03A-1-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-1-implementation-report.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-OPS-BLOCKERS.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-OPS-BLOCKERS.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-database-connectivity.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-database-connectivity.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-staging-acceptance-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-staging-acceptance-report.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-staging-deployment-package.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-staging-deployment-package.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-staging-runbook.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-staging-runbook.md,,
+documentation,docs,03,docs/wms-phase03/03A-2-winui-acceptance-checklist.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-2-winui-acceptance-checklist.md,,
+documentation,docs,03,docs/wms-phase03/03A-implementation-report.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/03A-implementation-report.md,,
+documentation,docs,03,docs/wms-phase03/evidence/03a2-lab-acceptance-evidence.json,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/evidence/03a2-lab-acceptance-evidence.json,,
+documentation,docs,03,docs/wms-phase03/evidence/03a2-staging-evidence.json,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-phase03/evidence/03a2-staging-evidence.json,,
+documentation,docs,ux,docs/wms-ux/UX-01-design-audit.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/UX-01-design-audit.md,,
+documentation,docs,ux,docs/wms-ux/UX-02-design-system.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/UX-02-design-system.md,,
+documentation,docs,ux,docs/wms-ux/UX-03-screen-blueprints.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/UX-03-screen-blueprints.md,,
+documentation,docs,ux,docs/wms-ux/UX-04-interaction-standards.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/UX-04-interaction-standards.md,,
+documentation,docs,ux,docs/wms-ux/UX-05-prototype-review.md,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/UX-05-prototype-review.md,,
+documentation,docs,ux,docs/wms-ux/prototypes/partfinder-warehouse-ux-preview.html,markdown_or_json_or_html,dhoni/warehouse,,,,,docs/wms-ux/prototypes/partfinder-warehouse-ux-preview.html,,
+backend_file,nestjs,module,wms-context.decorator.ts,PartFinder-Backend/src/wms/decorators/wms-context.decorator.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/decorators/wms-context.decorator.ts,,
+backend_file,nestjs,dto,wms-inventory.dto.ts,PartFinder-Backend/src/wms/dto/wms-inventory.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-inventory.dto.ts,,
+backend_file,nestjs,dto,wms-location.dto.ts,PartFinder-Backend/src/wms/dto/wms-location.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-location.dto.ts,,
+backend_file,nestjs,dto,wms-operator-grant.dto.ts,PartFinder-Backend/src/wms/dto/wms-operator-grant.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-operator-grant.dto.ts,,
+backend_file,nestjs,dto,wms-receiving.dto.ts,PartFinder-Backend/src/wms/dto/wms-receiving.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-receiving.dto.ts,,
+backend_file,nestjs,dto,wms-sku.dto.ts,PartFinder-Backend/src/wms/dto/wms-sku.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-sku.dto.ts,,
+backend_file,nestjs,dto,wms-stock-owner.dto.ts,PartFinder-Backend/src/wms/dto/wms-stock-owner.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-stock-owner.dto.ts,,
+backend_file,nestjs,dto,wms-warehouse.dto.ts,PartFinder-Backend/src/wms/dto/wms-warehouse.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-warehouse.dto.ts,,
+backend_file,nestjs,dto,wms-zone.dto.ts,PartFinder-Backend/src/wms/dto/wms-zone.dto.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/dto/wms-zone.dto.ts,,
+backend_file,nestjs,test,wms-org-resolution.util.spec.ts,PartFinder-Backend/src/wms/guards/wms-org-resolution.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/guards/wms-org-resolution.util.spec.ts,,
+backend_file,nestjs,guard,wms-org-resolution.util.ts,PartFinder-Backend/src/wms/guards/wms-org-resolution.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/guards/wms-org-resolution.util.ts,,
+backend_file,nestjs,test,wms-session.guard.spec.ts,PartFinder-Backend/src/wms/guards/wms-session.guard.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/guards/wms-session.guard.spec.ts,,
+backend_file,nestjs,guard,wms-session.guard.ts,PartFinder-Backend/src/wms/guards/wms-session.guard.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/guards/wms-session.guard.ts,,
+backend_file,nestjs,service,wms-diagnostics.service.ts,PartFinder-Backend/src/wms/services/wms-diagnostics.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-diagnostics.service.ts,,
+backend_file,nestjs,service,wms-erp-foundation.service.ts,PartFinder-Backend/src/wms/services/wms-erp-foundation.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-erp-foundation.service.ts,,
+backend_file,nestjs,service,wms-inventory-posting.service.ts,PartFinder-Backend/src/wms/services/wms-inventory-posting.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-inventory-posting.service.ts,,
+backend_file,nestjs,service,wms-inventory-read.service.ts,PartFinder-Backend/src/wms/services/wms-inventory-read.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-inventory-read.service.ts,,
+backend_file,nestjs,service,wms-ledger-dry-run.service.ts,PartFinder-Backend/src/wms/services/wms-ledger-dry-run.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-ledger-dry-run.service.ts,,
+backend_file,nestjs,service,wms-operator-grants.service.ts,PartFinder-Backend/src/wms/services/wms-operator-grants.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-operator-grants.service.ts,,
+backend_file,nestjs,service,wms-receiving.service.ts,PartFinder-Backend/src/wms/services/wms-receiving.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-receiving.service.ts,,
+backend_file,nestjs,test,wms-setup-operator-scope.spec.ts,PartFinder-Backend/src/wms/services/wms-setup-operator-scope.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-setup-operator-scope.spec.ts,,
+backend_file,nestjs,service,wms-setup.service.ts,PartFinder-Backend/src/wms/services/wms-setup.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-setup.service.ts,,
+backend_file,nestjs,service,wms-sku-audit.service.ts,PartFinder-Backend/src/wms/services/wms-sku-audit.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-sku-audit.service.ts,,
+backend_file,nestjs,test,wms-sku-merge-guards.spec.ts,PartFinder-Backend/src/wms/services/wms-sku-merge-guards.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-sku-merge-guards.spec.ts,,
+backend_file,nestjs,service,wms-sku.service.ts,PartFinder-Backend/src/wms/services/wms-sku.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-sku.service.ts,,
+backend_file,nestjs,service,wms-staging-gate.service.ts,PartFinder-Backend/src/wms/services/wms-staging-gate.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-staging-gate.service.ts,,
+backend_file,nestjs,service,wms-tenant-collections.service.ts,PartFinder-Backend/src/wms/services/wms-tenant-collections.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-tenant-collections.service.ts,,
+backend_file,nestjs,service,wms-transaction-guard.service.ts,PartFinder-Backend/src/wms/services/wms-transaction-guard.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-transaction-guard.service.ts,,
+backend_file,nestjs,service,wms-uom.service.ts,PartFinder-Backend/src/wms/services/wms-uom.service.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/services/wms-uom.service.ts,,
+backend_file,nestjs,test,wms-03a2-staging-acceptance.spec.ts,PartFinder-Backend/src/wms/wms-03a2-staging-acceptance.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-03a2-staging-acceptance.spec.ts,,
+backend_file,nestjs,test,wms-03a2-staging-lab.evidence.spec.ts,PartFinder-Backend/src/wms/wms-03a2-staging-lab.evidence.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-03a2-staging-lab.evidence.spec.ts,,
+backend_file,nestjs,test,wms-balance-key.util.spec.ts,PartFinder-Backend/src/wms/wms-balance-key.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-balance-key.util.spec.ts,,
+backend_file,nestjs,module,wms-balance-key.util.ts,PartFinder-Backend/src/wms/wms-balance-key.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-balance-key.util.ts,,
+backend_file,nestjs,test,wms-deployment-tier.util.spec.ts,PartFinder-Backend/src/wms/wms-deployment-tier.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-deployment-tier.util.spec.ts,,
+backend_file,nestjs,module,wms-deployment-tier.util.ts,PartFinder-Backend/src/wms/wms-deployment-tier.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-deployment-tier.util.ts,,
+backend_file,nestjs,test,wms-inventory-plan.util.spec.ts,PartFinder-Backend/src/wms/wms-inventory-plan.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-inventory-plan.util.spec.ts,,
+backend_file,nestjs,module,wms-inventory-plan.util.ts,PartFinder-Backend/src/wms/wms-inventory-plan.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-inventory-plan.util.ts,,
+backend_file,nestjs,module,wms-live-stock.util.ts,PartFinder-Backend/src/wms/wms-live-stock.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-live-stock.util.ts,,
+backend_file,nestjs,module,wms-operator-permissions.util.ts,PartFinder-Backend/src/wms/wms-operator-permissions.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-operator-permissions.util.ts,,
+backend_file,nestjs,module,wms-phase02.controller.ts,PartFinder-Backend/src/wms/wms-phase02.controller.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-phase02.controller.ts,,
+backend_file,nestjs,module,wms-phase03a.controller.ts,PartFinder-Backend/src/wms/wms-phase03a.controller.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-phase03a.controller.ts,,
+backend_file,nestjs,test,wms-receiving-workflow.integration.spec.ts,PartFinder-Backend/src/wms/wms-receiving-workflow.integration.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-receiving-workflow.integration.spec.ts,,
+backend_file,nestjs,test,wms-scope.util.spec.ts,PartFinder-Backend/src/wms/wms-scope.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-scope.util.spec.ts,,
+backend_file,nestjs,module,wms-scope.util.ts,PartFinder-Backend/src/wms/wms-scope.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-scope.util.ts,,
+backend_file,nestjs,module,wms-setup.controller.ts,PartFinder-Backend/src/wms/wms-setup.controller.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-setup.controller.ts,,
+backend_file,nestjs,test,wms-sku-namespaces.spec.ts,PartFinder-Backend/src/wms/wms-sku-namespaces.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-sku-namespaces.spec.ts,,
+backend_file,nestjs,module,wms-sku-namespaces.ts,PartFinder-Backend/src/wms/wms-sku-namespaces.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-sku-namespaces.ts,,
+backend_file,nestjs,test,wms-staging-gate.service.spec.ts,PartFinder-Backend/src/wms/wms-staging-gate.service.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-staging-gate.service.spec.ts,,
+backend_file,nestjs,test,wms-staging-stock.util.spec.ts,PartFinder-Backend/src/wms/wms-staging-stock.util.spec.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-staging-stock.util.spec.ts,,
+backend_file,nestjs,module,wms-staging-stock.util.ts,PartFinder-Backend/src/wms/wms-staging-stock.util.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-staging-stock.util.ts,,
+backend_file,nestjs,module,wms-stock-transaction.types.ts,PartFinder-Backend/src/wms/wms-stock-transaction.types.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-stock-transaction.types.ts,,
+backend_file,nestjs,module,wms-uom.constants.ts,PartFinder-Backend/src/wms/wms-uom.constants.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms-uom.constants.ts,,
+backend_file,nestjs,module,wms.module.ts,PartFinder-Backend/src/wms/wms.module.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms.module.ts,,
+backend_file,nestjs,module,wms.types.ts,PartFinder-Backend/src/wms/wms.types.ts,dhoni/warehouse,,,,,PartFinder-Backend/src/wms/wms.types.ts,,
+winui_file,desktop,WinUI,WmsSectionEqualsToVisibilityConverter.cs,PartFinder/PartFinder/Converters/WmsSectionEqualsToVisibilityConverter.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Converters/WmsSectionEqualsToVisibilityConverter.cs,,
+winui_file,desktop,WinUI,WmsFutureModuleRegistry.cs,PartFinder/PartFinder/Models/WmsFutureModuleRegistry.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Models/WmsFutureModuleRegistry.cs,,
+winui_file,desktop,WinUI,WmsWorkbookSections.cs,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Models/WmsWorkbookSections.cs,,
+winui_file,desktop,WinUI,WmsApiClient.cs,PartFinder/PartFinder/Services/WmsApiClient.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Services/WmsApiClient.cs,,
+winui_file,desktop,WinUI,WmsWorksheetExportService.cs,PartFinder/PartFinder/Services/WmsWorksheetExportService.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Services/WmsWorksheetExportService.cs,,
+winui_file,desktop,WinUI,WmsWorksheetGridHelper.cs,PartFinder/PartFinder/Services/WmsWorksheetGridHelper.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Services/WmsWorksheetGridHelper.cs,,
+winui_file,desktop,WinUI,WmsGrantScopeRowVm.cs,PartFinder/PartFinder/ViewModels/WmsGrantScopeRowVm.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsGrantScopeRowVm.cs,,
+winui_file,desktop,WinUI,WmsWorkbookNavItem.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookNavItem.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookNavItem.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.Navigation.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Navigation.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Navigation.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.Receiving.Grid.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.Grid.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.Grid.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.Receiving.Operations.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.Operations.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.Operations.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.Receiving.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.Receiving.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.SkuAndInventory.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.SkuAndInventory.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.SkuAndInventory.cs,,
+winui_file,desktop,WinUI,WmsWorkbookViewModel.cs,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/ViewModels/WmsWorkbookViewModel.cs,,
+winui_file,desktop,WinUI,WmsRoadmapPlaceholder.xaml,PartFinder/PartFinder/Views/Components/WmsRoadmapPlaceholder.xaml,dhoni/warehouse,,,,,PartFinder/PartFinder/Views/Components/WmsRoadmapPlaceholder.xaml,,
+winui_file,desktop,WinUI,WmsRoadmapPlaceholder.xaml.cs,PartFinder/PartFinder/Views/Components/WmsRoadmapPlaceholder.xaml.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Views/Components/WmsRoadmapPlaceholder.xaml.cs,,
+winui_file,desktop,WinUI,WmsWorkbookPage.xaml,PartFinder/PartFinder/Views/Pages/WmsWorkbookPage.xaml,dhoni/warehouse,,,,,PartFinder/PartFinder/Views/Pages/WmsWorkbookPage.xaml,,
+winui_file,desktop,WinUI,WmsWorkbookPage.xaml.cs,PartFinder/PartFinder/Views/Pages/WmsWorkbookPage.xaml.cs,dhoni/warehouse,,,,,PartFinder/PartFinder/Views/Pages/WmsWorkbookPage.xaml.cs,,
+platform_integration,platform,organization.schema,wmsEnabled,boolean entitlement default true,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,organization.schema,maxWmsWarehouses,default 10,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,organization.schema,maxStockOwners,default 50,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,jwt.strategy,orgCode,Included in JWT payload for WMS session,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,setup refresh session,device login,Supports WinUI quick login path,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,AppPage,WmsWorkbook,Navigation entry for warehouse workbook,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,UserAccessCapabilities,CanAccessWmsWorkbook,Admin-gated nav,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,production API,https://backend.partfinder.store,Default WinUI BaseUrl,dhoni/wms; dhoni/warehouse,,,,,,,
+platform_integration,platform,portfolio,Vercel rewrite,/api/* -> backend.partfinder.store,dhoni/wms; dhoni/warehouse,,,,,,,
+connectivity,infrastructure,mongodb_atlas,DNS symptom,querySrv ECONNREFUSED on Node 127.0.0.1,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-database-connectivity.md,,
+connectivity,infrastructure,mongodb_atlas,DNS fix,Prefer 8.8.8.8; drop loopback in dns.setServers,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-database-connectivity.md,,
+connectivity,infrastructure,mongodb_atlas,Fix files,src/test-utils/mongodb-atlas-dns.ts; scripts/mongodb-atlas-dns.mjs,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-database-connectivity.md,,
+connectivity,infrastructure,mongodb_atlas,Preflight command,npm run wms:mongodb-dns-preflight,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-database-connectivity.md,,
+connectivity,infrastructure,mongodb_atlas,Production API Mongo proof,GET /api/public/platform/maintenance returns 200,dhoni/warehouse,03A.2,,,,docs/wms-phase03/03A-2-database-connectivity.md,,

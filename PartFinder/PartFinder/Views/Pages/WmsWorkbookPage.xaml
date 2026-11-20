@@ -14,82 +14,184 @@
         <converters:WmsSectionEqualsToVisibilityConverter x:Key="SectionVisConverter" />
     </Page.Resources>
     <Grid Padding="16" DataContext="{x:Bind ViewModel, Mode=OneWay}">
+        <components:NoPermissionView
+            x:Name="WmsDeniedView"
+            Message="{x:Bind ViewModel.WmsAccessDeniedMessage, Mode=OneWay}"
+            Visibility="{x:Bind ViewModel.HasWmsAccess, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
+
+        <Grid
+            Visibility="{x:Bind ViewModel.HasWmsAccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="248" />
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="280" MinWidth="240" MaxWidth="360" />
+            <ColumnDefinition Width="*" MinWidth="480" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.ColumnSpan="2" Spacing="6" Margin="0,0,0,12">
-            <TextBlock FontSize="24" FontWeight="SemiBold" Text="Warehouse Workbook" />
-            <TextBlock
-                Opacity="0.75"
-                Text="Excel-style warehouse setup, SKU registry and read-only inventory. All data via NestJS WMS APIs."
-                TextWrapping="Wrap" />
-            <TextBlock Text="{Binding StatusMessage, Mode=OneWay}" TextWrapping="Wrap" />
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <ComboBox
-                    Width="220"
-                    ItemsSource="{Binding Warehouses, Mode=OneWay}"
-                    SelectedItem="{Binding SelectedWarehouse, Mode=TwoWay}"
-                    DisplayMemberPath="Name"
-                    PlaceholderText="Warehouse" />
-                <TextBox
-                    Width="240"
-                    PlaceholderText="Search…"
-                    Text="{Binding InventorySearch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <Button Command="{Binding ApplySearchCommand}" Content="Search" />
-                <Button Command="{Binding RefreshCommand}" Content="Refresh" />
-                <Button Command="{Binding RefreshReceivingWorksheetCommand}" Content="Refresh worksheet" />
-                <Button Command="{Binding ExportCurrentWorksheetCommand}" Content="Export Excel" />
-            </StackPanel>
-            <TextBlock Text="{Binding ReceivingGateSummary, Mode=OneWay}" Opacity="0.75" TextWrapping="Wrap" />
-        </StackPanel>
-
-        <ListView
-            Grid.Row="1"
-            ItemsSource="{Binding NavItems, Mode=OneWay}"
-            SelectionMode="None"
-            BorderBrush="{StaticResource BorderDefaultBrush}"
-            BorderThickness="0,0,1,0">
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="viewmodels:WmsWorkbookNavItem">
+        <Border
+            Grid.ColumnSpan="2"
+            Style="{StaticResource WmsCardBorderStyle}"
+            Margin="0,0,0,12"
+            Padding="16,14">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Spacing="4">
+                        <TextBlock Style="{StaticResource WmsPageTitleStyle}" Text="Warehouse Workbook" />
                         <TextBlock
-                            Margin="8,12,8,4"
-                            FontWeight="SemiBold"
-                            FontSize="11"
-                            Opacity="0.65"
-                            Text="{x:Bind GroupTitle}"
-                            Visibility="{x:Bind IsGroupHeader, Converter={StaticResource BoolToVisibilityConverter}}" />
-                        <Button
-                            Background="Transparent"
-                            BorderThickness="0"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            Padding="8,6"
-                            Command="{Binding DataContext.SelectSectionCommand, ElementName=PageRoot}"
-                            CommandParameter="{x:Bind}"
-                            Visibility="{x:Bind IsGroupHeader, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
-                            <StackPanel>
-                                <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
-                                <TextBlock Text="{x:Bind Subtitle}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
-                                <TextBlock
-                                    Text="{x:Bind RoadmapPhase}"
-                                    FontSize="10"
-                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                    Visibility="{x:Bind IsOperational, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
-                            </StackPanel>
-                        </Button>
+                            Style="{StaticResource WmsFormHintStyle}"
+                            Margin="0"
+                            Text="Enterprise warehouse setup, receiving (03A), and read-only inventory. Data is loaded from the WMS API for your signed-in organization." />
                     </StackPanel>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                        <Button
+                            Style="{StaticResource WmsSecondaryButtonStyle}"
+                            Command="{Binding RefreshCommand}"
+                            Content="Refresh data"
+                            ToolTipService.ToolTip="Reload warehouses, masters, and the current section." />
+                        <Button
+                            Style="{StaticResource WmsSecondaryButtonStyle}"
+                            Command="{Binding ExportCurrentWorksheetCommand}"
+                            Content="Export to Excel"
+                            ToolTipService.ToolTip="Export the current worksheet grid when supported." />
+                    </StackPanel>
+                </Grid>
+                <Border
+                    Grid.Row="1"
+                    Padding="10,8"
+                    CornerRadius="{StaticResource WmsCornerRadiusS}"
+                    Background="#33FFB900"
+                    Visibility="{Binding ShowStagingBanner, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock
+                        Foreground="{StaticResource WarningBrush}"
+                        Text="{Binding StagingBannerText, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                </Border>
+                <Grid
+                    Grid.Row="2"
+                    ColumnDefinitions="*,*"
+                    RowDefinitions="Auto,Auto"
+                    ColumnSpacing="16"
+                    RowSpacing="10">
+                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Organization" />
+                        <TextBlock Text="{Binding HeaderOrgCode, Mode=OneWay}" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Warehouse" />
+                        <ComboBox
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{Binding Warehouses, Mode=OneWay}"
+                            SelectedItem="{Binding SelectedWarehouse, Mode=TwoWay}"
+                            DisplayMemberPath="Name"
+                            PlaceholderText="Select warehouse" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Signed in as" />
+                        <TextBlock
+                            Text="{Binding HeaderUserEmail, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            FontSize="12"
+                            Opacity="0.85"
+                            Text="{Binding HeaderRoleDisplay, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Search records" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox
+                                Grid.Column="0"
+                                HorizontalAlignment="Stretch"
+                                PlaceholderText="SKU, receipt ID, reference…"
+                                Text="{Binding InventorySearch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Grid.Column="1"
+                                Style="{StaticResource WmsSecondaryButtonStyle}"
+                                Command="{Binding ApplySearchCommand}"
+                                Content="Search" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+                <TextBlock
+                    Grid.Row="3"
+                    Margin="0,4,0,0"
+                    Foreground="{StaticResource SuccessBrush}"
+                    Text="{Binding StatusMessage, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+            </Grid>
+        </Border>
 
-        <ScrollViewer Grid.Row="1" Grid.Column="1" Padding="16,0,0,0">
+        <ScrollViewer
+            Grid.Row="1"
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Disabled"
+            BorderBrush="{StaticResource BorderDefaultBrush}"
+            BorderThickness="0,0,1,0"
+            Padding="0,0,8,0">
+            <ListView
+                ItemsSource="{Binding NavItems, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:WmsWorkbookNavItem">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                Margin="12,14,8,4"
+                                FontWeight="SemiBold"
+                                FontSize="11"
+                                Opacity="0.65"
+                                Text="{x:Bind GroupTitle}"
+                                Visibility="{x:Bind IsGroupHeader, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Button
+                                Style="{StaticResource WmsNavButtonStyle}"
+                                Command="{Binding ElementName=PageRoot, Path=ViewModel.SelectSectionCommand}"
+                                CommandParameter="{x:Bind}"
+                                ToolTipService.ToolTip="{x:Bind TooltipText}"
+                                Visibility="{x:Bind IsGroupHeader, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+                                <Grid ColumnDefinitions="Auto,4,*" ColumnSpacing="8">
+                                    <FontIcon
+                                        FontSize="16"
+                                        Glyph="{x:Bind IconGlyph}"
+                                        Opacity="0.9" />
+                                    <Border
+                                        Grid.Column="1"
+                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                        CornerRadius="2"
+                                        Visibility="{x:Bind IsSelected, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <StackPanel Grid.Column="2" Spacing="2">
+                                        <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Text="{x:Bind Subtitle}"
+                                            FontSize="11"
+                                            Opacity="0.75"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Text="{x:Bind RoadmapPhase}"
+                                            FontSize="10"
+                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                            Visibility="{x:Bind IsOperational, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </ScrollViewer>
+
+        <ScrollViewer
+            Grid.Row="1"
+            Grid.Column="1"
+            Padding="16,0,8,0"
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Auto">
+            <StackPanel MinWidth="0" Spacing="8">
+                <components:WmsWorkbookSectionIntro
+                    Title="{Binding SectionTitle, Mode=OneWay}"
+                    Description="{Binding SectionDescription, Mode=OneWay}"
+                    Visibility="{Binding IsRoadmapSection, Mode=OneWay, Converter={StaticResource InvertedBoolToVisibilityConverter}}" />
             <Grid>
                 <components:WmsRoadmapPlaceholder
                     Title="{Binding RoadmapTitle, Mode=OneWay}"
@@ -99,11 +201,51 @@
 
                 <Grid Visibility="{Binding ShowOperationalWorksheet, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel
+                    Spacing="12"
                     Visibility="{Binding SelectedSectionId, Mode=OneWay, Converter={StaticResource SectionVisConverter}, ConverterParameter=dashboard}">
-                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Dashboard" />
-                    <TextBlock Margin="0,8,0,0" Text="{Binding TransactionProbeSummary, Mode=OneWay}" TextWrapping="Wrap" />
-                    <TextBlock Margin="0,8,0,0" Text="{Binding CatalogPhaseSummary, Mode=OneWay}" />
-                    <TextBlock Margin="0,8,0,0" Opacity="0.75" TextWrapping="Wrap" Text="Stock balances and ledger are read-only. Production inventory posting is not exposed in this UI." />
+                    <Grid
+                        ColumnDefinitions="*,*"
+                        RowDefinitions="Auto,Auto"
+                        ColumnSpacing="12"
+                        RowSpacing="12">
+                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Expected receipts" />
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding DashboardExpectedCount, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Open ASN/PO headers loaded from API." />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Goods receipts" />
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding DashboardGoodsReceiptCount, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Posted physical receipts." />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="QC pending" />
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding DashboardQcPendingCount, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Lines awaiting inspection." />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Put-away pending" />
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding DashboardPutawayPendingCount, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Tasks not yet completed." />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <Border Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                        <StackPanel Spacing="8">
+                            <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Diagnostics" />
+                            <TextBlock Text="{Binding TransactionProbeSummary, Mode=OneWay}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CatalogPhaseSummary, Mode=OneWay}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ReceivingGateSummary, Mode=OneWay}" Opacity="0.85" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" TextWrapping="Wrap" Text="Balances and ledger are read-only here. Use the Receiving sections for 03A.2 acceptance steps." />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <Grid
@@ -349,20 +491,49 @@
                     RowDefinitions="Auto,Auto,*"
                     RowSpacing="8"
                     Visibility="{Binding SelectedSectionId, Mode=OneWay, Converter={StaticResource SectionVisConverter}, ConverterParameter=expected_receipts}">
-                    <StackPanel Spacing="6">
-                        <TextBlock FontWeight="SemiBold" Text="Expected receipt (draft)" />
+                    <Border Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Create expected receipt" />
+                        <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Register products expected to arrive. Stock owner scope must match your operator grant." />
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="12">
+                            <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Stock owner / client (required)" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    ItemsSource="{Binding StockOwners, Mode=OneWay}"
+                                    SelectedItem="{Binding DraftReceiptOwner, Mode=TwoWay}"
+                                    DisplayMemberPath="Name"
+                                    PlaceholderText="Select the client that owns this stock" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Receipt reference (optional)" />
+                                <TextBox
+                                    HorizontalAlignment="Stretch"
+                                    PlaceholderText="PO or external ref, e.g. PO-4401"
+                                    Text="{Binding DraftExternalPoId, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Supplier ID (optional)" />
+                                <TextBox
+                                    HorizontalAlignment="Stretch"
+                                    PlaceholderText="Supplier identifier"
+                                    Text="{Binding DraftSupplierId, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Remarks / notes (optional)" />
+                                <TextBox
+                                    HorizontalAlignment="Stretch"
+                                    PlaceholderText="Delivery note or ASN details"
+                                    Text="{Binding DraftSupplierNote, Mode=TwoWay}" />
+                            </StackPanel>
+                        </Grid>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ComboBox Width="180" ItemsSource="{Binding StockOwners, Mode=OneWay}" SelectedItem="{Binding DraftReceiptOwner, Mode=TwoWay}" DisplayMemberPath="Name" PlaceholderText="Stock owner" />
-                            <TextBox Width="140" PlaceholderText="PO / external ref" Text="{Binding DraftExternalPoId, Mode=TwoWay}" />
-                            <TextBox Width="120" PlaceholderText="Supplier ID" Text="{Binding DraftSupplierId, Mode=TwoWay}" />
-                            <TextBox Width="160" PlaceholderText="Delivery note" Text="{Binding DraftSupplierNote, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Command="{Binding AddExpectedLineDraftRowCommand}" Content="Add line" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
-                            <Button Command="{Binding ImportExpectedLinesFromExcelAsyncCommand}" Content="Import Excel" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
-                            <Button Command="{Binding SaveExpectedReceiptCommand}" Content="Save" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsSecondaryButtonStyle}" Command="{Binding AddExpectedLineDraftRowCommand}" Content="Add product line" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsSecondaryButtonStyle}" Command="{Binding ImportExpectedLinesFromExcelAsyncCommand}" Content="Import from Excel" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsPrimaryButtonStyle}" Command="{Binding SaveExpectedReceiptCommand}" Content="Save expected receipt" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
                     <ListView Grid.Row="1" ItemsSource="{Binding ExpectedLineDrafts, Mode=OneWay}" SelectionMode="None">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="services:WmsExpectedLineDraftVm">
@@ -391,15 +562,35 @@
                 <Grid
                     RowDefinitions="Auto,Auto,*"
                     Visibility="{Binding SelectedSectionId, Mode=OneWay, Converter={StaticResource SectionVisConverter}, ConverterParameter=goods_receiving}">
-                    <StackPanel Spacing="6">
-                        <TextBlock FontWeight="SemiBold" Text="Confirm physical receipt" />
+                    <Border Style="{StaticResource WmsCardBorderStyle}" Margin="0">
+                    <StackPanel Spacing="10">
+                        <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Record goods receiving" />
+                        <TextBlock Style="{StaticResource WmsFormHintStyle}" Margin="0" Text="Confirm quantities physically received. Choose receiving location and lines before confirming (prevents duplicate posting)." />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="16" RowSpacing="4">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Stock owner / client" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    ItemsSource="{Binding StockOwners, Mode=OneWay}"
+                                    SelectedItem="{Binding DraftReceiptOwner, Mode=TwoWay}"
+                                    DisplayMemberPath="Name"
+                                    PlaceholderText="Select stock owner" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Receiving location" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    ItemsSource="{Binding Locations, Mode=OneWay}"
+                                    SelectedItem="{Binding DraftReceivingLocation, Mode=TwoWay}"
+                                    DisplayMemberPath="Path"
+                                    PlaceholderText="Select where goods were received" />
+                            </StackPanel>
+                        </Grid>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ComboBox Width="180" ItemsSource="{Binding StockOwners, Mode=OneWay}" SelectedItem="{Binding DraftReceiptOwner, Mode=TwoWay}" DisplayMemberPath="Name" />
-                            <ComboBox Width="200" ItemsSource="{Binding Locations, Mode=OneWay}" SelectedItem="{Binding DraftReceivingLocation, Mode=TwoWay}" DisplayMemberPath="Path" PlaceholderText="Receiving location" />
-                            <Button Command="{Binding AddGoodsReceiptLineDraftRowCommand}" Content="Add line" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
-                            <Button Command="{Binding PasteGoodsReceiptLinesFromClipboardCommand}" Content="Paste" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
-                            <Button Command="{Binding ConfirmGoodsReceiptCommand}" Content="Confirm receipt" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
-                            <Button Command="{Binding SortReceivingListCommand}" CommandParameter="status" Content="Sort" />
+                            <Button Style="{StaticResource WmsSecondaryButtonStyle}" Command="{Binding AddGoodsReceiptLineDraftRowCommand}" Content="Add receipt line" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsSecondaryButtonStyle}" Command="{Binding PasteGoodsReceiptLinesFromClipboardCommand}" Content="Paste from clipboard" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsPrimaryButtonStyle}" Command="{Binding ConfirmGoodsReceiptCommand}" Content="Confirm goods receipt" IsEnabled="{Binding CanOperateReceiving, Mode=OneWay}" />
+                            <Button Style="{StaticResource WmsSecondaryButtonStyle}" Command="{Binding RefreshReceivingWorksheetCommand}" Content="Refresh worksheet" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <TextBlock VerticalAlignment="Center" Text="SKU col" />
@@ -408,12 +599,13 @@
                             <Slider Width="100" Minimum="60" Maximum="160" Value="{Binding ReceivingColQty, Mode=TwoWay}" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
                     <ListView Grid.Row="1" ItemsSource="{Binding GoodsReceiptLineDrafts, Mode=OneWay}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="services:WmsGoodsReceiptLineDraftVm">
                                 <Grid ColumnDefinitions="140,80,80,80,56,56,56" ColumnSpacing="6">
-                                    <TextBox Text="{x:Bind SkuId, Mode=TwoWay}" Width="{Binding DataContext.ReceivingColSku, ElementName=PageRoot, Mode=OneWay}" />
-                                    <NumberBox Grid.Column="1" Width="{Binding DataContext.ReceivingColQty, ElementName=PageRoot, Mode=OneWay}" Value="{x:Bind QtyReceived, Mode=TwoWay}" />
+                                    <TextBox Text="{x:Bind SkuId, Mode=TwoWay}" Width="{Binding ElementName=PageRoot, Path=ViewModel.ReceivingColSku, Mode=OneWay}" />
+                                    <NumberBox Grid.Column="1" Width="{Binding ElementName=PageRoot, Path=ViewModel.ReceivingColQty, Mode=OneWay}" Value="{x:Bind QtyReceived, Mode=TwoWay}" />
                                     <TextBox Grid.Column="2" Text="{x:Bind LotId, Mode=TwoWay}" PlaceholderText="Lot" />
                                     <TextBox Grid.Column="3" Text="{x:Bind SerialId, Mode=TwoWay}" PlaceholderText="Serial" />
                                     <CheckBox Grid.Column="4" Content="Dam" IsChecked="{x:Bind Damaged, Mode=TwoWay}" />
@@ -457,10 +649,19 @@
                     Visibility="{Binding SelectedSectionId, Mode=OneWay, Converter={StaticResource SectionVisConverter}, ConverterParameter=quality_control}">
                     <StackPanel Spacing="8">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <NumberBox Width="100" Header="Accept" Value="{Binding QcQtyAccepted, Mode=TwoWay}" />
-                            <NumberBox Width="100" Header="Reject" Value="{Binding QcQtyRejected, Mode=TwoWay}" />
-                            <TextBox Width="200" PlaceholderText="Note" Text="{Binding QcNote, Mode=TwoWay}" />
-                            <Button Command="{Binding ApplyQcDecisionCommand}" Content="Apply QC" IsEnabled="{Binding CanOperateQc, Mode=OneWay}" />
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="QC accepted" />
+                                <NumberBox MinWidth="100" PlaceholderText="e.g. 55" Value="{Binding QcQtyAccepted, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="QC rejected (blocked)" />
+                                <NumberBox MinWidth="100" PlaceholderText="e.g. 5" Value="{Binding QcQtyRejected, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel MinWidth="200">
+                                <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Remarks (optional)" />
+                                <TextBox PlaceholderText="Inspection notes" Text="{Binding QcNote, Mode=TwoWay}" />
+                            </StackPanel>
+                            <Button Style="{StaticResource WmsPrimaryButtonStyle}" VerticalAlignment="Bottom" Command="{Binding ApplyQcDecisionCommand}" Content="Record QC result" IsEnabled="{Binding CanOperateQc, Mode=OneWay}" />
                         </StackPanel>
                         <TextBlock FontWeight="SemiBold" Text="Supervisor disposition (explicit write-off)" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -492,8 +693,11 @@
                     RowDefinitions="Auto,*"
                     Visibility="{Binding SelectedSectionId, Mode=OneWay, Converter={StaticResource SectionVisConverter}, ConverterParameter=putaway_tasks}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ComboBox Width="220" ItemsSource="{Binding Locations, Mode=OneWay}" SelectedItem="{Binding DraftPutawayToLocation, Mode=TwoWay}" DisplayMemberPath="Path" PlaceholderText="Storage location" />
-                        <Button Command="{Binding CompletePutawayTaskCommand}" Content="Complete put-away" IsEnabled="{Binding CanOperatePutaway, Mode=OneWay}" />
+                        <StackPanel MinWidth="240">
+                            <TextBlock Style="{StaticResource WmsFormLabelStyle}" Text="Put-away destination" />
+                            <ComboBox ItemsSource="{Binding Locations, Mode=OneWay}" SelectedItem="{Binding DraftPutawayToLocation, Mode=TwoWay}" DisplayMemberPath="Path" PlaceholderText="Choose an authorized storage bin" />
+                        </StackPanel>
+                        <Button Style="{StaticResource WmsPrimaryButtonStyle}" VerticalAlignment="Bottom" Command="{Binding CompletePutawayTaskCommand}" Content="Complete put-away" IsEnabled="{Binding CanOperatePutaway, Mode=OneWay}" />
                     </StackPanel>
                     <ListView Grid.Row="1" ItemsSource="{Binding PutawayRows, Mode=OneWay}" SelectedItem="{Binding SelectedPutawayTask, Mode=TwoWay}">
                         <ListView.ItemTemplate>
@@ -575,6 +779,7 @@
                 </StackPanel>
                 </Grid>
             </Grid>
+            </StackPanel>
         </ScrollViewer>
 
         <ProgressRing
@@ -583,7 +788,9 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             IsActive="{Binding IsBusy, Mode=OneWay}"
+            IsHitTestVisible="{Binding IsBusy, Mode=OneWay}"
             Width="48"
             Height="48" />
+        </Grid>
     </Grid>
 </Page>

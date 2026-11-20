@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PartFinder.Helpers;
 
 namespace PartFinder.Services;
@@ -742,9 +743,14 @@ public sealed class WmsReceivingAuditRowDto
 public sealed class WmsSessionProfileDto
 {
     public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
     public bool IsWmsAdmin { get; set; }
     public WmsOperatorPermissionsDto OperatorPermissions { get; set; } = new();
+
+    [JsonConverter(typeof(WmsScopeIdsJsonConverter))]
     public string[] AllowedWarehouseIds { get; set; } = [];
+
+    [JsonConverter(typeof(WmsScopeIdsJsonConverter))]
     public string[] AllowedOwnerIds { get; set; } = [];
 }
 

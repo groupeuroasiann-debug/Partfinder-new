@@ -3,30 +3,37 @@ using PartFinder.Models;
 namespace PartFinder.Services;
 
 /// <summary>
-/// RBAC policy for the desktop shell. Replace with Casbin-backed enforcement when server-side auth lands.
+/// RBAC policy for the desktop shell. WMS workbook access requires a successful
+/// <c>GET /wms/v1/session/profile</c> (NestJS WmsSessionGuard), not desktop role alone.
 /// </summary>
 public sealed class CurrentUserAccessService : ICurrentUserAccessService
 {
     private readonly ILocalSetupContext _setupContext;
     private readonly AdminSessionStore _adminSession;
     private readonly IOrgUserDirectoryService _users;
+    private readonly WmsApiClient _wms;
 
-    private UserAccessCapabilities _capabilities = UserAccessCapabilities.FullAdmin;
-    private bool _isOrganizationAdministrator = true;
+    private UserAccessCapabilities _capabilities = UserAccessCapabilities.FailClosed;
+    private bool _isOrganizationAdministrator;
+    private string? _wmsWorkbookAccessDeniedReason;
 
     public CurrentUserAccessService(
         ILocalSetupContext setupContext,
         AdminSessionStore adminSession,
-        IOrgUserDirectoryService users)
+        IOrgUserDirectoryService users,
+        WmsApiClient wms)
     {
         _setupContext = setupContext;
         _adminSession = adminSession;
         _users = users;
+        _wms = wms;
     }
 
     public UserAccessCapabilities Capabilities => _capabilities;
 
     public bool IsOrganizationAdministrator => _isOrganizationAdministrator;
+
+    public string? WmsWorkbookAccessDeniedReason => _wmsWorkbookAccessDeniedReason;
 
     public bool CanViewAllAuditHistory => _capabilities.CanManageInventory;
 
@@ -36,6 +43,7 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
     {
         try
         {
+            _wmsWorkbookAccessDeniedReason = null;
             _setupContext.Refresh();
             _adminSession.Load();
 
@@ -44,23 +52,23 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
             {
                 _isOrganizationAdministrator = true;
                 _capabilities = UserAccessCapabilities.FullAdmin;
+                await EnrichWmsWorkbookAccessAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             var record = await _users.FindByEmailAsync(email, cancellationToken).ConfigureAwait(false);
             if (record is null)
             {
-                // No record in org_app_users means this is the org creator (in org_admins collection).
-                // Org creator gets full access including User Management.
+                // No record in org_app_users means org creator (org_admins). WMS still gated by API.
                 _isOrganizationAdministrator = true;
                 _capabilities = UserAccessCapabilities.FullAdmin;
+                await EnrichWmsWorkbookAccessAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
             if (string.Equals(record.Role, "Admin", StringComparison.OrdinalIgnoreCase))
             {
                 _isOrganizationAdministrator = true;
-                // Invited admin — full access EXCEPT User Management (only org creator can manage users).
                 _capabilities = new UserAccessCapabilities
                 {
                     CanAccessMasterData = true,
@@ -86,8 +94,9 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
 
                     CanViewInventory = true,
                     CanManageInventory = true,
-                    CanAccessWmsWorkbook = true,
+                    CanAccessWmsWorkbook = false,
                 };
+                await EnrichWmsWorkbookAccessAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
@@ -96,8 +105,6 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
                 _isOrganizationAdministrator = false;
                 _capabilities = new UserAccessCapabilities
                 {
-                    // Page-level access (navbar visibility) — Employee sees all standard pages.
-                    // Granular permissions below decide what they can DO inside each page.
                     CanAccessMasterData = true,
                     CanAccessDashboard = true,
                     CanAccessParts = true,
@@ -105,14 +112,11 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
                     CanAccessSettings = true,
                     CanAccessUserManagement = false,
 
-                    // Granular template permissions (actual operations)
                     CanAddTemplate = record.TemplatePermissions?.Add ?? false,
                     CanViewTemplate = record.TemplatePermissions?.View ?? false,
                     CanEditTemplate = record.TemplatePermissions?.Edit ?? false,
                     CanDeleteTemplate = record.TemplatePermissions?.Delete ?? false,
 
-                    // Granular master data permissions (actual operations)
-                    // Master data row add/delete: admins only (not employees).
                     CanCopyMasterData = record.MasterDataPermissions?.Copy ?? false,
                     CanViewMasterData = record.MasterDataPermissions?.View ?? false,
                     CanEditMasterData = record.MasterDataPermissions?.Edit ?? false,
@@ -124,20 +128,72 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
 
                     CanViewInventory = true,
                     CanManageInventory = false,
+                    CanAccessWmsWorkbook = false,
                 };
+                await EnrichWmsWorkbookAccessAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
-            // Unknown role — default to FullAdmin for backward compatibility.
-            _isOrganizationAdministrator = true;
-            _capabilities = UserAccessCapabilities.FullAdmin;
+            _isOrganizationAdministrator = false;
+            _capabilities = UserAccessCapabilities.FailClosed;
+            await EnrichWmsWorkbookAccessAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             DebugLogClient.Post("warn", "CurrentUserAccessService.RefreshAsync", ex.Message);
-            _isOrganizationAdministrator = true;
-            _capabilities = UserAccessCapabilities.FullAdmin;
+            _isOrganizationAdministrator = false;
+            _capabilities = UserAccessCapabilities.FailClosed;
+            _wmsWorkbookAccessDeniedReason =
+                "Could not verify permissions. Sign in again or contact your organisation admin.";
         }
+    }
+
+    private async Task EnrichWmsWorkbookAccessAsync(CancellationToken cancellationToken)
+    {
+        _wmsWorkbookAccessDeniedReason = null;
+        _adminSession.Load();
+        if (!_adminSession.HasSession)
+        {
+            _capabilities = _capabilities.WithWmsWorkbook(false);
+            return;
+        }
+
+        var profile = await _wms.GetSessionProfileAsync(cancellationToken).ConfigureAwait(false);
+        if (profile.Ok && profile.Data is not null)
+        {
+            _capabilities = _capabilities.WithWmsWorkbook(true);
+            return;
+        }
+
+        _capabilities = _capabilities.WithWmsWorkbook(false);
+        if (IsWmsAccessDeniedError(profile.Error))
+        {
+            _wmsWorkbookAccessDeniedReason =
+                string.IsNullOrWhiteSpace(profile.Error)
+                    ? "Warehouse Management access is not granted for this account."
+                    : profile.Error;
+            return;
+        }
+
+        _wmsWorkbookAccessDeniedReason = string.IsNullOrWhiteSpace(profile.Error)
+            ? "Could not reach the WMS API (GET /wms/v1/session/profile). " +
+              "For staging acceptance use org 900152, a WMS operator account, and start the app with " +
+              "PARTFINDER_STAGING_API=1 so the client uses appsettings.Staging.json."
+            : profile.Error;
+    }
+
+    private static bool IsWmsAccessDeniedError(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return false;
+        }
+
+        return error.Contains("403", StringComparison.Ordinal) ||
+               error.Contains("Forbidden", StringComparison.OrdinalIgnoreCase) ||
+               error.Contains("No WMS operator grants", StringComparison.OrdinalIgnoreCase) ||
+               error.Contains("Warehouse Management is not enabled", StringComparison.OrdinalIgnoreCase) ||
+               error.Contains("not a member of this organization", StringComparison.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<PartTemplateDefinition> FilterTemplatesForParts(IReadOnlyList<PartTemplateDefinition> templates)
@@ -145,7 +201,6 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
         var cap = _capabilities;
         IEnumerable<PartTemplateDefinition> q = templates;
 
-        // Never use Master Data template on Parts for employees.
         if (!cap.CanAccessMasterData)
         {
             q = q.Where(t => !string.Equals(
@@ -174,5 +229,4 @@ public sealed class CurrentUserAccessService : ICurrentUserAccessService
         _setupContext.Refresh();
         return _setupContext.AdminEmail?.Trim();
     }
-
 }

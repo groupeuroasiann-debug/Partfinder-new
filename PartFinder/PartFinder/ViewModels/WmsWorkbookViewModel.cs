@@ -9,11 +9,19 @@ public partial class WmsWorkbookViewModel : ViewModelBase
 {
     private readonly WmsApiClient _wms;
     private readonly ICurrentUserAccessService _access;
+    private readonly ILocalSetupContext _setupContext;
+    private readonly AdminSessionStore _sessionStore;
 
-    public WmsWorkbookViewModel(WmsApiClient wms, ICurrentUserAccessService access)
+    public WmsWorkbookViewModel(
+        WmsApiClient wms,
+        ICurrentUserAccessService access,
+        ILocalSetupContext setupContext,
+        AdminSessionStore sessionStore)
     {
         _wms = wms;
         _access = access;
+        _setupContext = setupContext;
+        _sessionStore = sessionStore;
         Warehouses = new ObservableCollection<WmsWarehouseDto>();
         StockOwners = new ObservableCollection<WmsStockOwnerDto>();
         Zones = new ObservableCollection<WmsZoneDto>();
@@ -35,6 +43,11 @@ public partial class WmsWorkbookViewModel : ViewModelBase
     public ObservableCollection<string> MappingErrorRows { get; }
 
     public bool CanEditSetup => _access.IsOrganizationAdministrator;
+
+    public bool HasWmsAccess { get; private set; } = true;
+
+    public string WmsAccessDeniedMessage { get; private set; } =
+        "You do not have permission to use Warehouse Workbook.";
 
     private string _statusMessage = string.Empty;
     public string StatusMessage
@@ -65,6 +78,7 @@ public partial class WmsWorkbookViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedWarehouse, value))
             {
+                UpdateHeaderWarehouse();
                 _ = ReloadZonesAndLocationsAsync();
             }
         }
@@ -320,8 +334,32 @@ public partial class WmsWorkbookViewModel : ViewModelBase
     private int _txnPage;
     private const int PageSize = 50;
 
+    public async Task EnsureAccessAsync(CancellationToken ct = default)
+    {
+        await _access.RefreshAsync(ct).ConfigureAwait(true);
+        if (!_access.Capabilities.CanAccessWmsWorkbook)
+        {
+            HasWmsAccess = false;
+            WmsAccessDeniedMessage =
+                _access.WmsWorkbookAccessDeniedReason ??
+                "Warehouse Management is not enabled for this account or operator grants are missing.";
+            OnPropertyChanged(nameof(HasWmsAccess));
+            OnPropertyChanged(nameof(WmsAccessDeniedMessage));
+            return;
+        }
+
+        HasWmsAccess = true;
+        OnPropertyChanged(nameof(HasWmsAccess));
+        RefreshHeaderChrome();
+    }
+
     public async Task LoadAsync(CancellationToken ct = default)
     {
+        if (!HasWmsAccess)
+        {
+            return;
+        }
+
         IsBusy = true;
         StatusMessage = string.Empty;
         try
@@ -362,6 +400,9 @@ public partial class WmsWorkbookViewModel : ViewModelBase
             var phase = health.Data?.Phase ?? "WMS";
             StatusMessage =
                 $"Connected ({phase}). Legacy partfinder_inventory is unchanged; WMS ledger is API-backed.";
+            RefreshHeaderChrome();
+            RefreshDashboardCounts();
+            await LoadSessionProfileAsync().ConfigureAwait(true);
         }
         finally
         {

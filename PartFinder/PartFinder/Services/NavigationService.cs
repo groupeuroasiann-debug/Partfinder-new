@@ -51,7 +51,7 @@ public sealed class NavigationService : INavigationService
     {
         _frame = frame;
         _frameReady.TrySetResult();
-        _frame.CacheSize = 1;
+        _frame.CacheSize = 0;
         if (App.Current.Resources.TryGetValue("LuxuryPageTransitions", out var transitions) &&
             transitions is TransitionCollection transitionCollection)
         {
@@ -62,7 +62,13 @@ public sealed class NavigationService : INavigationService
     public bool Navigate(AppPage page, object? parameter = null)
     {
         _resetGeneration++;
-        return NavigateCore(page, parameter, new DrillInNavigationTransitionInfo());
+        var transition = new SuppressNavigationTransitionInfo();
+        if (!NavigateCore(page, parameter, transition))
+        {
+            return ShowFresh(page);
+        }
+
+        return true;
     }
 
     public bool ResetTo(AppPage page)
