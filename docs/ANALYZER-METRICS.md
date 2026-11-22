@@ -4,15 +4,14 @@ Columns such as **COCOMO**, **cyclomatic complexity**, **# of pipelines**, and *
 
 ## Local analyzer (tracked files only)
 
+One-time scc install (fills **Total complexity**, **COCOMO estimated cost ($)**, **COCOMO estimated months**):
+
 ```powershell
+.\tools\install-scc.ps1
 .\tools\run-analyzer-report.ps1
 ```
 
-Add complexity / COCOMO-style columns (install [scc](https://github.com/boyter/scc) first):
-
-```powershell
-.\tools\run-analyzer-report.ps1 -UseScc
-```
+Committed spreadsheet export: `docs/metrics/report.csv` (open in Excel).
 
 Optional coverage from test runs (slower):
 
