@@ -1,12 +1,17 @@
-﻿# Full local report: CI + scc/COCOMO (install scc via tools/install-scc.ps1).
+﻿# Repo analyzer report: local clone or GitHub API (COCOMO via tools/install-scc.ps1 + --use-scc).
 param(
+  [ValidateSet("local", "github")]
+  [string]$Provider = "local",
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+  [string]$GithubProject = "jayandra06/Partfinder-new",
   [string]$AnalyzerScript = "c:\Users\euroa\OneDrive\Desktop\Jay Docs\Final Script\repo_analyzer_UPDATED.py",
   [string]$SccPath = (Join-Path $PSScriptRoot "scc\scc.exe"),
   [string]$OutputCsv = (Join-Path $RepoRoot "docs\metrics\report.csv"),
+  [string]$GitHubToken = "",
   [switch]$UseScc = $true,
   [switch]$EnableCoverage,
-  [switch]$SkipSccInstall
+  [switch]$SkipSccInstall,
+  [switch]$SkipRemoteCoverage
 )
 
 $detailJson = [System.IO.Path]::ChangeExtension($OutputCsv, ".json")
@@ -29,12 +34,25 @@ if (-not (Test-Path $metricsDir)) {
 }
 
 $argsList = @(
-  "--provider", "local",
-  "--path", $RepoRoot,
+  "--provider", $Provider,
   "--name", "Partfinder",
-  "--output", $OutputCsv,
-  "--local-mrs", "merges"
+  "--output", $OutputCsv
 )
+
+if ($Provider -eq "local") {
+  $argsList += "--path", $RepoRoot
+  $argsList += "--local-mrs", "merges"
+} else {
+  if (-not $GitHubToken) {
+    try { $GitHubToken = (gh auth token 2>$null) } catch { }
+  }
+  if (-not $GitHubToken) {
+    throw "GitHub provider requires a token: set GITHUB_TOKEN or run gh auth login"
+  }
+  $argsList += "--project", $GithubProject
+  $argsList += "--token", $GitHubToken
+  if ($SkipRemoteCoverage) { $argsList += "--skip-remote-coverage" }
+}
 
 if ($UseScc -and (Test-Path $SccPath)) {
   $argsList += "--use-scc", "--scc-path", $SccPath
