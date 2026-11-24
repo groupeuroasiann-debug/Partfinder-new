@@ -115,7 +115,7 @@ function App() {
 
 function PublicDashboardPage() {
   return (
-    <main className="page">
+    <main className="page" id="main-content">
       <header className="hero">
         <Link
           to="/"
@@ -134,14 +134,16 @@ function PublicDashboardPage() {
         <p className="badge">PartFinder Dashboard</p>
         <h1>Everyone can view the live platform dashboard</h1>
         <p className="sub">
-          See the headline metrics and open the admin area when you need to manage the platform.
+          Windows desktop app for daily work, NestJS API for multi-tenant data, and this admin
+          portal for organizations, licensing, and releases. Anyone can view headline metrics;
+          administrators sign in to configure the platform.
         </p>
         <div className="actions">
           <Link to="/admin/dashboard" className="btn-primary">
-            Open Dashboard
+            View live metrics
           </Link>
-          <Link to="/admin" className="btn-primary">
-            Admin Login
+          <Link to="/admin" className="btn-secondary">
+            Admin sign in
           </Link>
           <Link to="/admin/register" className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span>Admin Registration</span>
@@ -149,6 +151,20 @@ function PublicDashboardPage() {
           </Link>
         </div>
       </header>
+      <section className="feature-grid" aria-label="Platform capabilities">
+        <article className="card">
+          <h3>Explorer &amp; master data</h3>
+          <p>Link worksheets, inherit template fields, and filter large part grids with confidence.</p>
+        </article>
+        <article className="card">
+          <h3>Multi-tenant orgs</h3>
+          <p>Provision organizations, plans, license bans, and MongoDB clusters from the admin UI.</p>
+        </article>
+        <article className="card">
+          <h3>Operations ready</h3>
+          <p>Maintenance windows, debug log streaming, and release notes for the Windows client.</p>
+        </article>
+      </section>
       <DashboardSection />
     </main>
   )
@@ -2333,10 +2349,18 @@ function NotFoundPage() {
           <PartFinderLogo className="brand-logo" style={{ marginBottom: 16 }} />
         </Link>
         <h2>Page not found</h2>
-        <p>The route you requested does not exist.</p>
-        <a href="/" className="btn-secondary">
-          Back to Home
-        </a>
+        <p>
+          The URL is not part of PartFinder admin. Try the public dashboard or sign in to manage
+          organizations.
+        </p>
+        <div className="actions">
+          <Link to="/dashboard" className="btn-primary">
+            Public dashboard
+          </Link>
+          <Link to="/admin" className="btn-secondary">
+            Admin login
+          </Link>
+        </div>
       </section>
     </main>
   )
