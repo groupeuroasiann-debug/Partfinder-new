@@ -93,6 +93,10 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         }
 
         await vm.LoadFavouriteStoreAsync().ConfigureAwait(true);
+        if (_viewModel is null)
+        {
+            return;
+        }
 
         _navigationArgs ??= new MasterDataNavigationArgs { Mode = MasterDataSurfaceMode.ReadOnlyCatalog };
         if (!_surfaceInitialized)
@@ -101,13 +105,18 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             _surfaceInitialized = true;
         }
 
+        if (_viewModel is null)
+        {
+            return;
+        }
+
         if (_navigationArgs.Mode == MasterDataSurfaceMode.LinkedBrowse)
         {
             ConfigureEmbeddedBrowseChrome();
         }
 
         UpdateCatalogNavChrome();
-        _displayedTemplateId ??= _viewModel.SelectedDataTemplate?.Id;
+        _displayedTemplateId ??= _viewModel?.SelectedDataTemplate?.Id;
         RestorePageIndexFromSession();
         RebuildSpreadsheet();
     }
@@ -310,6 +319,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
     private void OnMasterDataPageUnloaded(object sender, RoutedEventArgs e)
     {
         Unloaded -= OnMasterDataPageUnloaded;
+        _columnFilterDebounceTimer?.Stop();
         _suspendBrowsePersist = false;
         PersistGridBrowseState();
         if (_viewModel is not null)
@@ -407,12 +417,20 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         _columnFilterDrafts[fieldKey] = text;
 
         _columnFilterDebounceTimer ??= DispatcherQueue.CreateTimer();
-        _columnFilterDebounceTimer.Interval = TimeSpan.FromMilliseconds(550);
+        _columnFilterDebounceTimer.Interval = TimeSpan.FromSeconds(1.25);
         _columnFilterDebounceTimer.IsRepeating = false;
         _columnFilterDebounceTimer.Stop();
         _columnFilterDebounceTimer.Tick -= OnColumnFilterDebounceTick;
         _columnFilterDebounceTimer.Tick += OnColumnFilterDebounceTick;
         _columnFilterDebounceTimer.Start();
+    }
+
+    private void ApplyColumnFilterImmediately(string fieldKey, string text)
+    {
+        _columnFilterDebounceTimer?.Stop();
+        _columnFilterFocusKey = fieldKey;
+        _columnFilterDrafts[fieldKey] = text;
+        _viewModel?.SetColumnFilter(fieldKey, text);
     }
 
     private void OnColumnFilterDebounceTick(
@@ -439,28 +457,55 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             return;
         }
 
-        var box = FindColumnFilterTextBox(SpreadsheetHost, _columnFilterFocusKey);
-        if (box is null)
+        var control = FindColumnFilterControl(SpreadsheetHost, _columnFilterFocusKey);
+        if (control is null)
         {
             return;
         }
 
-        box.Focus(FocusState.Programmatic);
-        var length = box.Text?.Length ?? 0;
-        box.SelectionStart = length;
-        box.SelectionLength = 0;
+        control.Focus(FocusState.Programmatic);
+        var textBox = control as TextBox ?? FindDescendantTextBox(control);
+        if (textBox is not null)
+        {
+            var length = textBox.Text?.Length ?? 0;
+            textBox.SelectionStart = length;
+            textBox.SelectionLength = 0;
+        }
     }
 
-    private static TextBox? FindColumnFilterTextBox(DependencyObject root, string fieldKey)
+    private static Control? FindColumnFilterControl(DependencyObject root, string fieldKey)
     {
         var stack = new Stack<DependencyObject>();
         stack.Push(root);
         while (stack.Count > 0)
         {
             var node = stack.Pop();
-            if (node is TextBox box
-                && box.Tag is string tag
+            if (node is Control ctrl
+                && (ctrl is AutoSuggestBox || ctrl is TextBox)
+                && ctrl.Tag is string tag
                 && string.Equals(tag, fieldKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return ctrl;
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(node);
+            for (var i = 0; i < childCount; i++)
+            {
+                stack.Push(VisualTreeHelper.GetChild(node, i));
+            }
+        }
+
+        return null;
+    }
+
+    private static TextBox? FindDescendantTextBox(DependencyObject root)
+    {
+        var stack = new Stack<DependencyObject>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (node is TextBox box)
             {
                 return box;
             }
@@ -1309,14 +1354,15 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             var initialFilter = _columnFilterDrafts.TryGetValue(fieldKey, out var draft)
                 ? draft
                 : activeFilter ?? string.Empty;
-            var filterBox = new TextBox
+            var filterBox = new AutoSuggestBox
             {
                 PlaceholderText = "Search column…",
+                QueryIcon = new SymbolIcon(Symbol.Find),
                 FontSize = 12,
                 Tag = fieldKey,
                 IsEnabled = true,
-                IsReadOnly = false,
                 IsTabStop = true,
+                IsSuggestionListOpen = false,
             };
             filterBox.GotFocus += (_, _) => _columnFilterFocusKey = fieldKey;
             filterBox.LostFocus += (_, _) =>
@@ -1326,14 +1372,21 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             _suppressColumnFilterTextEvents = true;
             filterBox.Text = initialFilter;
             _suppressColumnFilterTextEvents = false;
-            filterBox.TextChanged += (_, _) =>
+            filterBox.TextChanged += (sender, args) =>
             {
-                if (_suppressColumnFilterTextEvents)
+                if (_suppressColumnFilterTextEvents || args.Reason == AutoSuggestionBoxTextChangeReason.ProgrammaticChange)
                 {
                     return;
                 }
 
-                ScheduleColumnFilterApply(fieldKey, filterBox.Text);
+                sender.IsSuggestionListOpen = false;
+                var query = sender.Text ?? string.Empty;
+                ScheduleColumnFilterApply(fieldKey, query);
+            };
+            filterBox.QuerySubmitted += (_, args) =>
+            {
+                var submitted = args.QueryText ?? string.Empty;
+                ApplyColumnFilterImmediately(fieldKey, submitted);
             };
             filterBorder.Child = filterBox;
             Grid.SetRow(filterBorder, 1);

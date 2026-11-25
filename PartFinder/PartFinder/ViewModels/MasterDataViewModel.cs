@@ -274,6 +274,85 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     public bool TryGetColumnFilter(string fieldKey, out string filterText) =>
         _columnFilters.TryGetValue(fieldKey, out filterText!);
 
+    /// <summary>
+    /// Returns up to <paramref name="maxSuggestions"/> distinct values from <paramref name="fieldKey"/>
+    /// matching <paramref name="query"/>, prioritizing prefix matches for the search dropdown.
+    /// </summary>
+    public IReadOnlyList<string> GetColumnFilterSuggestions(
+        string fieldKey,
+        string? query,
+        int maxSuggestions = 15) =>
+        FilterColumnSuggestions(Rows, fieldKey, query, maxSuggestions);
+
+    public static IReadOnlyList<string> FilterColumnSuggestions(
+        IEnumerable<MasterDataRowViewModel> rows,
+        string fieldKey,
+        string? query,
+        int maxSuggestions = 15)
+    {
+        if (string.IsNullOrWhiteSpace(fieldKey) || maxSuggestions <= 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var normalizedQuery = query?.Trim() ?? string.Empty;
+        var distinctValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var prefixMatches = new List<string>();
+        var containsMatches = new List<string>();
+
+        foreach (var row in rows)
+        {
+            var cell = row.Cells.FirstOrDefault(
+                c => string.Equals(c.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
+            var value = cell?.Text?.Trim();
+            if (string.IsNullOrEmpty(value) || !distinctValues.Add(value))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(normalizedQuery))
+            {
+                prefixMatches.Add(value);
+                continue;
+            }
+
+            if (value.StartsWith(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+            {
+                prefixMatches.Add(value);
+            }
+            else if (value.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+            {
+                containsMatches.Add(value);
+            }
+        }
+
+        prefixMatches.Sort(StringComparer.OrdinalIgnoreCase);
+        containsMatches.Sort(StringComparer.OrdinalIgnoreCase);
+
+        var results = new List<string>(Math.Min(maxSuggestions, prefixMatches.Count + containsMatches.Count));
+        foreach (var match in prefixMatches)
+        {
+            if (results.Count >= maxSuggestions)
+            {
+                break;
+            }
+
+            results.Add(match);
+        }
+
+        foreach (var match in containsMatches)
+        {
+            if (results.Count >= maxSuggestions)
+            {
+                break;
+            }
+
+            results.Add(match);
+        }
+
+        return results;
+    }
+
     public void SetColumnFilter(string fieldKey, string? filterValue)
     {
         if (string.IsNullOrWhiteSpace(fieldKey))
