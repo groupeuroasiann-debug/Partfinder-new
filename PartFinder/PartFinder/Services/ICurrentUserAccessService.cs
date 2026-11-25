@@ -10,6 +10,9 @@ public interface ICurrentUserAccessService
     /// <summary>Resolves the signed-in / setup email and loads org user record from Mongo.</summary>
     Task RefreshAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>When WMS workbook is hidden, human-readable reason from NestJS session probe (if 403).</summary>
+    string? WmsWorkbookAccessDeniedReason { get; }
+
     /// <summary>Filters templates for the Parts page (Master Data template excluded for employees).</summary>
     IReadOnlyList<Models.PartTemplateDefinition> FilterTemplatesForParts(
         IReadOnlyList<Models.PartTemplateDefinition> templates);

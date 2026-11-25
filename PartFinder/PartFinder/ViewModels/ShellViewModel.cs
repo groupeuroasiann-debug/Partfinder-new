@@ -306,13 +306,32 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
             navItem.IsSelected = ReferenceEquals(navItem, item);
         }
 
+        var previousPage = _lastSelectedPage;
         _selectedNavigationItem = item;
         OnPropertyChanged(nameof(SelectedNavigationItem));
         _lastSelectedPage = item.Page;
 
         if (navigate && !_suppressNavigation)
         {
-            _navigationService.Navigate(item.Page);
+            var navigated = _navigationService.ResetTo(item.Page);
+            if (!navigated)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ShellViewModel] Failed to navigate to {item.Page} ({item.Label}).");
+                _lastSelectedPage = previousPage;
+                var revert = NavigationItems.FirstOrDefault(i => i.Page == previousPage)
+                             ?? NavigationItems.FirstOrDefault();
+                if (revert is not null)
+                {
+                    foreach (var navItem in NavigationItems)
+                    {
+                        navItem.IsSelected = ReferenceEquals(navItem, revert);
+                    }
+
+                    _selectedNavigationItem = revert;
+                    OnPropertyChanged(nameof(SelectedNavigationItem));
+                }
+            }
         }
     }
 
@@ -391,22 +410,28 @@ public partial class ShellViewModel : ViewModelBase, IShellNavCoordinator
             NavigationItems.Add(
                 new NavItemViewModel
                 {
-                    Label = "Warehouse Management",
+                    Label = "Inventory",
                     IconGlyph = "\uE179",
                     Page = AppPage.Inventory,
                     IsEnabled = true,
+                    Tooltip = "Legacy parts inventory (Mongo). Not the NestJS WMS workbook.",
                 });
         }
 
-        if (c.CanAccessWmsWorkbook)
+        if (_adminSession.HasSession)
         {
+            var wmsGranted = c.CanAccessWmsWorkbook;
             NavigationItems.Add(
                 new NavItemViewModel
                 {
-                    Label = "WMS Setup",
+                    Label = "WMS Workbook",
                     IconGlyph = "\uE7B8",
                     Page = AppPage.WmsWorkbook,
                     IsEnabled = true,
+                    Tooltip = wmsGranted
+                        ? "Warehouse Workbook — receiving, QC, put-away (NestJS WMS API)."
+                        : _access.WmsWorkbookAccessDeniedReason ??
+                          "WMS not available for this sign-in. Use a WMS operator on an enabled organisation.",
                 });
         }
 

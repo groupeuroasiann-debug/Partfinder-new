@@ -34,11 +34,39 @@ public static class LicenseApiClient
     public static string GetBaseUrl()
     {
         var baseDir = AppContext.BaseDirectory;
+        var useStagingApi =
+            string.Equals(
+                Environment.GetEnvironmentVariable("PARTFINDER_STAGING_API"),
+                "1",
+                StringComparison.OrdinalIgnoreCase);
+
 #if DEBUG
-        var fromDev = TryReadLicenseApiBaseUrl(Path.Combine(baseDir, "appsettings.Development.json"));
-        if (!string.IsNullOrWhiteSpace(fromDev))
+        if (useStagingApi)
         {
-            return fromDev;
+            var fromStaging = TryReadLicenseApiBaseUrl(
+                Path.Combine(baseDir, "appsettings.Staging.json"),
+                allowHostedStaging: true);
+            if (!string.IsNullOrWhiteSpace(fromStaging))
+            {
+                return fromStaging;
+            }
+        }
+        else
+        {
+            var fromDev = TryReadLicenseApiBaseUrl(
+                Path.Combine(baseDir, "appsettings.Development.json"));
+            if (!string.IsNullOrWhiteSpace(fromDev))
+            {
+                return fromDev;
+            }
+        }
+#else
+        var fromStagingRelease = TryReadLicenseApiBaseUrl(
+            Path.Combine(baseDir, "appsettings.Staging.json"),
+            allowHostedStaging: true);
+        if (!string.IsNullOrWhiteSpace(fromStagingRelease))
+        {
+            return fromStagingRelease;
         }
 #endif
         var fromDefault = TryReadLicenseApiBaseUrl(Path.Combine(baseDir, "appsettings.json"));
@@ -50,7 +78,7 @@ public static class LicenseApiClient
         return "https://backend.partfinder.store";
     }
 
-    private static string? TryReadLicenseApiBaseUrl(string path)
+    private static string? TryReadLicenseApiBaseUrl(string path, bool allowHostedStaging = false)
     {
         try
         {
@@ -64,11 +92,19 @@ public static class LicenseApiClient
                 licenseApi.TryGetProperty("BaseUrl", out var baseUrlEl))
             {
                 var s = baseUrlEl.GetString();
-                if (!string.IsNullOrWhiteSpace(s) &&
-                    !s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(s))
                 {
-                    return s.TrimEnd('/');
+                    return null;
                 }
+
+                var isVercelStaging =
+                    s.Contains("vercel.app", StringComparison.OrdinalIgnoreCase);
+                if (isVercelStaging && !allowHostedStaging)
+                {
+                    return null;
+                }
+
+                return s.TrimEnd('/');
             }
         }
         catch

@@ -13,11 +13,16 @@ public sealed partial class WmsWorkbookPage : Page
     {
         ViewModel = App.Services.GetRequiredService<WmsWorkbookViewModel>();
         InitializeComponent();
+        DataContext = ViewModel;
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        await ViewModel.LoadAsync().ConfigureAwait(true);
+        await ViewModel.EnsureAccessAsync().ConfigureAwait(true);
+        if (ViewModel.HasWmsAccess)
+        {
+            await ViewModel.LoadAsync().ConfigureAwait(true);
+        }
     }
 }

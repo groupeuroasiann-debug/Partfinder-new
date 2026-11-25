@@ -3,6 +3,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Navigation;
 using PartFinder.Services;
 using PartFinder.ViewModels;
 using System;
@@ -168,6 +169,19 @@ public sealed partial class ShellLayout : UserControl
         Unloaded -= OnShellLayoutUnloaded;
         AppTitleBarLayout.LayoutUpdated -= OnAppTitleBarLayoutUpdated;
         _shellViewModel.NavigationItems.CollectionChanged -= OnNavigationItemsCollectionChanged;
+        ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
+    }
+
+    private void OnContentFrameNavigationFailed(object sender, NavigationFailedEventArgs e)
+    {
+        var pageName = e.SourcePageType?.Name ?? "unknown";
+        var detail = e.Exception?.Message ?? "unknown error";
+        System.Diagnostics.Debug.WriteLine(
+            $"[ShellLayout] NavigationFailed to {pageName}: {detail}");
+        DebugLogClient.Post(
+            "error",
+            "ShellLayout.NavigationFailed",
+            $"{pageName}: {detail}");
     }
 
     private void OnShellLayoutLoaded(object sender, RoutedEventArgs e)
@@ -182,7 +196,9 @@ public sealed partial class ShellLayout : UserControl
             ambientStoryboard.Begin();
         }
 
-        App.Services.GetRequiredService<INavigationService>().Initialize(ContentFrame);
+        var navigation = App.Services.GetRequiredService<INavigationService>();
+        navigation.Initialize(ContentFrame);
+        ContentFrame.NavigationFailed += OnContentFrameNavigationFailed;
 
         NotifyTitleBarRegionsChanged();
         ScheduleTopNavScrollAffordanceUpdate();

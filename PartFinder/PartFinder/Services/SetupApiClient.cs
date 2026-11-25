@@ -681,7 +681,10 @@ public static class SetupApiClient
         if (LooksLikeNetworkError(detail))
         {
             return
-                $"Cannot reach the PartFinder API at {api}. {detail} Check your internet connection and LicenseApi:BaseUrl in appsettings.json.";
+                $"Cannot reach the PartFinder API at {api}. {detail} " +
+                "For org 900152 / WMS staging use https://partfinder-backend-staging.vercel.app " +
+                "(appsettings.Development.json or set PARTFINDER_STAGING_API=1). " +
+                "For a local NestJS API only, set LicenseApi:BaseUrl to http://127.0.0.1:3000 in appsettings.Development.json and start PartFinder-Backend.";
         }
 
         if (detail.Contains("server error", StringComparison.OrdinalIgnoreCase) ||

@@ -1,0 +1,30 @@
+{
+  "executedAt": "2026-11-19T12:01:00.000Z",
+  "apiBase": "https://partfinder-backend-staging.vercel.app",
+  "orgCode": "900152",
+  "environment": "hosted-vercel",
+  "loginFlow": "POST /api/public/setup/invite-login",
+  "accounts": [
+    {
+      "persona": "WMS Administrator",
+      "email": "wms-admin-staging@partfinder.acceptance",
+      "loginSuccess": true,
+      "wmsWarehousesListHttpStatus": 200
+    },
+    {
+      "persona": "Operator A",
+      "email": "operator-a-staging@partfinder.acceptance",
+      "loginSuccess": true,
+      "wmsWarehousesListHttpStatus": 200,
+      "scopedWarehouseCount": 1
+    },
+    {
+      "persona": "Operator B",
+      "email": "operator-b-staging@partfinder.acceptance",
+      "loginSuccess": true,
+      "wmsWarehousesListHttpStatus": 200,
+      "scopedWarehouseCount": 1
+    }
+  ],
+  "credentialsNote": "Temporary password set via PartFinder-Backend/scripts/staging-hosted-identities.mjs with WMS_STAGING_TEST_PASSWORD — not stored in git."
+}

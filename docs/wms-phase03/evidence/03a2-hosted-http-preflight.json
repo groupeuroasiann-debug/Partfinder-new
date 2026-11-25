@@ -1,0 +1,18 @@
+{
+    "apiBase":  "https://partfinder-backend-staging.vercel.app",
+    "environment":  "hosted-vercel",
+    "preflight":  {
+                      "supported":  true,
+                      "commitProbe":  true,
+                      "rollbackProbe":  true,
+                      "deploymentTier":  "staging",
+                      "stagingStockPosting":  false,
+                      "liveStockPosting":  false,
+                      "postingGateOpen":  false,
+                      "tenantDatabase":  "wms_staging_acceptance_900152",
+                      "replicaSetName":  "atlas-52zzyo-shard-0",
+                      "recordedAt":  "2026-11-19T12:01:03.341Z"
+                  },
+    "executedAt":  "2026-11-19T12:01:03.2383477Z",
+    "orgCode":  "900152"
+}

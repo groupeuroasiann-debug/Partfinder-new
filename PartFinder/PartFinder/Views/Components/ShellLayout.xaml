@@ -212,7 +212,7 @@
                                             Style="{StaticResource TopNavIconButtonStyle}"
                                             Click="OnTopNavItemClicked"
                                             DataContext="{x:Bind}"
-                                            ToolTipService.ToolTip="{x:Bind Label}">
+                                            ToolTipService.ToolTip="{x:Bind ToolTipDisplay, Mode=OneWay}">
                                             <StackPanel
                                                 Spacing="2"
                                                 HorizontalAlignment="Center"

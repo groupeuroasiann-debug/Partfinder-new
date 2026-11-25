@@ -40,6 +40,39 @@ public sealed class UserAccessCapabilities
     /// <summary>Warehouse Workbook setup (NestJS WMS API — Phase 02A).</summary>
     public bool CanAccessWmsWorkbook { get; init; }
 
+    public UserAccessCapabilities WithWmsWorkbook(bool canAccess) => new()
+    {
+        CanAccessMasterData = CanAccessMasterData,
+        CanAccessDashboard = CanAccessDashboard,
+        CanAccessParts = CanAccessParts,
+        CanAccessTemplates = CanAccessTemplates,
+        CanAccessSettings = CanAccessSettings,
+        CanAccessUserManagement = CanAccessUserManagement,
+        CanAddTemplate = CanAddTemplate,
+        CanViewTemplate = CanViewTemplate,
+        CanEditTemplate = CanEditTemplate,
+        CanDeleteTemplate = CanDeleteTemplate,
+        CanCopyMasterData = CanCopyMasterData,
+        CanViewMasterData = CanViewMasterData,
+        CanEditMasterData = CanEditMasterData,
+        CanAddMasterData = CanAddMasterData,
+        CanDeleteMasterData = CanDeleteMasterData,
+        PartsAllTemplates = PartsAllTemplates,
+        AllowedTemplateIds = AllowedTemplateIds,
+        CanViewInventory = CanViewInventory,
+        CanManageInventory = CanManageInventory,
+        CanAccessWmsWorkbook = canAccess,
+    };
+
+    /// <summary>Minimal shell access when RBAC refresh fails (fail closed for WMS).</summary>
+    public static UserAccessCapabilities FailClosed { get; } = new()
+    {
+        CanAccessDashboard = true,
+        CanAccessSettings = true,
+        CanViewInventory = true,
+        CanAccessWmsWorkbook = false,
+    };
+
     public static UserAccessCapabilities FullAdmin { get; } = new()
     {
         CanAccessMasterData = true,
@@ -65,6 +98,6 @@ public sealed class UserAccessCapabilities
 
         CanViewInventory = true,
         CanManageInventory = true,
-        CanAccessWmsWorkbook = true,
+        CanAccessWmsWorkbook = false,
     };
 }
