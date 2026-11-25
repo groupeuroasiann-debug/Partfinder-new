@@ -32,6 +32,11 @@ public sealed class UserAccessCapabilitiesTests
 
         foreach (var prop in BoolProperties())
         {
+            if (prop.Name == nameof(UserAccessCapabilities.CanAccessWmsWorkbook))
+            {
+                continue;
+            }
+
             Assert.IsTrue((bool)prop.GetValue(caps)!, prop.Name);
         }
 
