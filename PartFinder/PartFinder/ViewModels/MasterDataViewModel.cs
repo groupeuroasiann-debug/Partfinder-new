@@ -1506,6 +1506,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         if (parsed.Fields.Count == 0)
         {
             StatusMessage = parsed.Warnings.FirstOrDefault() ?? "No columns detected in the file.";
+            ClearOperationProgress();
             return;
         }
 
@@ -1519,53 +1520,61 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
 
         ReportProgress(progress, 5, "Importing", "Preparing columns…");
-        Columns.Clear();
-        foreach (var field in parsed.Fields.OrderBy(f => f.DisplayOrder))
+        IsLoading = true;
+        try
         {
-            Columns.Add(field);
-        }
-
-        Rows.Clear();
-        var total = parsed.Rows.Count;
-        for (var index = 0; index < total; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var source = parsed.Rows[index];
-            var row = new MasterDataRowViewModel();
-            foreach (var col in Columns)
+            Columns.Clear();
+            foreach (var field in parsed.Fields.OrderBy(f => f.DisplayOrder))
             {
-                var text = source.TryGetValue(col.Key, out var v) ? v ?? string.Empty : string.Empty;
-                row.Cells.Add(CreateCell(col, text, null));
+                Columns.Add(field);
             }
 
-            Rows.Add(row);
-            if (index % 25 == 0 || index == total - 1)
+            Rows.Clear();
+            var total = parsed.Rows.Count;
+            for (var index = 0; index < total; index++)
             {
-                var pct = total == 0 ? 40 : 10 + 80.0 * (index + 1) / total;
-                ReportProgress(progress, pct, "Importing", $"Loaded {index + 1} of {total} rows…");
-                if (index % 100 == 0)
+                cancellationToken.ThrowIfCancellationRequested();
+                var source = parsed.Rows[index];
+                var row = new MasterDataRowViewModel();
+                foreach (var col in Columns)
                 {
-                    await Task.Yield();
+                    var text = source.TryGetValue(col.Key, out var v) ? v ?? string.Empty : string.Empty;
+                    row.Cells.Add(CreateCell(col, text, null));
+                }
+
+                Rows.Add(row);
+                if (index % 25 == 0 || index == total - 1)
+                {
+                    var pct = total == 0 ? 40 : 10 + 80.0 * (index + 1) / total;
+                    ReportProgress(progress, pct, "Importing", $"Loaded {index + 1} of {total} rows…");
+                    if (index % 100 == 0)
+                    {
+                        await Task.Yield();
+                    }
                 }
             }
-        }
 
-        if (Rows.Count < CanvasMinRows)
+            if (Rows.Count < CanvasMinRows)
+            {
+                EnsureCanvasRowBuffer();
+            }
+
+            IsEditMode = true;
+            ReportProgress(progress, 90, "Importing", total > 0 ? $"{total} rows loaded into the grid." : "Columns ready.");
+            StatusMessage = parsed.Rows.Count > 0
+                ? $"Loaded {parsed.Rows.Count} row(s) from file. Saving to catalog…"
+                : "Columns loaded from file header row.";
+            if (parsed.Warnings.Count > 0)
+            {
+                StatusMessage += " " + string.Join(" ", parsed.Warnings);
+            }
+
+            await CompleteSchemaImportPersistenceAsync(progress, cancellationToken).ConfigureAwait(true);
+        }
+        finally
         {
-            EnsureCanvasRowBuffer();
+            IsLoading = false;
         }
-
-        IsEditMode = true;
-        ReportProgress(progress, 100, "Import complete", total > 0 ? $"{total} rows loaded into the grid." : "Columns ready.");
-        StatusMessage = parsed.Rows.Count > 0
-            ? $"Loaded {parsed.Rows.Count} row(s) from file. Saving to catalog…"
-            : "Columns loaded from file header row.";
-        if (parsed.Warnings.Count > 0)
-        {
-            StatusMessage += " " + string.Join(" ", parsed.Warnings);
-        }
-
-        await CompleteSchemaImportPersistenceAsync(progress, cancellationToken).ConfigureAwait(true);
     }
 
     private async Task CompleteSchemaImportPersistenceAsync(
@@ -1589,6 +1598,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
                 if (commitError is not null)
                 {
                     StatusMessage = commitError;
+                    ClearOperationProgress();
                     return;
                 }
             }
@@ -1622,6 +1632,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     {
         if (SelectedDataTemplate is null)
         {
+            ClearOperationProgress();
             return;
         }
 
@@ -1633,6 +1644,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(templateId))
         {
             StatusMessage = "This catalog has no id. Save the catalog name first, then import again.";
+            ClearOperationProgress();
             return;
         }
 
@@ -1645,6 +1657,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             if (commitError is not null)
             {
                 StatusMessage = commitError;
+                ClearOperationProgress();
                 return;
             }
 
@@ -1653,6 +1666,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 StatusMessage = "Catalog was cleared while importing. Please select the catalog and try again.";
+                ClearOperationProgress();
                 return;
             }
 
@@ -1673,6 +1687,10 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             StatusMessage = $"Imported {inserted} row(s) into \"{templateName}\".";
             ShowNoTemplateHint = false;
             await LoadCatalogRowsPageAsync(0, 50, cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Import failed: " + ex.Message;
         }
         finally
         {
@@ -1710,6 +1728,12 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         try
         {
+            var index = DataTemplates.ToList().FindIndex(t => t.Id == patched.Id);
+            if (index >= 0)
+            {
+                DataTemplates[index] = patched;
+            }
+
             SelectedDataTemplate = patched;
         }
         finally
@@ -1724,12 +1748,6 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         foreach (var field in patched.Fields.OrderBy(f => f.DisplayOrder))
         {
             Columns.Add(field);
-        }
-
-        var index = DataTemplates.ToList().FindIndex(t => t.Id == patched.Id);
-        if (index >= 0)
-        {
-            DataTemplates[index] = patched;
         }
 
         return null;
@@ -1959,7 +1977,6 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         };
 
         await _templateSchema.SaveTemplateAsync(patched, cancellationToken).ConfigureAwait(true);
-        SelectedDataTemplate = patched;
         var oldByIndex = Columns.ToList();
         Columns.Clear();
         foreach (var field in fields)
@@ -1968,10 +1985,28 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         }
 
         RemapRowCellsAfterSchemaCommit(fields, oldByIndex);
-        var index = DataTemplates.ToList().FindIndex(t => t.Id == patched.Id);
-        if (index >= 0)
+        var suppressReload = _suppressTemplateSelectionChange;
+        if (!suppressReload)
         {
-            DataTemplates[index] = patched;
+            _suppressTemplateSelectionChange = true;
+        }
+
+        try
+        {
+            var index = DataTemplates.ToList().FindIndex(t => t.Id == patched.Id);
+            if (index >= 0)
+            {
+                DataTemplates[index] = patched;
+            }
+
+            SelectedDataTemplate = patched;
+        }
+        finally
+        {
+            if (!suppressReload)
+            {
+                _suppressTemplateSelectionChange = false;
+            }
         }
 
         return null;

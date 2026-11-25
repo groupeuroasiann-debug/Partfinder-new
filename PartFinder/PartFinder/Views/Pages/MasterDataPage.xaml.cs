@@ -750,18 +750,89 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             return;
         }
 
-        _viewModel.ApplyOperationProgress(new MasterDataOperationProgress(2, "Importing", "Reading file…", "2%"));
-        var importProgress = new Progress<MasterDataOperationProgress>(_viewModel.ApplyOperationProgress);
-
-        if (_viewModel.ShouldInferImportSchema())
+        string? tempPath = null;
+        try
         {
-            var inferred = await _excelTemplateService.ParseImportFileInferSchemaAsync(file.Path).ConfigureAwait(true);
-            if (inferred.Fields.Count == 0)
+            _viewModel.ApplyOperationProgress(new MasterDataOperationProgress(2, "Importing", "Reading file…", "2%"));
+            var importProgress = new Progress<MasterDataOperationProgress>(_viewModel.ApplyOperationProgress);
+
+            var path = await ResolvePickerFilePathAsync(file).ConfigureAwait(true);
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
+                _viewModel.ClearOperationProgress();
+                var errDlg = new ContentDialog
+                {
+                    Title = "Could not access file",
+                    Content = "Could not read the selected file. Please make sure the file is not locked by another application and try again.",
+                    CloseButtonText = "Close",
+                    XamlRoot = XamlRoot,
+                };
+                _ = await errDlg.ShowAsync();
+                return;
+            }
+
+            tempPath = path != file.Path ? path : null;
+
+            if (_viewModel.ShouldInferImportSchema())
+            {
+                var inferred = await _excelTemplateService.ParseImportFileInferSchemaAsync(path).ConfigureAwait(true);
+                if (inferred.Fields.Count == 0)
+                {
+                    _viewModel.ClearOperationProgress();
+                    var noneDlg = new ContentDialog
+                    {
+                        Title = "Could not read file",
+                        Content = inferred.Warnings.FirstOrDefault() ?? "No columns were found in row 1.",
+                        CloseButtonText = "Close",
+                        XamlRoot = XamlRoot,
+                    };
+                    _ = await noneDlg.ShowAsync();
+                    return;
+                }
+
+                _viewModel.ClearOperationProgress();
+                var confirmSchema = new ContentDialog
+                {
+                    Title = "Import into catalog?",
+                    Content = $"Use {inferred.Fields.Count} column(s) from the file header and load {inferred.Rows.Count} data row(s)?",
+                    PrimaryButtonText = "Import",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = XamlRoot,
+                };
+                if (await confirmSchema.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                var targetCatalogName = _viewModel.SelectedDataTemplate?.Name ?? "catalog";
+                _viewModel.ApplyOperationProgress(new MasterDataOperationProgress(5, "Importing", "Preparing columns…", "5%"));
+                try
+                {
+                    await _viewModel.ApplySchemaImportAsync(inferred, importProgress).ConfigureAwait(true);
+                }
+                finally
+                {
+                    await Task.Delay(400).ConfigureAwait(true);
+                    _viewModel.ClearOperationProgress();
+                }
+
+                RebuildSpreadsheet();
+                var catalogName = _viewModel.SelectedDataTemplate?.Name ?? targetCatalogName;
+                _activity.LogStockChange(
+                    "Catalog Import",
+                    $"Loaded {inferred.Rows.Count} row(s) and {inferred.Fields.Count} columns from file into '{catalogName}'");
+                return;
+            }
+
+            var parsed = await _excelTemplateService.ParseImportFileAsync(_viewModel.SelectedDataTemplate, path).ConfigureAwait(true);
+            if (parsed.Rows.Count == 0)
+            {
+                _viewModel.ClearOperationProgress();
                 var noneDlg = new ContentDialog
                 {
-                    Title = "Could not read file",
-                    Content = inferred.Warnings.FirstOrDefault() ?? "No columns were found in row 1.",
+                    Title = "No data to import",
+                    Content = BuildImportSummaryContent(parsed, 0, imported: 0),
                     CloseButtonText = "Close",
                     XamlRoot = XamlRoot,
                 };
@@ -769,23 +840,26 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
                 return;
             }
 
-            var confirmSchema = new ContentDialog
+            _viewModel.ClearOperationProgress();
+            var confirm = new ContentDialog
             {
-                Title = "Import into catalog?",
-                Content = $"Use {inferred.Fields.Count} column(s) from the file header and load {inferred.Rows.Count} data row(s)?",
+                Title = "Import Excel data?",
+                Content = $"Import {parsed.Rows.Count} row(s) into template \"{_viewModel.SelectedDataTemplate.Name}\"?",
                 PrimaryButtonText = "Import",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = XamlRoot,
             };
-            if (await confirmSchema.ShowAsync() != ContentDialogResult.Primary)
+            if (await confirm.ShowAsync() != ContentDialogResult.Primary)
             {
                 return;
             }
 
+            _viewModel.ApplyOperationProgress(new MasterDataOperationProgress(5, "Importing", "Preparing data…", "5%"));
+            int imported;
             try
             {
-                await _viewModel.ApplySchemaImportAsync(inferred, importProgress).ConfigureAwait(true);
+                imported = await _viewModel.ImportRowsAsync(parsed.Rows, importProgress).ConfigureAwait(true);
             }
             finally
             {
@@ -794,63 +868,78 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             }
 
             RebuildSpreadsheet();
-            _activity.LogStockChange(
-                "Catalog Import",
-                $"Loaded {inferred.Rows.Count} row(s) and {inferred.Fields.Count} columns from file into '{_viewModel.SelectedDataTemplate.Name}'");
-            return;
-        }
-
-        var parsed = await _excelTemplateService.ParseImportFileAsync(_viewModel.SelectedDataTemplate, file.Path);
-        if (parsed.Rows.Count == 0)
-        {
-            var noneDlg = new ContentDialog
+            var dlg = new ContentDialog
             {
-                Title = "No data to import",
-                Content = BuildImportSummaryContent(parsed, 0, imported: 0),
+                Title = "Import completed",
+                Content = BuildImportSummaryContent(parsed, parsed.Rows.Count, imported),
+                CloseButtonText = "OK",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
+            };
+
+            _activity.LogStockChange("Excel Import", $"Imported {imported} rows into template '{_viewModel.SelectedDataTemplate?.Name ?? "template"}'");
+            _ = await dlg.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            _viewModel.ClearOperationProgress();
+            var errDlg = new ContentDialog
+            {
+                Title = "Import failed",
+                Content = $"Could not complete import: {ex.Message}",
                 CloseButtonText = "Close",
                 XamlRoot = XamlRoot,
             };
-            _ = await noneDlg.ShowAsync();
-            return;
-        }
-
-        var confirm = new ContentDialog
-        {
-            Title = "Import Excel data?",
-            Content = $"Import {parsed.Rows.Count} row(s) into template \"{_viewModel.SelectedDataTemplate.Name}\"?",
-            PrimaryButtonText = "Import",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-        };
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        int imported;
-        try
-        {
-            imported = await _viewModel.ImportRowsAsync(parsed.Rows, importProgress).ConfigureAwait(true);
+            _ = await errDlg.ShowAsync();
         }
         finally
         {
-            await Task.Delay(400).ConfigureAwait(true);
             _viewModel.ClearOperationProgress();
+            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Ignore temp file cleanup exceptions
+                }
+            }
+        }
+    }
+
+    private static async Task<string?> ResolvePickerFilePathAsync(Windows.Storage.StorageFile file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.Path) && File.Exists(file.Path))
+        {
+            try
+            {
+                using var testStream = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                return file.Path;
+            }
+            catch
+            {
+                // File path may be locked or not directly streamable; fall through to StorageFile stream copy
+            }
         }
 
-        RebuildSpreadsheet();
-        var dlg = new ContentDialog
+        try
         {
-            Title = "Import completed",
-            Content = BuildImportSummaryContent(parsed, parsed.Rows.Count, imported),
-            CloseButtonText = "OK",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-        };
-
-        _activity.LogStockChange("Excel Import", $"Imported {imported} rows into template '{_viewModel.SelectedDataTemplate.Name}'");
-        _ = await dlg.ShowAsync();
+            var tempDir = Path.Combine(Path.GetTempPath(), "PartFinderMasterDataImport");
+            Directory.CreateDirectory(tempDir);
+            var tempPath = Path.Combine(tempDir, $"{Guid.NewGuid():N}_{file.Name}");
+            using (var source = await file.OpenStreamForReadAsync().ConfigureAwait(true))
+            await using (var dest = File.Create(tempPath))
+            {
+                await source.CopyToAsync(dest).ConfigureAwait(true);
+            }
+            return tempPath;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async void OnPurgeMasterDataClicked(object sender, RoutedEventArgs e)
