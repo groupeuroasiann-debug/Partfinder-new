@@ -1,14 +1,23 @@
+using System.Text.RegularExpressions;
+
 namespace PartFinder.Helpers;
 
 /// <summary>Normalises common US spellings in user-visible text (e.g. API error messages).</summary>
 internal static class BritishEnglish
 {
+    // "Catalogue" itself contains "Catalog", so a plain string replace is not idempotent
+    // ("catalogs" -> "catalogues" -> "catalogueues"). Only rewrite "catalog" when it is not
+    // already followed by "ue".
+    private static readonly Regex CatalogRegex = new("([Cc])atalog(?!ue)", RegexOptions.Compiled);
+
     public static string ForDisplay(string text)
     {
         if (string.IsNullOrEmpty(text))
         {
             return text;
         }
+
+        text = CatalogRegex.Replace(text, "$1atalogue");
 
         return text
             .Replace("Organizations", "Organisations")
@@ -23,10 +32,6 @@ internal static class BritishEnglish
             .Replace("favorites", "favourites")
             .Replace("Favorite", "Favourite")
             .Replace("favorite", "favourite")
-            .Replace("Catalogs", "Catalogues")
-            .Replace("catalogs", "catalogues")
-            .Replace("Catalog", "Catalogue")
-            .Replace("catalog", "catalogue")
             .Replace("Optimization", "Optimisation")
             .Replace("optimization", "optimisation")
             .Replace("Synchronize", "Synchronise")
