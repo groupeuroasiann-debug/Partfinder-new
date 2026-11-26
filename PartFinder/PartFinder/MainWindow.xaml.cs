@@ -1210,6 +1210,33 @@ public sealed partial class MainWindow : Window
             var security = App.Services.GetRequiredService<LocalUserSecurityStore>();
             security.Load();
 
+            var activeEmail = !string.IsNullOrWhiteSpace(_resolvedSignedInEmail)
+                ? _resolvedSignedInEmail
+                : App.Services.GetRequiredService<AdminSessionStore>().Email;
+            if (string.IsNullOrWhiteSpace(activeEmail))
+            {
+                var setup = App.Services.GetRequiredService<ILocalSetupContext>();
+                setup.Refresh();
+                activeEmail = setup.AdminEmail;
+            }
+
+            if (!string.IsNullOrWhiteSpace(activeEmail))
+            {
+                var users = App.Services.GetRequiredService<IOrgUserDirectoryService>();
+                var remoteTwoFactor = await users.GetTwoFactorForEmailAsync(activeEmail).ConfigureAwait(true);
+                if (remoteTwoFactor is not null)
+                {
+                    if (remoteTwoFactor.Enabled && !string.IsNullOrWhiteSpace(remoteTwoFactor.Secret))
+                    {
+                        security.SetTwoFactor(remoteTwoFactor.Secret, true);
+                    }
+                    else
+                    {
+                        security.DisableTwoFactor();
+                    }
+                }
+            }
+
             if (security.TwoFactorEnabled && !_loginTotpVerifiedThisSession)
             {
                 LoginTotpErrorBorder.Visibility = Visibility.Collapsed;
@@ -1217,6 +1244,7 @@ public sealed partial class MainWindow : Window
                 LoginTwoFactorRoot.Visibility = Visibility.Visible;
                 ShellRoot.Visibility = Visibility.Collapsed;
                 AppLockRoot.Visibility = Visibility.Collapsed;
+                LoginTotpBox.Focus(FocusState.Programmatic);
                 return;
             }
 
@@ -1273,6 +1301,15 @@ public sealed partial class MainWindow : Window
         var shellVm = App.Services.GetRequiredService<ShellViewModel>();
         await shellVm.InitializeAsync().ConfigureAwait(true);
         LogAutoLoginIfSessionActive();
+    }
+
+    private void OnLoginTotpBoxKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            OnLoginTotpVerifyClick(sender, e);
+        }
     }
 
     private void OnLoginTotpVerifyClick(object sender, RoutedEventArgs e)

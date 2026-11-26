@@ -2,6 +2,8 @@ using PartFinder.Models;
 
 namespace PartFinder.Services;
 
+public sealed record UserTwoFactorState(bool Enabled, string? Secret);
+
 public sealed class InviteUserResult
 {
     public required string Email { get; init; }
@@ -98,5 +100,17 @@ public interface IOrgUserDirectoryService
     /// <summary>Clears invite pending flag when the user signed in without a forced password change.</summary>
     Task<bool> MarkInvitedUserActiveAfterLoginAsync(
         string email,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the email-linked 2FA state from the shared user directory, or null if unreachable.</summary>
+    Task<UserTwoFactorState?> GetTwoFactorForEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Persists the email-linked 2FA secret and enabled flag so 2FA follows the user across devices.</summary>
+    Task<bool> SetTwoFactorForEmailAsync(
+        string email,
+        string? secret,
+        bool enabled,
         CancellationToken cancellationToken = default);
 }
