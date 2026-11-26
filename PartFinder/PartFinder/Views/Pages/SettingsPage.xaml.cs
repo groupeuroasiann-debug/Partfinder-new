@@ -1217,25 +1217,12 @@ public sealed partial class SettingsPage : Page
 
 
     private void OnUseEmailProfileClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-
     {
-
         if (DataContext is not SettingsViewModel vm) return;
 
-        vm.ProfileName = string.Empty;
-
-        if (vm.SaveProfileCommand.CanExecute(null))
-
-        {
-
-            vm.SaveProfileCommand.Execute(null);
-
-            _activity.LogUserAction("Profile Updated", "Display name cleared — email will be shown");
-
-            ShowToast("Profile Updated", "Email will now be shown as display name.");
-
-        }
-
+        vm.UseEmailProfile();
+        _activity.LogUserAction("Profile Updated", "Display name cleared — email will be shown");
+        ShowToast("Profile Updated", "Email will now be shown as display name.");
     }
 
 

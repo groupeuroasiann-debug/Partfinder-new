@@ -576,6 +576,22 @@ public partial class SettingsViewModel : ViewModelBase
         CaptureProfileBaseline();
     }
 
+    public void UseEmailProfile()
+    {
+        ProfileMessage = string.Empty;
+        ProfileName = string.Empty;
+
+        _profile.SaveProfile(
+            null,
+            ProfileDepartment.Trim(),
+            ProfileDesignation.Trim(),
+            ProfileBio.Trim());
+
+        OnPropertyChanged(nameof(AvatarInitial));
+        ProfileMessage = "Email will now be shown as display name.";
+        CaptureProfileBaseline();
+    }
+
     private async Task SyncProfileDisplayNameToDirectoryAsync(string email, string displayName)
     {
         try
