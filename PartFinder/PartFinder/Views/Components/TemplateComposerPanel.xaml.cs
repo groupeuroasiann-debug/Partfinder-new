@@ -19,6 +19,7 @@ public sealed partial class TemplateComposerPanel : UserControl
     private readonly List<RowSlot> _rows = [];
     private readonly List<string> _removedRowIds = [];
     private readonly List<SourceCatalog> _sources = [];
+    private readonly Dictionary<string, IReadOnlyList<MasterDataRowRecord>> _sourceRowsCache = new(StringComparer.Ordinal);
     private string? _selectedColumnKey;
     private bool _busy;
     private bool _isCreating;
@@ -106,6 +107,7 @@ public sealed partial class TemplateComposerPanel : UserControl
         if (!_viewOnly)
         {
             _sources.Clear();
+            _sourceRowsCache.Clear();
             var catalogs = TemplateCatalogFilters.MasterDataCatalogs(
                 await _templates.GetTemplatesAsync().ConfigureAwait(true));
             foreach (var catalog in CatalogBrowseSessionStore.OrderForCatalogSidebar(catalogs))
@@ -283,7 +285,12 @@ public sealed partial class TemplateComposerPanel : UserControl
 
     private async Task ImportSourceColumnAsync(SourceCatalog catalog, TemplateFieldDefinition sourceField)
     {
-        if (_busy || _selectedColumnKey is null)
+        if (_busy)
+        {
+            return;
+        }
+
+        if (_selectedColumnKey is null)
         {
             StatusText.Text = "Select a column in the template table first.";
             return;
@@ -304,7 +311,12 @@ public sealed partial class TemplateComposerPanel : UserControl
         _busy = true;
         try
         {
-            var sourceRows = await _records.GetRowsAsync(catalog.Id).ConfigureAwait(true);
+            if (!_sourceRowsCache.TryGetValue(catalog.Id, out var sourceRows))
+            {
+                sourceRows = await _records.GetRowsAsync(catalog.Id).ConfigureAwait(true);
+                _sourceRowsCache[catalog.Id] = sourceRows;
+            }
+
             while (_rows.Count < sourceRows.Count)
             {
                 AddEmptyRows(Math.Min(GrowRowsBatch, sourceRows.Count - _rows.Count));
@@ -315,7 +327,13 @@ public sealed partial class TemplateComposerPanel : UserControl
                 var value = string.Empty;
                 if (i < sourceRows.Count)
                 {
-                    sourceRows[i].Values.TryGetValue(sourceField.Key, out value);
+                    var rowValues = sourceRows[i].Values;
+                    if (!rowValues.TryGetValue(sourceField.Key, out value))
+                    {
+                        value = rowValues
+                            .FirstOrDefault(kv => string.Equals(kv.Key, sourceField.Key, StringComparison.OrdinalIgnoreCase))
+                            .Value;
+                    }
                 }
 
                 _rows[i].Values[destination.Key] = value ?? string.Empty;
@@ -325,8 +343,7 @@ public sealed partial class TemplateComposerPanel : UserControl
             destination.SourceTemplateId = catalog.Id;
             destination.SourceFieldKey = sourceField.Key;
             ApplyRender();
-            StatusText.Text = $"Imported \"{sourceField.Label}\" from {catalog.Name}.";
-            await SaveAsync(StatusText.Text).ConfigureAwait(true);
+            StatusText.Text = $"Imported \"{sourceField.Label}\" from {catalog.Name}. Click Save when done.";
         }
         catch (Exception ex)
         {
@@ -503,6 +520,61 @@ public sealed partial class TemplateComposerPanel : UserControl
         }
     }
 
+    private void SelectColumn(string columnKey, int columnIndex)
+    {
+        if (!string.Equals(_selectedColumnKey, columnKey, StringComparison.Ordinal))
+        {
+            _selectedColumnKey = columnKey;
+            UpdateColumnSelectionVisuals();
+        }
+
+        if (!_viewOnly)
+        {
+            MaybeGrowColumnsForIndex(columnIndex);
+        }
+    }
+
+    private void UpdateColumnSelectionVisuals()
+    {
+        if (HeaderScroll.Content is Grid headerGrid)
+        {
+            foreach (var child in headerGrid.Children)
+            {
+                if (child is Border border && border.Tag is string key)
+                {
+                    var selected = string.Equals(key, _selectedColumnKey, StringComparison.Ordinal);
+                    border.Background = selected ? Brush("RowSelectedBackgroundBrush") : Brush("GridHeaderBackgroundBrush");
+                    border.BorderBrush = selected ? Brush("AccentPrimaryBrush") : Brush("BorderDefaultBrush");
+                    border.BorderThickness = new Thickness(selected ? 2 : 1);
+                }
+            }
+        }
+
+        if (TemplateScroll.Content is ItemsRepeater repeater)
+        {
+            var count = VisualTreeHelper.GetChildrenCount(repeater);
+            for (var i = 0; i < count; i++)
+            {
+                if (VisualTreeHelper.GetChild(repeater, i) is Grid rowGrid && rowGrid.Tag is RowSlot rowSlot)
+                {
+                    var rowIndex = _rows.IndexOf(rowSlot);
+                    foreach (var child in rowGrid.Children)
+                    {
+                        if (child is Border cell && cell.Tag is string key)
+                        {
+                            var selected = string.Equals(key, _selectedColumnKey, StringComparison.Ordinal);
+                            cell.Background = selected
+                                ? Brush("RowSelectedBackgroundBrush")
+                                : Brush(rowIndex % 2 == 0 ? "CardBackgroundBrush" : "GridRowAltBackgroundBrush");
+                            cell.BorderBrush = selected ? Brush("AccentPrimaryBrush") : Brush("BorderDefaultBrush");
+                            cell.BorderThickness = new Thickness(selected ? 2 : 1, 0, selected ? 2 : 1, 1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void Render() => ApplyRender();
 
     private void ApplyRender()
@@ -515,11 +587,18 @@ public sealed partial class TemplateComposerPanel : UserControl
         _applyingRender = true;
         try
         {
+            var prevH = TemplateScroll.HorizontalOffset;
+            var prevV = TemplateScroll.VerticalOffset;
             var columnWidth = ColumnWidth();
             _laidOutViewport = TemplateScroll.ViewportWidth;
             HeaderScroll.Content = BuildHeader(columnWidth);
             TemplateScroll.Content = BuildVirtualRows(columnWidth);
             SourcesScroll.Content = BuildSourceTables();
+            if (prevH > 0 || prevV > 0)
+            {
+                _ = TemplateScroll.ChangeView(prevH, prevV, null, true);
+                _ = HeaderScroll.ChangeView(prevH, null, null, true);
+            }
         }
         finally
         {
@@ -554,6 +633,7 @@ public sealed partial class TemplateComposerPanel : UserControl
             var selected = column.Key == _selectedColumnKey;
             var cell = new Border
             {
+                Tag = column.Key,
                 Background = selected ? Brush("RowSelectedBackgroundBrush") : Brush("GridHeaderBackgroundBrush"),
                 BorderBrush = selected ? Brush("AccentPrimaryBrush") : Brush("BorderDefaultBrush"),
                 BorderThickness = new Thickness(selected ? 2 : 1),
@@ -581,21 +661,16 @@ public sealed partial class TemplateComposerPanel : UserControl
                 IsEnabled = !_viewOnly,
                 IsReadOnly = _viewOnly,
             };
+            labelBox.AddHandler(
+                UIElement.PointerPressedEvent,
+                new PointerEventHandler((_, _) => SelectColumn(captured.Key, columnIndex)),
+                true);
             labelBox.GotFocus += (_, _) =>
             {
-                if (!string.Equals(_selectedColumnKey, captured.Key, StringComparison.Ordinal))
-                {
-                    _selectedColumnKey = captured.Key;
-                    ApplyRender();
-                }
-
+                SelectColumn(captured.Key, columnIndex);
                 StatusText.Text = _viewOnly
                     ? "View-only workspace — browse template data here. Use Edit on Analytics to change structure or values."
-                    : "Select a column header, then choose a master data column below to import values.";
-                if (!_viewOnly)
-                {
-                    MaybeGrowColumnsForIndex(columnIndex);
-                }
+                    : "Select a column header or cell, then choose a master data column below to import values.";
             };
             if (!_viewOnly)
             {
@@ -668,7 +743,9 @@ public sealed partial class TemplateComposerPanel : UserControl
         public UIElement GetElement(ElementFactoryGetArgs args)
         {
             var row = (RowSlot)args.Data;
-            var grid = args.Parent as Grid ?? CreateGrid();
+            var grid = args.Parent is Grid existing && existing.Children.Count == _owner._columns.Count
+                ? existing
+                : CreateGrid();
             grid.Tag = row;
             var index = _owner._rows.IndexOf(row);
             for (var c = 0; c < _owner._columns.Count && c < grid.Children.Count; c++)
@@ -677,6 +754,7 @@ public sealed partial class TemplateComposerPanel : UserControl
                 var selected = column.Key == _owner._selectedColumnKey;
                 row.Values.TryGetValue(column.Key, out var text);
                 var cell = (Border)grid.Children[c];
+                cell.Tag = column.Key;
                 cell.Background = selected
                     ? TemplateComposerPanel.Brush("RowSelectedBackgroundBrush")
                     : TemplateComposerPanel.Brush(index % 2 == 0 ? "CardBackgroundBrush" : "GridRowAltBackgroundBrush");
@@ -710,9 +788,12 @@ public sealed partial class TemplateComposerPanel : UserControl
             for (var c = 0; c < _owner._columns.Count; c++)
             {
                 var column = _owner._columns[c];
+                var columnIndex = c;
+                var columnKey = column.Key;
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(_columnWidth) });
                 var cell = new Border
                 {
+                    Tag = columnKey,
                     Padding = new Thickness(4, 0, 4, 0),
                 };
                 var box = new TextBox
@@ -726,9 +807,25 @@ public sealed partial class TemplateComposerPanel : UserControl
                     IsEnabled = !_owner._viewOnly,
                     IsReadOnly = _owner._viewOnly,
                 };
+                box.AddHandler(
+                    UIElement.PointerPressedEvent,
+                    new PointerEventHandler((_, _) => _owner.SelectColumn(columnKey, columnIndex)),
+                    true);
+                box.GotFocus += (_, _) =>
+                {
+                    _owner.SelectColumn(columnKey, columnIndex);
+                    if (_owner._viewOnly)
+                    {
+                        _owner.StatusText.Text = "View-only workspace — browse template data here. Use Edit on Analytics to change structure or values.";
+                    }
+                    else
+                    {
+                        _owner.StatusText.Text = "Select a column header or cell, then choose a master data column below to import values.";
+                    }
+                };
+                cell.PointerPressed += (_, _) => _owner.SelectColumn(columnKey, columnIndex);
                 if (!_owner._viewOnly)
                 {
-                    var columnKey = column.Key;
                     box.TextChanged += (_, _) =>
                     {
                         if (grid.Tag is RowSlot rowSlot)
