@@ -47,10 +47,15 @@ public sealed partial class SettingsPage : Page
 
         InitializeComponent();
 
-        DataContext = App.Services.GetRequiredService<SettingsViewModel>();
+        var vm = App.Services.GetRequiredService<SettingsViewModel>();
+        DataContext = vm;
+        vm.CurrentSessionLoggedOut += OnCurrentSessionLoggedOut;
+        Unloaded += (_, _) => vm.CurrentSessionLoggedOut -= OnCurrentSessionLoggedOut;
         VisualStateManager.GoToState(this, "Collapsed", false);
 
     }
+
+    private void OnCurrentSessionLoggedOut(object? sender, EventArgs e) => CompleteApplicationLogout();
 
     private void OnSidebarEntered(object sender, PointerRoutedEventArgs e) => VisualStateManager.GoToState(this, "Expanded", true);
     private void OnSidebarExited(object sender, PointerRoutedEventArgs e) => VisualStateManager.GoToState(this, "Collapsed", true);
@@ -381,37 +386,19 @@ public sealed partial class SettingsPage : Page
 
 
 
-        // Logout button - only for non-current sessions
-
-        if (!isCurrent)
-
+        // Logout button - available on all session cards (current device logs out of app)
+        var logoutBtn = new Button
         {
-
-            var logoutBtn = new Button
-
-            {
-
-                Content = "Logout",
-
-                Foreground = (Brush)Application.Current.Resources["DangerBrush"],
-
-                Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
-
-                VerticalAlignment = VerticalAlignment.Center,
-
-                Padding = new Thickness(16, 8, 16, 8),
-
-                Tag = session,
-
-            };
-
-            logoutBtn.Click += OnRemoteLogoutClick;
-
-            Grid.SetColumn(logoutBtn, 2);
-
-            grid.Children.Add(logoutBtn);
-
-        }
+            Content = "Logout",
+            Foreground = (Brush)Application.Current.Resources["DangerBrush"],
+            Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(16, 8, 16, 8),
+            Tag = session,
+        };
+        logoutBtn.Click += OnRemoteLogoutClick;
+        Grid.SetColumn(logoutBtn, 2);
+        grid.Children.Add(logoutBtn);
 
 
 
@@ -456,29 +443,31 @@ public sealed partial class SettingsPage : Page
 
 
         var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
+        var activityLogger = App.Services.GetRequiredService<ActivityLogger>();
+        var sessionService = App.Services.GetRequiredService<MongoSessionService>();
 
+        activityLogger.LogLogout(adminSession.Email ?? "unknown");
+        await activityLogger.FlushAsync().ConfigureAwait(true);
+        await sessionService.DeactivateCurrentSessionAsync().ConfigureAwait(true);
+
+        CompleteApplicationLogout(adminSession);
+    }
+
+    private static void CompleteApplicationLogout(AdminSessionStore? adminSession = null)
+    {
+        adminSession ??= App.Services.GetRequiredService<AdminSessionStore>();
         adminSession.Clear();
+        App.Services.GetRequiredService<CatalogBrowseSessionStore>().Reset();
 
         // Do NOT delete setup-state.json — it holds orgCode/dbUri needed after re-login
-
-
-
         if (App.MainAppWindow is MainWindow main)
-
         {
-
             main.ResetToSetup();
-
         }
-
         else
-
         {
-
             Application.Current.Exit();
-
         }
-
     }
 
 

@@ -992,7 +992,7 @@
                                 Content="Refresh" Padding="20,10"
                                 Command="{Binding LoadActiveSessionsCommand}" />
                         <Button Style="{StaticResource OutlinedButtonStyle}"
-                                Content="Logout from all other devices"
+                                Content="Logout from all devices"
                                 Foreground="{StaticResource DangerBrush}"
                                 Command="{Binding LogoutAllOtherSessionsCommand}"
                                 Padding="20,10" />

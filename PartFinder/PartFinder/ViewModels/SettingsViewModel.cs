@@ -1469,27 +1469,38 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
+    public event EventHandler? CurrentSessionLoggedOut;
+
     [RelayCommand]
     private async Task LogoutRemoteSessionAsync(LoginSessionRecord? session, CancellationToken ct)
     {
         if (session is null) return;
 
-        // Prevent logging out current device
-        if (IsCurrentSession(session))
+        LoginManagementMessage = string.Empty;
+        var isCurrent = IsCurrentSession(session);
+        var success = await _sessionService.LogoutSessionAsync(session.SessionId, ct).ConfigureAwait(true);
+
+        if (isCurrent)
         {
-            LoginManagementMessage = "Cannot logout from the current device here. Use the Logout button instead.";
+            ActiveSessions.Remove(session);
+            LoginManagementMessage = $"Logged out from {session.DeviceName}.";
+            _session.Load();
+            var email = _session.Email ?? _setupContext.AdminEmail ?? "unknown";
+            _activityLogger.LogUserAction("Device Logout",
+                $"Logged out session on current device '{session.DeviceName}' ({session.IpAddress})");
+            _activityLogger.LogLogout(email);
+            await _activityLogger.FlushAsync().ConfigureAwait(true);
+            CurrentSessionLoggedOut?.Invoke(this, EventArgs.Empty);
             return;
         }
 
-        LoginManagementMessage = string.Empty;
-
-        var success = await _sessionService.LogoutSessionAsync(session.SessionId, ct).ConfigureAwait(true);
         if (success)
         {
             ActiveSessions.Remove(session);
             LoginManagementMessage = $"Logged out from {session.DeviceName}.";
             _activityLogger.LogUserAction("Remote Logout",
                 $"Remotely logged out session on '{session.DeviceName}' ({session.IpAddress})");
+            await _activityLogger.FlushAsync().ConfigureAwait(true);
         }
         else
         {
@@ -1510,18 +1521,16 @@ public partial class SettingsViewModel : ViewModelBase
             return;
         }
 
-        var count = await _sessionService.LogoutAllOtherSessionsAsync(email, ct).ConfigureAwait(true);
-        if (count > 0)
-        {
-            LoginManagementMessage = $"Logged out from {count} other device(s).";
-            _activityLogger.LogUserAction("Logout All Others", $"Logged out {count} remote session(s)");
-            // Refresh the list
-            await LoadActiveSessionsAsync(ct).ConfigureAwait(true);
-        }
-        else
-        {
-            LoginManagementMessage = "No other active sessions to logout.";
-        }
+        var count = await _sessionService.LogoutAllSessionsAsync(email, ct).ConfigureAwait(true);
+        ActiveSessions.Clear();
+        LoginManagementMessage = count > 0
+            ? $"Logged out from all {count} device(s)."
+            : "Logged out from all devices.";
+        _activityLogger.LogUserAction("Logout All Devices",
+            $"Logged out from all active device sessions ({count}) for '{email}'");
+        _activityLogger.LogLogout(email);
+        await _activityLogger.FlushAsync().ConfigureAwait(true);
+        CurrentSessionLoggedOut?.Invoke(this, EventArgs.Empty);
     }
 
     private static bool IsStrongPassword(string password)

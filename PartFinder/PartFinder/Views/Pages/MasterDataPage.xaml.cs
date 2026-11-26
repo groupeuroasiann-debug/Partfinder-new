@@ -728,21 +728,22 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
     private async void OnCancelEditClicked(object sender, RoutedEventArgs e)
     {
-        if (_viewModel is null)
+        var vm = _viewModel;
+        if (vm is null)
         {
             return;
         }
 
-        if (_viewModel.SelectedDataTemplate is null)
+        if (vm.SelectedDataTemplate is null)
         {
-            _viewModel.ToggleEditModeCommand.Execute(null);
+            vm.ToggleEditModeCommand.Execute(null);
             return;
         }
 
-        await _viewModel.LoadForTemplateAsync(_viewModel.SelectedDataTemplate.Id).ConfigureAwait(true);
-        if (_viewModel.IsEditMode)
+        await vm.LoadForTemplateAsync(vm.SelectedDataTemplate.Id).ConfigureAwait(true);
+        if (_viewModel is { IsEditMode: true } currentVm)
         {
-            _viewModel.ToggleEditModeCommand.Execute(null);
+            currentVm.ToggleEditModeCommand.Execute(null);
         }
     }
 
