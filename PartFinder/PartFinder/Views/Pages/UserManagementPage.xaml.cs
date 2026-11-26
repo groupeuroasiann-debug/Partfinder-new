@@ -44,16 +44,8 @@ public sealed partial class UserManagementPage : Page
         if (DataContext is not UserManagementViewModel vm) return;
 
         await vm.PrepareInviteDialogAsync().ConfigureAwait(true);
-        var content = new InviteUserControl { DataContext = vm };
-        var dialog = new ContentDialog
-        {
-            Title = "Invite New User",
-            PrimaryButtonText = "Send Invite",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-            Content = content,
-        };
+        var content = new InviteUserControl { DataContext = vm, RequestedTheme = ActualTheme };
+        var dialog = CreateThemedDialog("Invite New User", "Send Invite", "Cancel", content);
 
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return;
@@ -61,13 +53,7 @@ public sealed partial class UserManagementPage : Page
         var (err, resultInfo) = await vm.InviteAsync().ConfigureAwait(true);
         if (!string.IsNullOrEmpty(err))
         {
-            var errDialog = new ContentDialog
-            {
-                Title = "Could not invite",
-                Content = err,
-                CloseButtonText = "OK",
-                XamlRoot = XamlRoot,
-            };
+            var errDialog = CreateThemedDialog("Could not invite", null, "OK", err);
             await errDialog.ShowAsync();
             return;
         }
@@ -198,16 +184,8 @@ public sealed partial class UserManagementPage : Page
         if (DataContext is not UserManagementViewModel vm) return;
 
         await vm.PrepareEditDialogAsync(user).ConfigureAwait(true);
-        var content = new InviteUserControl { DataContext = vm };
-        var dialog = new ContentDialog
-        {
-            Title = "Edit User",
-            PrimaryButtonText = "Save Changes",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-            Content = content,
-        };
+        var content = new InviteUserControl { DataContext = vm, RequestedTheme = ActualTheme };
+        var dialog = CreateThemedDialog("Edit User", "Save Changes", "Cancel", content);
 
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return;
@@ -215,18 +193,50 @@ public sealed partial class UserManagementPage : Page
         var err = await vm.SaveEditAsync().ConfigureAwait(true);
         if (!string.IsNullOrEmpty(err))
         {
-            var errDialog = new ContentDialog
-            {
-                Title = "Could not update",
-                Content = err,
-                CloseButtonText = "OK",
-                XamlRoot = XamlRoot,
-            };
+            var errDialog = CreateThemedDialog("Could not update", null, "OK", err);
             await errDialog.ShowAsync();
             return;
         }
 
         ShowToast("User Updated", "User details updated successfully.");
+    }
+
+    private ContentDialog CreateThemedDialog(
+        string title,
+        string? primaryButtonText,
+        string closeButtonText,
+        object content)
+    {
+        var dlg = new ContentDialog
+        {
+            Title = title,
+            CloseButtonText = closeButtonText,
+            XamlRoot = XamlRoot,
+            RequestedTheme = ActualTheme,
+            Content = content,
+        };
+        if (!string.IsNullOrEmpty(primaryButtonText))
+        {
+            dlg.PrimaryButtonText = primaryButtonText;
+            dlg.DefaultButton = ContentDialogButton.Primary;
+        }
+
+        if (Application.Current.Resources.TryGetValue("ElevatedCardBackgroundBrush", out var bg) && bg is Microsoft.UI.Xaml.Media.Brush bgBrush)
+        {
+            dlg.Background = bgBrush;
+        }
+
+        if (Application.Current.Resources.TryGetValue("TextPrimaryBrush", out var fg) && fg is Microsoft.UI.Xaml.Media.Brush fgBrush)
+        {
+            dlg.Foreground = fgBrush;
+        }
+
+        if (Application.Current.Resources.TryGetValue("BorderDefaultBrush", out var border) && border is Microsoft.UI.Xaml.Media.Brush borderBrush)
+        {
+            dlg.BorderBrush = borderBrush;
+        }
+
+        return dlg;
     }
 
     private async Task RunDeleteUserAsync(Models.OrgAppUserSummary user)
