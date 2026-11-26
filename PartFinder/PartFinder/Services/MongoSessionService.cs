@@ -164,6 +164,50 @@ public sealed class MongoSessionService
     }
 
     /// <summary>
+    /// Logs out all active sessions for the user (including the current device).
+    /// </summary>
+    public async Task<int> LogoutAllSessionsAsync(string userEmail, CancellationToken ct = default)
+    {
+        var coll = TryGetCollection();
+        if (coll is null || string.IsNullOrWhiteSpace(userEmail)) return 0;
+
+        try
+        {
+            var filter = Builders<LoginSessionRecord>.Filter.And(
+                Builders<LoginSessionRecord>.Filter.Eq(r => r.UserId, userEmail.Trim().ToLowerInvariant()),
+                Builders<LoginSessionRecord>.Filter.Eq(r => r.IsActive, true));
+
+            var update = Builders<LoginSessionRecord>.Update.Set(r => r.IsActive, false);
+            var result = await coll.UpdateManyAsync(filter, update, cancellationToken: ct).ConfigureAwait(false);
+            return (int)result.ModifiedCount;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Returns false only if the current session record exists in MongoDB and was marked inactive.
+    /// </summary>
+    public async Task<bool> IsCurrentSessionActiveAsync(CancellationToken ct = default)
+    {
+        var coll = TryGetCollection();
+        if (coll is null) return true;
+
+        try
+        {
+            var filter = Builders<LoginSessionRecord>.Filter.Eq(r => r.SessionId, _currentSessionId);
+            var record = await coll.Find(filter).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            return record is null || record.IsActive;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Logs out all sessions except the current one.
     /// </summary>
     public async Task<int> LogoutAllOtherSessionsAsync(string userEmail, CancellationToken ct = default)

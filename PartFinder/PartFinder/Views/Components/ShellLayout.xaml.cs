@@ -20,6 +20,8 @@ public sealed partial class ShellLayout : UserControl
     private const double TopNavScrollStep = 140;
 
     private readonly ShellViewModel _shellViewModel;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _sessionWatchTimer;
+    private bool _sessionCheckInFlight;
 
     public ShellLayout()
     {
@@ -105,9 +107,11 @@ public sealed partial class ShellLayout : UserControl
     {
         var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
         var activityLogger = App.Services.GetRequiredService<ActivityLogger>();
+        var sessionService = App.Services.GetRequiredService<MongoSessionService>();
 
         activityLogger.LogLogout(adminSession.Email ?? "unknown");
         await activityLogger.FlushAsync().ConfigureAwait(true);
+        await sessionService.DeactivateCurrentSessionAsync().ConfigureAwait(true);
 
         adminSession.Clear();
         // Do NOT delete setup-state.json — it holds orgCode/dbUri needed after re-login
@@ -170,6 +174,7 @@ public sealed partial class ShellLayout : UserControl
         AppTitleBarLayout.LayoutUpdated -= OnAppTitleBarLayoutUpdated;
         _shellViewModel.NavigationItems.CollectionChanged -= OnNavigationItemsCollectionChanged;
         ContentFrame.NavigationFailed -= OnContentFrameNavigationFailed;
+        _sessionWatchTimer?.Stop();
     }
 
     private void OnContentFrameNavigationFailed(object sender, NavigationFailedEventArgs e)
@@ -202,6 +207,61 @@ public sealed partial class ShellLayout : UserControl
 
         NotifyTitleBarRegionsChanged();
         ScheduleTopNavScrollAffordanceUpdate();
+        StartSessionWatchTimer();
+    }
+
+    private void StartSessionWatchTimer()
+    {
+        if (_sessionWatchTimer is not null)
+        {
+            _sessionWatchTimer.Start();
+            return;
+        }
+
+        _sessionWatchTimer = DispatcherQueue.CreateTimer();
+        _sessionWatchTimer.Interval = TimeSpan.FromSeconds(15);
+        _sessionWatchTimer.IsRepeating = true;
+        _sessionWatchTimer.Tick += OnSessionWatchTick;
+        _sessionWatchTimer.Start();
+    }
+
+    private async void OnSessionWatchTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        if (_sessionCheckInFlight || !IsLoaded)
+        {
+            return;
+        }
+
+        _sessionCheckInFlight = true;
+        try
+        {
+            var sessionService = App.Services.GetRequiredService<MongoSessionService>();
+            var active = await sessionService.IsCurrentSessionActiveAsync().ConfigureAwait(true);
+            if (active)
+            {
+                return;
+            }
+
+            sender.Stop();
+            var adminSession = App.Services.GetRequiredService<AdminSessionStore>();
+            var activityLogger = App.Services.GetRequiredService<ActivityLogger>();
+            activityLogger.LogLogout(adminSession.Email ?? "unknown");
+            await activityLogger.FlushAsync().ConfigureAwait(true);
+            adminSession.Clear();
+            App.Services.GetRequiredService<CatalogBrowseSessionStore>().Reset();
+            if (App.MainAppWindow is MainWindow main)
+            {
+                main.ResetToSetup();
+            }
+        }
+        catch
+        {
+            // Ignore transient checks
+        }
+        finally
+        {
+            _sessionCheckInFlight = false;
+        }
     }
 
     private void OnNavigationItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

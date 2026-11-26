@@ -52,6 +52,7 @@ public sealed partial class TemplateComposerPanel : UserControl
         _isCreating = isCreating;
         _viewOnly = viewOnly && !isCreating;
         CancelCreationButton.Visibility = isCreating ? Visibility.Visible : Visibility.Collapsed;
+        AddColumnButton.Visibility = _viewOnly ? Visibility.Collapsed : Visibility.Visible;
         SaveButton.Visibility = _viewOnly ? Visibility.Collapsed : Visibility.Visible;
         MasterDataPanelBorder.Visibility = _viewOnly ? Visibility.Collapsed : Visibility.Visible;
         StatusText.Text = "Loading template…";
@@ -700,10 +701,21 @@ public sealed partial class TemplateComposerPanel : UserControl
                 };
                 ToolTipService.SetToolTip(more, "Column actions");
                 var menu = new MenuFlyout();
+                var insertLeftItem = new MenuFlyoutItem { Text = "Insert column left" };
+                insertLeftItem.Click += (_, _) => InsertColumnAt(_columns.IndexOf(captured));
+                var insertRightItem = new MenuFlyoutItem { Text = "Insert column right" };
+                insertRightItem.Click += (_, _) =>
+                {
+                    var idx = _columns.IndexOf(captured);
+                    InsertColumnAt(idx >= 0 ? idx + 1 : _columns.Count);
+                };
                 var copyItem = new MenuFlyoutItem { Text = "Copy a new column" };
                 copyItem.Click += async (_, _) => await DuplicateColumnAsync(captured).ConfigureAwait(true);
                 var deleteItem = new MenuFlyoutItem { Text = "Delete" };
                 deleteItem.Click += async (_, _) => await DeleteColumnAsync(captured).ConfigureAwait(true);
+                menu.Items.Add(insertLeftItem);
+                menu.Items.Add(insertRightItem);
+                menu.Items.Add(new MenuFlyoutSeparator());
                 menu.Items.Add(copyItem);
                 menu.Items.Add(deleteItem);
                 more.Flyout = menu;
@@ -984,6 +996,12 @@ public sealed partial class TemplateComposerPanel : UserControl
             _columns.Add(new ColumnSlot { Key = NewKey(), Label = $"Column {number}" });
         }
 
+        if (_columns.Count > 0 && ColumnHasContent(_columns[^1], _columns.Count - 1))
+        {
+            var number = _columns.Count + 1;
+            _columns.Add(new ColumnSlot { Key = NewKey(), Label = $"Column {number}" });
+        }
+
         var targetRows = Math.Max(_rows.Count + TrailingRowBuffer, MinEditingRows);
         if (_rows.Count < targetRows)
         {
@@ -1016,6 +1034,63 @@ public sealed partial class TemplateComposerPanel : UserControl
 
         AddEmptyRows(GrowRowsBatch);
         ApplyRender();
+    }
+
+    private void InsertColumnAt(int index)
+    {
+        if (_busy || _viewOnly)
+        {
+            return;
+        }
+
+        var clamped = Math.Clamp(index, 0, _columns.Count);
+        var number = _columns.Count + 1;
+        var col = new ColumnSlot { Key = NewKey(), Label = $"Column {number}" };
+        _columns.Insert(clamped, col);
+        _selectedColumnKey = col.Key;
+        ApplyRender();
+        StatusText.Text = $"Inserted {col.Label}. Type into it or select a master data column below to fill it.";
+    }
+
+    private void RefreshHeaderSelection()
+    {
+        if (HeaderScroll.Content is not Grid headerGrid)
+        {
+            return;
+        }
+
+        for (var c = 0; c < _columns.Count && c < headerGrid.Children.Count; c++)
+        {
+            if (headerGrid.Children[c] is not Border cell)
+            {
+                continue;
+            }
+
+            var selected = string.Equals(_columns[c].Key, _selectedColumnKey, StringComparison.Ordinal);
+            cell.Background = selected ? Brush("RowSelectedBackgroundBrush") : Brush("GridHeaderBackgroundBrush");
+            cell.BorderBrush = selected ? Brush("AccentPrimaryBrush") : Brush("BorderDefaultBrush");
+            cell.BorderThickness = new Thickness(selected ? 2 : 1);
+        }
+    }
+
+    private void OnAddColumnClick(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _viewOnly)
+        {
+            return;
+        }
+
+        var number = _columns.Count + 1;
+        var col = new ColumnSlot { Key = NewKey(), Label = $"Column {number}" };
+        _columns.Add(col);
+        _selectedColumnKey = col.Key;
+        ApplyRender();
+        if (TemplateScroll.ScrollableWidth > 0)
+        {
+            TemplateScroll.ChangeView(TemplateScroll.ScrollableWidth, null, null, disableAnimation: false);
+        }
+
+        StatusText.Text = $"Added {col.Label}. Type into it or select a master data column below to fill it.";
     }
 
     private void MaybeGrowColumnsForIndex(int columnIndex)
