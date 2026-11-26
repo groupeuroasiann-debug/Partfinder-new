@@ -432,7 +432,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     public string PasscodeStatusText => PasscodeIsConfigured ? "Configured" : "Not configured";
 
-    public string TwoFactorStatusDetail => TwoFactorEnabled ? "Enabled on this device" : "Not enabled on this device";
+    public string TwoFactorStatusDetail => TwoFactorEnabled ? "Enabled for your account" : "Not enabled for your account";
 
     public string AdminSessionStatusText => AdminSessionActive
         ? $"Signed in: {SessionEmailDisplay}"
@@ -499,6 +499,7 @@ public partial class SettingsViewModel : ViewModelBase
         if (!string.IsNullOrWhiteSpace(emailToShow) && emailToShow != "—")
         {
             _ = LoadProfileFromDirectoryAsync(emailToShow);
+            _ = SyncTwoFactorStateFromAccountAsync(emailToShow);
         }
         else
         {
@@ -573,6 +574,22 @@ public partial class SettingsViewModel : ViewModelBase
 
         ProfileMessage = "Profile updated.";
         _activityLogger.LogUserAction("Profile Updated", $"Profile saved for \"{SessionEmailDisplay}\"");
+        CaptureProfileBaseline();
+    }
+
+    public void UseEmailProfile()
+    {
+        ProfileMessage = string.Empty;
+        ProfileName = string.Empty;
+
+        _profile.SaveProfile(
+            null,
+            ProfileDepartment.Trim(),
+            ProfileDesignation.Trim(),
+            ProfileBio.Trim());
+
+        OnPropertyChanged(nameof(AvatarInitial));
+        ProfileMessage = "Email will now be shown as display name.";
         CaptureProfileBaseline();
     }
 
@@ -959,8 +976,16 @@ public partial class SettingsViewModel : ViewModelBase
         TwoFactorConfirmCode = string.Empty;
         TwoFactorEnabled = true;
         TwoFactorMessage =
-            "Two-factor authentication is on. Use your authenticator app when resetting password or passcode.";
+            "Two-factor authentication is on and linked to your email account.";
         _activityLogger.LogUserAction("2FA Enabled", "Two-factor authentication was enabled");
+
+        var activeEmail = ResolveActiveUserEmail();
+        var directorySynced = false;
+        if (!string.IsNullOrWhiteSpace(activeEmail) && syncedSecret is not null)
+        {
+            directorySynced = await _users.SetTwoFactorForEmailAsync(activeEmail, syncedSecret, true, ct)
+                .ConfigureAwait(true);
+        }
 
         _session.Load();
         if (_session.HasSession && _session.AccessToken is not null && syncedSecret is not null)
@@ -968,20 +993,15 @@ public partial class SettingsViewModel : ViewModelBase
             var (syncOk, syncErr) =
                 await AdminAuthApiClient.SyncTotpSecretAsync(_session.AccessToken, syncedSecret, ct)
                     .ConfigureAwait(true);
-            if (!syncOk)
+            if (!syncOk && !directorySynced)
             {
                 TwoFactorMessage +=
-                    " Server sync failed (needed for forgot password on the server): " + (syncErr ?? "unknown error");
-            }
-            else
-            {
-                TwoFactorMessage += " Secret synced to the server for forgot-password recovery.";
+                    " Server sync failed: " + (syncErr ?? "unknown error");
             }
         }
-        else
+        else if (!directorySynced)
         {
-            TwoFactorMessage +=
-                " Sign in below, then tap \"Sync 2FA to server\" so forgot-password recovery works.";
+            TwoFactorMessage += " Saved locally; could not reach shared database to link across devices.";
         }
     }
 
@@ -1047,6 +1067,12 @@ public partial class SettingsViewModel : ViewModelBase
         TwoFactorMessage = "Two-factor authentication is off.";
         _activityLogger.LogUserAction("2FA Disabled", "Two-factor authentication was disabled");
 
+        var activeEmail = ResolveActiveUserEmail();
+        if (!string.IsNullOrWhiteSpace(activeEmail))
+        {
+            _ = await _users.SetTwoFactorForEmailAsync(activeEmail, null, false, ct).ConfigureAwait(true);
+        }
+
         _session.Load();
         if (_session.HasSession && _session.AccessToken is not null)
         {
@@ -1056,6 +1082,49 @@ public partial class SettingsViewModel : ViewModelBase
             {
                 TwoFactorMessage += " Could not clear server copy: " + (err ?? "unknown");
             }
+        }
+    }
+
+    private string? ResolveActiveUserEmail()
+    {
+        var email = _session.Email;
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            email = TryReadAdminEmailFromSetup();
+        }
+
+        if (string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(SessionEmailDisplay) && SessionEmailDisplay != "—")
+        {
+            email = SessionEmailDisplay;
+        }
+
+        return string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+    }
+
+    private async Task SyncTwoFactorStateFromAccountAsync(string email)
+    {
+        try
+        {
+            var state = await _users.GetTwoFactorForEmailAsync(email).ConfigureAwait(true);
+            if (state is null)
+            {
+                return;
+            }
+
+            if (state.Enabled && !string.IsNullOrWhiteSpace(state.Secret))
+            {
+                _security.SetTwoFactor(state.Secret, true);
+                TwoFactorEnabled = true;
+            }
+            else
+            {
+                _security.DisableTwoFactor();
+                TwoFactorEnabled = false;
+            }
+        }
+        catch
+        {
+            // Keep local state if directory lookup fails.
         }
     }
 

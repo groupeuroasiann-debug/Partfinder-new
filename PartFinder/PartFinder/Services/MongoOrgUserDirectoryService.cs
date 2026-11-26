@@ -26,6 +26,7 @@ public sealed class MongoOrgUserDirectoryService : IOrgUserDirectoryService
     {
         public required IMongoCollection<OrgAppUserDoc> AppUsers { get; init; }
         public required IMongoCollection<BsonDocument> Admins { get; init; }
+        public required IMongoCollection<BsonDocument> TwoFactorSecrets { get; init; }
     }
 
     public async Task<IReadOnlyList<OrgAppUserSummary>> ListUsersAsync(CancellationToken cancellationToken = default)
@@ -175,6 +176,7 @@ public sealed class MongoOrgUserDirectoryService : IOrgUserDirectoryService
             {
                 AppUsers = userDb.GetCollection<OrgAppUserDoc>(CollectionName),
                 Admins = userDb.GetCollection<BsonDocument>(MongoTenantBootstrap.OrgAdminCollection),
+                TwoFactorSecrets = userDb.GetCollection<BsonDocument>("user_two_factor"),
             };
         }
         catch
@@ -201,6 +203,7 @@ public sealed class MongoOrgUserDirectoryService : IOrgUserDirectoryService
             {
                 AppUsers = tenantDb.GetCollection<OrgAppUserDoc>(CollectionName),
                 Admins = tenantDb.GetCollection<BsonDocument>(MongoTenantBootstrap.OrgAdminCollection),
+                TwoFactorSecrets = tenantDb.GetCollection<BsonDocument>("user_two_factor"),
             };
         }
         catch
@@ -686,6 +689,85 @@ public sealed class MongoOrgUserDirectoryService : IOrgUserDirectoryService
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return result.ModifiedCount > 0 || result.MatchedCount > 0;
+    }
+
+    public async Task<UserTwoFactorState?> GetTwoFactorForEmailAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeEmail(email);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            return null;
+        }
+
+        try
+        {
+            var bindings = await EnsureBindingsAsync(cancellationToken).ConfigureAwait(false);
+            if (bindings is null)
+            {
+                return null;
+            }
+
+            var filter = Builders<BsonDocument>.Filter.Eq("emailNormalized", normalized);
+            var doc = await bindings.TwoFactorSecrets
+                .Find(filter)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (doc is null)
+            {
+                return new UserTwoFactorState(false, null);
+            }
+
+            var enabled = doc.TryGetValue("enabled", out var enabledVal) && enabledVal.IsBoolean && enabledVal.AsBoolean;
+            var secret = doc.TryGetValue("secret", out var secretVal) && secretVal.IsString ? secretVal.AsString : null;
+            return new UserTwoFactorState(enabled && !string.IsNullOrWhiteSpace(secret), secret);
+        }
+        catch (Exception ex)
+        {
+            DebugLogClient.Post("warn", "MongoOrgUserDirectoryService.GetTwoFactorForEmailAsync", ex.Message);
+            return null;
+        }
+    }
+
+    public async Task<bool> SetTwoFactorForEmailAsync(
+        string email,
+        string? secret,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeEmail(email);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            return false;
+        }
+
+        try
+        {
+            var bindings = await EnsureBindingsAsync(cancellationToken).ConfigureAwait(false);
+            if (bindings is null)
+            {
+                return false;
+            }
+
+            var filter = Builders<BsonDocument>.Filter.Eq("emailNormalized", normalized);
+            var update = Builders<BsonDocument>.Update
+                .Set("emailNormalized", normalized)
+                .Set("enabled", enabled)
+                .Set("secret", enabled ? (secret ?? string.Empty) : string.Empty)
+                .Set("updatedAtUtc", DateTime.UtcNow);
+
+            await bindings.TwoFactorSecrets
+                .UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = true }, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DebugLogClient.Post("warn", "MongoOrgUserDirectoryService.SetTwoFactorForEmailAsync", ex.Message);
+            return false;
+        }
     }
 
     public async Task<bool> MarkInvitedUserActiveAfterLoginAsync(
