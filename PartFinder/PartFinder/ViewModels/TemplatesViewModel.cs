@@ -132,7 +132,13 @@ public partial class TemplatesViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteTemplateAsync(string templateId)
     {
-        if (string.IsNullOrWhiteSpace(templateId) || !_access.Capabilities.CanDeleteTemplate) return;
+        if (string.IsNullOrWhiteSpace(templateId) || !_access.Capabilities.CanDeleteTemplate)
+        {
+            FormError = "You do not have permission to delete templates.";
+            return;
+        }
+
+        FormError = string.Empty;
         try
         {
             await _relationCleanup.DeleteAllRelationsInvolvingTemplateAsync(templateId).ConfigureAwait(true);
@@ -144,7 +150,10 @@ public partial class TemplatesViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsAllTemplatesGalleryEmpty));
             AllTemplatesViewRequested?.Invoke(this, EventArgs.Empty);
         }
-        catch { /* ignore */ }
+        catch (Exception ex)
+        {
+            FormError = ex.Message;
+        }
     }
 
     /// <summary>Leave canvas editor after delete or cancel; does not start Master Data flow.</summary>
@@ -292,7 +301,9 @@ public partial class TemplatesViewModel : ViewModelBase
 
     public bool CanEditSelectedTemplate => !IsCreatingTemplate && SelectedTemplate is not null && _access.Capabilities.CanEditTemplate;
 
-    public bool CanDeleteSelectedTemplate => !IsCreatingTemplate && SelectedTemplate is not null && _access.Capabilities.CanDeleteTemplate;
+    public bool CanDeleteTemplate => _access.Capabilities.CanDeleteTemplate;
+
+    public bool CanDeleteSelectedTemplate => !IsCreatingTemplate && SelectedTemplate is not null && CanDeleteTemplate;
 
     public bool CanAddTemplate => _access.Capabilities.CanAddTemplate;
 

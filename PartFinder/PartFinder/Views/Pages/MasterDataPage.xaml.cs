@@ -405,7 +405,14 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         _refreshDataRowsOnly = _viewModel is { IsEditMode: false };
         if (_viewModel?.IsCatalogReadOnly == true)
         {
-            await _viewModel.LoadCatalogRowsPageAsync(0, MasterDataPageSize).ConfigureAwait(true);
+            if (_viewModel.HasActiveColumnFilters)
+            {
+                await _viewModel.EnsureAllCatalogRowsLoadedAsync().ConfigureAwait(true);
+            }
+            else
+            {
+                await _viewModel.LoadCatalogRowsPageAsync(0, MasterDataPageSize).ConfigureAwait(true);
+            }
         }
 
         ScheduleRebuildSpreadsheet();
@@ -417,7 +424,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         _columnFilterDrafts[fieldKey] = text;
 
         _columnFilterDebounceTimer ??= DispatcherQueue.CreateTimer();
-        _columnFilterDebounceTimer.Interval = TimeSpan.FromSeconds(1.25);
+        _columnFilterDebounceTimer.Interval = TimeSpan.FromMilliseconds(300);
         _columnFilterDebounceTimer.IsRepeating = false;
         _columnFilterDebounceTimer.Stop();
         _columnFilterDebounceTimer.Tick -= OnColumnFilterDebounceTick;
@@ -534,7 +541,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             _openColumnSearchKeys.Clear();
         }
 
-        if (e.Action == NotifyCollectionChangedAction.Add
+        if (e?.Action == NotifyCollectionChangedAction.Add
             && _viewModel is not null
             && e.NewItems is { Count: > 0 }
             && e.NewItems[e.NewItems.Count - 1] is MasterDataRowViewModel addedRow)
@@ -569,7 +576,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
         _gridPageIndex--;
         WriteBrowseState(includeScrollOffsets: false);
-        if (_viewModel?.IsCatalogReadOnly == true)
+        if (_viewModel is { IsCatalogReadOnly: true, HasActiveColumnFilters: false })
         {
             await _viewModel.LoadCatalogRowsPageAsync(_gridPageIndex, MasterDataPageSize).ConfigureAwait(true);
         }
@@ -587,7 +594,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
         _gridPageIndex++;
         WriteBrowseState(includeScrollOffsets: false);
-        if (_viewModel?.IsCatalogReadOnly == true)
+        if (_viewModel is { IsCatalogReadOnly: true, HasActiveColumnFilters: false })
         {
             await _viewModel.LoadCatalogRowsPageAsync(_gridPageIndex, MasterDataPageSize).ConfigureAwait(true);
         }
@@ -1075,7 +1082,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         var visibleRows = _viewModel.Rows.Where(_viewModel.IsRowVisible).ToList();
         UpdatePager(visibleRows.Count);
         var pageStart = _gridPageIndex * MasterDataPageSize;
-        var pageRows = _viewModel.IsCatalogReadOnly
+        var pageRows = _viewModel.IsCatalogReadOnly && !_viewModel.HasActiveColumnFilters
             ? visibleRows
             : visibleRows.Skip(pageStart).Take(MasterDataPageSize).ToList();
         var colCount = _viewModel.Columns.Count;
@@ -1091,6 +1098,13 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
             && _spreadsheetShowDeleteCol == showDeleteCol)
         {
             _refreshDataRowsOnly = false;
+            if (rowCount == 0 && _viewModel.HasActiveColumnFilters)
+            {
+                _sheetGrid = null;
+                _spreadsheetScroll.Content = CreateEmptySearchStateElement();
+                return;
+            }
+
             var dataOnlyGrid = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Left,
@@ -1458,7 +1472,8 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         }
 
         headerScroll.Content = headerGrid;
-        scroll.Content = dataGrid;
+        var showEmptySearch = rowCount == 0 && _viewModel.HasActiveColumnFilters;
+        scroll.Content = showEmptySearch ? CreateEmptySearchStateElement() : dataGrid;
         Grid.SetRow(headerScroll, 0);
         Grid.SetRow(scroll, 1);
         sheetRoot.Children.Add(headerScroll);
@@ -1471,7 +1486,7 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         _spreadsheetColCount = colCount;
         _spreadsheetShowDeleteCol = showDeleteCol;
         _spreadsheetDataColumnWidth = dataColumnWidth;
-        _sheetGrid = dataGrid;
+        _sheetGrid = showEmptySearch ? null : dataGrid;
         RefreshColumnManagementCombos();
         if (scroll.IsLoaded)
         {
@@ -1488,6 +1503,64 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         }
 
         RestoreColumnFilterFocus();
+    }
+
+    private FrameworkElement CreateEmptySearchStateElement()
+    {
+        var panel = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(24, 48, 24, 48),
+            Spacing = 8,
+            MaxWidth = 420,
+        };
+
+        panel.Children.Add(new FontIcon
+        {
+            Glyph = "\uE721",
+            FontSize = 26,
+            Opacity = 0.65,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextSecondaryBrush"],
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "No matching records found",
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextPrimaryBrush"],
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "The data you requested is not in the list. Try adjusting or clearing your search filters.",
+            FontSize = 13,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextSecondaryBrush"],
+        });
+
+        var clearBtn = new Button
+        {
+            Content = "Clear search",
+            Style = (Style)Application.Current.Resources["OutlinedButtonStyle"],
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        clearBtn.Click += (_, _) =>
+        {
+            _columnFilterDebounceTimer?.Stop();
+            _columnFilterDrafts.Clear();
+            _columnFilterFocusKey = null;
+            _viewModel?.ClearColumnFilters();
+        };
+        panel.Children.Add(clearBtn);
+
+        return panel;
     }
 
     private void PopulateDataRowCells(
@@ -1662,7 +1735,9 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
         if (totalRows == 0)
         {
-            MasterDataPageStatusText.Text = "No rows";
+            MasterDataPageStatusText.Text = _viewModel?.HasActiveColumnFilters == true
+                ? "No matching rows"
+                : "No rows";
         }
         else
         {
@@ -3040,48 +3115,42 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
         public string Display { get; }
     }
 
-    private void OnCatalogContainerContentChanging(
-        ListViewBase sender,
-        ContainerContentChangingEventArgs args)
+    private void OnCatalogActionsFlyoutOpening(object? sender, object e)
     {
-        if (args.InRecycleQueue || _viewModel is null)
+        if (_viewModel is null || sender is not MenuFlyout flyout)
         {
             return;
         }
 
-        if (args.Item is not PartTemplateDefinition template)
-        {
-            return;
-        }
-
-        if (args.Phase == 0)
-        {
-            args.RegisterUpdateCallback(OnCatalogContainerContentChanging);
-            return;
-        }
-
-        if (args.ItemContainer is null || args.ItemContainer.ContentTemplateRoot is not Grid root)
-        {
-            return;
-        }
-
-        if (root.FindName("CatalogFavouriteIcon") is not FontIcon icon)
+        if (flyout.Target?.DataContext is not PartTemplateDefinition template)
         {
             return;
         }
 
         var isFav = _viewModel.IsFavouriteFor(template.Id);
-        icon.Glyph = isFav ? "\uE735" : "\uE734";
+        var canDelete = _viewModel.CanDeleteCatalogTemplate(template);
 
-        if (root.FindName("CatalogFavouriteButton") is Button btn)
+        foreach (var item in flyout.Items)
         {
-            ToolTipService.SetToolTip(btn, isFav ? "Remove from favourites" : "Add to favourites");
-        }
+            if (item is not MenuFlyoutItem menuItem)
+            {
+                continue;
+            }
 
-        if (root.FindName("CatalogDeleteButton") is Button deleteBtn)
-        {
-            var canDelete = _viewModel.CanDeleteCatalogTemplate(template);
-            deleteBtn.Visibility = canDelete ? Visibility.Visible : Visibility.Collapsed;
+            menuItem.Tag = template;
+
+            if (menuItem.Name == "CatalogFavouriteMenuItem")
+            {
+                menuItem.Text = isFav ? "Remove from favourites" : "Add to favourites";
+                if (menuItem.Icon is FontIcon icon)
+                {
+                    icon.Glyph = isFav ? "\uE735" : "\uE734";
+                }
+            }
+            else if (menuItem.Name == "CatalogDeleteMenuItem")
+            {
+                menuItem.Visibility = canDelete ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
     }
 
@@ -3128,12 +3197,13 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
     private async void OnCatalogDeleteClick(object sender, RoutedEventArgs e)
     {
-        if (_viewModel is null || XamlRoot is null || sender is not Button btn)
+        if (_viewModel is null || XamlRoot is null || sender is not MenuFlyoutItem menuItem)
         {
             return;
         }
 
-        if (btn.DataContext is not PartTemplateDefinition template)
+        var template = menuItem.Tag as PartTemplateDefinition ?? menuItem.DataContext as PartTemplateDefinition;
+        if (template is null)
         {
             return;
         }
@@ -3179,33 +3249,32 @@ public sealed partial class MasterDataPage : Page, INavigationParameterSink
 
     private async void OnCatalogFavouriteClick(object sender, RoutedEventArgs e)
     {
-        if (_viewModel is null || sender is not Button btn)
+        if (_viewModel is null || sender is not MenuFlyoutItem menuItem)
         {
             return;
         }
 
-        var template = btn.DataContext as PartTemplateDefinition;
+        var template = menuItem.Tag as PartTemplateDefinition ?? menuItem.DataContext as PartTemplateDefinition;
         if (template is null)
         {
             return;
         }
 
-        btn.IsEnabled = false;
+        menuItem.IsEnabled = false;
         try
         {
             await _viewModel.ToggleFavouritePublicAsync(template.Id).ConfigureAwait(true);
             var nowFav = _viewModel.IsFavouriteFor(template.Id);
 
-            if (btn.Content is FontIcon icon)
+            menuItem.Text = nowFav ? "Remove from favourites" : "Add to favourites";
+            if (menuItem.Icon is FontIcon icon)
             {
                 icon.Glyph = nowFav ? "\uE735" : "\uE734";
             }
-
-            ToolTipService.SetToolTip(btn, nowFav ? "Remove from favourites" : "Add to favourites");
         }
         finally
         {
-            btn.IsEnabled = true;
+            menuItem.IsEnabled = true;
         }
     }
 

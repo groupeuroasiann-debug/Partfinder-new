@@ -31,9 +31,11 @@
         </Style>
         <Style x:Key="CatalogNavListViewItemStyle" TargetType="ListViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="10,4,6,4" />
             <Setter Property="Margin" Value="0,2" />
-            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
@@ -94,14 +96,12 @@
                         IsItemClickEnabled="True"
                         ItemsSource="{Binding DataTemplates}"
                         SelectedItem="{Binding SelectedDataTemplate, Mode=TwoWay}"
-                        ContainerContentChanging="OnCatalogContainerContentChanging"
                         ItemContainerStyle="{StaticResource CatalogNavListViewItemStyle}">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:PartTemplateDefinition">
                                 <Grid ColumnSpacing="6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock
@@ -113,34 +113,72 @@
                                         TextWrapping="WrapWholeWords"
                                         VerticalAlignment="Center" />
                                     <Button
-                                        x:Name="CatalogDeleteButton"
+                                        x:Name="CatalogActionsButton"
                                         Grid.Column="1"
-                                        Width="30"
-                                        Height="30"
+                                        Width="24"
+                                        Height="24"
+                                        MinWidth="24"
+                                        MinHeight="24"
                                         Padding="0"
-                                        Margin="0,0,4,0"
-                                        CornerRadius="8"
-                                        Background="Transparent"
-                                        BorderBrush="{StaticResource DangerBrush}"
-                                        BorderThickness="1"
-                                        Click="OnCatalogDeleteClick"
-                                        Visibility="Collapsed"
-                                        ToolTipService.ToolTip="Delete catalog">
-                                        <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="{StaticResource DangerBrush}" />
-                                    </Button>
-                                    <Button
-                                        x:Name="CatalogFavouriteButton"
-                                        Grid.Column="2"
-                                        Width="30"
-                                        Height="30"
-                                        Padding="0"
-                                        CornerRadius="8"
+                                        VerticalAlignment="Center"
+                                        CornerRadius="6"
                                         Background="Transparent"
                                         BorderBrush="{StaticResource BorderDefaultBrush}"
                                         BorderThickness="1"
-                                        Click="OnCatalogFavouriteClick"
-                                        ToolTipService.ToolTip="Add to favourites">
-                                        <FontIcon x:Name="CatalogFavouriteIcon" Glyph="&#xE734;" FontSize="11" Foreground="#FFC107" />
+                                        ToolTipService.ToolTip="Catalog actions">
+                                        <FontIcon
+                                            Glyph="&#xE712;"
+                                            FontSize="10"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            RenderTransformOrigin="0.5,0.5">
+                                            <FontIcon.RenderTransform>
+                                                <RotateTransform Angle="90" />
+                                            </FontIcon.RenderTransform>
+                                        </FontIcon>
+                                        <Button.Flyout>
+                                            <MenuFlyout
+                                                Placement="BottomEdgeAlignedRight"
+                                                Opening="OnCatalogActionsFlyoutOpening">
+                                                <MenuFlyout.MenuFlyoutPresenterStyle>
+                                                    <Style TargetType="MenuFlyoutPresenter">
+                                                        <Setter Property="MinWidth" Value="140" />
+                                                        <Setter Property="Padding" Value="2" />
+                                                    </Style>
+                                                </MenuFlyout.MenuFlyoutPresenterStyle>
+                                                <MenuFlyoutItem
+                                                    x:Name="CatalogFavouriteMenuItem"
+                                                    Text="Add to favourites"
+                                                    FontSize="12"
+                                                    MinHeight="28"
+                                                    Padding="8,4"
+                                                    Click="OnCatalogFavouriteClick">
+                                                    <MenuFlyoutItem.Icon>
+                                                        <FontIcon
+                                                            x:Name="CatalogFavouriteIcon"
+                                                            Glyph="&#xE734;"
+                                                            FontSize="12"
+                                                            Foreground="#FFC107" />
+                                                    </MenuFlyoutItem.Icon>
+                                                </MenuFlyoutItem>
+                                                <MenuFlyoutItem
+                                                    x:Name="CatalogDeleteMenuItem"
+                                                    Text="Delete catalog"
+                                                    FontSize="12"
+                                                    MinHeight="28"
+                                                    Padding="8,4"
+                                                    Foreground="{StaticResource DangerBrush}"
+                                                    Visibility="Collapsed"
+                                                    Click="OnCatalogDeleteClick">
+                                                    <MenuFlyoutItem.Icon>
+                                                        <FontIcon
+                                                            Glyph="&#xE74D;"
+                                                            FontSize="12"
+                                                            Foreground="{StaticResource DangerBrush}" />
+                                                    </MenuFlyoutItem.Icon>
+                                                </MenuFlyoutItem>
+                                            </MenuFlyout>
+                                        </Button.Flyout>
                                     </Button>
                                 </Grid>
                             </DataTemplate>

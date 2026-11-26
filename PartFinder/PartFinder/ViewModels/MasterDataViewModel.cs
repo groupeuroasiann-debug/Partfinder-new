@@ -22,6 +22,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     private IReadOnlyList<TemplateContextAction> _loadedContextActions = Array.Empty<TemplateContextAction>();
     private readonly List<WorksheetRelationDto> _worksheetRelations = [];
     private CancellationTokenSource? _templateLoadCts;
+    private string? _fullCatalogLoadedTemplateId;
     private readonly Dictionary<string, string> _columnFilters = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _catalogAutoSaveCts;
     private int _catalogAutoSaveVersion;
@@ -179,8 +180,10 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         set => SetProperty(ref _catalogTotalRowCount, value);
     }
 
+    public bool HasActiveColumnFilters => _columnFilters.Count > 0;
+
     public int GetPagerTotalRowCount(int visibleRowCount) =>
-        IsCatalogReadOnly && CatalogTotalRowCount > 0
+        IsCatalogReadOnly && !HasActiveColumnFilters && CatalogTotalRowCount > 0
             ? CatalogTotalRowCount
             : visibleRowCount;
 
@@ -554,11 +557,18 @@ public sealed partial class MasterDataViewModel : ViewModelBase
             return;
         }
 
+        var mapped = await Task.Run(() => pageRows.Select(MapRecordToRow).ToList(), loadCt).ConfigureAwait(true);
+        if (!IsLoadStillCurrent(templateId))
+        {
+            return;
+        }
+
+        _fullCatalogLoadedTemplateId = null;
         CatalogTotalRowCount = total;
         Rows.Clear();
-        foreach (var rec in pageRows)
+        foreach (var row in mapped)
         {
-            Rows.Add(MapRecordToRow(rec));
+            Rows.Add(row);
         }
 
         if (Rows.Count == 0)
@@ -605,6 +615,68 @@ public sealed partial class MasterDataViewModel : ViewModelBase
         try
         {
             await LoadCatalogRowsPageCoreAsync(pageIndex, pageSize, templateId, loadCt).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Error: " + ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads all rows for the active catalog so column search filters across the complete dataset
+    /// rather than only the currently displayed page.
+    /// </summary>
+    public async Task EnsureAllCatalogRowsLoadedAsync(CancellationToken cancellationToken = default)
+    {
+        if (SelectedDataTemplate is null)
+        {
+            return;
+        }
+
+        var templateId = SelectedDataTemplate.Id;
+        if (string.Equals(_fullCatalogLoadedTemplateId, templateId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _templateLoadCts?.Cancel();
+        _templateLoadCts?.Dispose();
+        _templateLoadCts = cancellationToken == default
+            ? new CancellationTokenSource()
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var loadCt = _templateLoadCts.Token;
+
+        IsLoading = true;
+        try
+        {
+            var allRows = await _records.GetRowsAsync(templateId, loadCt).ConfigureAwait(true);
+            var mapped = await Task.Run(() => allRows.Select(MapRecordToRow).ToList(), loadCt).ConfigureAwait(true);
+            if (!IsLoadStillCurrent(templateId))
+            {
+                return;
+            }
+
+            CatalogTotalRowCount = allRows.Count;
+            Rows.Clear();
+            foreach (var row in mapped)
+            {
+                Rows.Add(row);
+            }
+
+            if (Rows.Count == 0)
+            {
+                Rows.Add(CreateEmptyRow());
+            }
+
+            await ResolveRecordLinkLabelsAsync(loadCt).ConfigureAwait(true);
+            _fullCatalogLoadedTemplateId = templateId;
         }
         catch (OperationCanceledException) when (loadCt.IsCancellationRequested)
         {
@@ -2338,9 +2410,9 @@ public sealed partial class MasterDataViewModel : ViewModelBase
                     continue;
                 }
 
-                dict[cell.FieldKey] = cell.IsRecordLink
+                dict[cell.FieldKey] = (cell.IsRecordLink
                     ? (!string.IsNullOrWhiteSpace(cell.LinkedRowId) ? cell.LinkedRowId : cell.Text)
-                    : cell.Text ?? string.Empty;
+                    : cell.Text) ?? string.Empty;
             }
 
             if (dict.Values.All(string.IsNullOrWhiteSpace))
