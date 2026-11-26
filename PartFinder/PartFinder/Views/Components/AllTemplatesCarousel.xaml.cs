@@ -36,6 +36,8 @@ public sealed partial class AllTemplatesCarousel : UserControl
     /// <summary>Data cells in the all-templates preview table (ID, BRAND, etc.).</summary>
     private const double DataRowMinHeight = 46;
     private const double DataRowFontSize = 13;
+    /// <summary>Maximum rows rendered in a carousel card preview to prevent UI hangs on large catalogs.</summary>
+    private const int MaxPreviewRows = 25;
     /// <summary>Minimum column width before the preview switches to horizontal scrolling.</summary>
     private const double PreviewColumnMinWidth = 88;
 
@@ -110,7 +112,7 @@ public sealed partial class AllTemplatesCarousel : UserControl
             IReadOnlyList<MasterDataRowRecord> rows;
             try
             {
-                rows = await _records.GetRowsAsync(template.Id).ConfigureAwait(true);
+                (rows, _) = await _records.GetRowsPageAsync(template.Id, 0, MaxPreviewRows).ConfigureAwait(true);
             }
             catch
             {
@@ -731,6 +733,7 @@ public sealed partial class AllTemplatesCarousel : UserControl
             Background = new SolidColorBrush(Color.FromArgb(14, 224, 82, 82)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(170, 224, 82, 82)),
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10),
+            Visibility = vm.CanDeleteTemplate ? Visibility.Visible : Visibility.Collapsed,
             Content = new FontIcon { Glyph = "\uE74D", FontSize = 14, Foreground = new SolidColorBrush(Color.FromArgb(255, 224, 82, 82)) },
         };
         ToolTipService.SetToolTip(deleteBtn, "Delete template");
@@ -746,21 +749,59 @@ public sealed partial class AllTemplatesCarousel : UserControl
                 DefaultButton = ContentDialogButton.Close, XamlRoot = xamlRoot,
             };
             if (await dlg.ShowAsync() != ContentDialogResult.Primary) return;
+            deleteBtn.IsEnabled = false;
             try
             {
+                var previousIndex = _activeIndex;
                 await vm.DeleteTemplateCommand.ExecuteAsync(template.Id);
+                if (!string.IsNullOrWhiteSpace(vm.FormError))
+                {
+                    var errDlg = new ContentDialog
+                    {
+                        Title = "Could not delete template",
+                        Content = vm.FormError,
+                        CloseButtonText = "OK",
+                        XamlRoot = xamlRoot,
+                    };
+                    _ = await errDlg.ShowAsync();
+                    return;
+                }
+
                 if (_cards.Contains(card))
                 {
                     _cards.Remove(card);
                     _cardTemplateIds.Remove(card);
                     _cardRecords.Remove(card);
                     CarouselCanvas.Children.Remove(card);
-                    if (_activeIndex >= _cards.Count && _activeIndex > 0) _activeIndex--;
-                    UpdateLayout(animate: true);
-                    UpdateNav();
                 }
+
+                if (_cards.Count > 0)
+                {
+                    _activeIndex = Math.Clamp(previousIndex, 0, _cards.Count - 1);
+                    UpdateLayout(animate: true);
+                }
+                else
+                {
+                    _activeIndex = 0;
+                }
+
+                UpdateNav();
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                var errDlg = new ContentDialog
+                {
+                    Title = "Could not delete template",
+                    Content = ex.Message,
+                    CloseButtonText = "OK",
+                    XamlRoot = xamlRoot,
+                };
+                _ = await errDlg.ShowAsync();
+            }
+            finally
+            {
+                deleteBtn.IsEnabled = true;
+            }
         };
 
         buttonStack.Children.Add(starBtn);
@@ -927,8 +968,9 @@ public sealed partial class AllTemplatesCarousel : UserControl
 
             // ── Scrollable data rows ──
             var dataStack = new StackPanel { Spacing = 0 };
+            var previewCount = Math.Min(records.Count, MaxPreviewRows);
 
-            for (int ri = 0; ri < records.Count; ri++)
+            for (int ri = 0; ri < previewCount; ri++)
             {
                 if (ri > 0)
                     dataStack.Children.Add(new Border

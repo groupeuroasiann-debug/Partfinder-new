@@ -236,7 +236,7 @@ public partial class FavouritesViewModel : ViewModelBase
         NotifyAllState();
     }
 
-    private void OnFavouritesChanged(object? sender, EventArgs e)
+    private async void OnFavouritesChanged(object? sender, EventArgs e)
     {
         if (_dispatcherQueue != null && !_dispatcherQueue.HasThreadAccess)
         {
@@ -244,47 +244,62 @@ public partial class FavouritesViewModel : ViewModelBase
             return;
         }
 
-        var favouriteIds = _favouriteStore.GetAll();
-
-        // Remove cards that are no longer favourites
-        var toRemove = FavouriteTemplates
-            .Where(card => !favouriteIds.Contains(card.Template.Id))
-            .ToList();
-
-        foreach (var card in toRemove)
+        try
         {
-            FavouriteTemplates.Remove(card);
-        }
+            var favouriteIds = _favouriteStore.GetAll();
 
-        // Add newly-starred templates
-        foreach (var id in favouriteIds)
-        {
-            var existingCard = FavouriteTemplates.FirstOrDefault(c => c.Template.Id == id);
-            if (existingCard is not null)
+            // Remove cards that are no longer favourites
+            var toRemove = FavouriteTemplates
+                .Where(card => !favouriteIds.Contains(card.Template.Id))
+                .ToList();
+
+            foreach (var card in toRemove)
             {
-                existingCard.IsFavourite = true;
-                continue;
+                FavouriteTemplates.Remove(card);
             }
 
-            // New favourite — find template and add card
-            var template = _allTemplates.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
-            if (template is not null)
+            // Add newly-starred templates without blocking the UI thread
+            foreach (var id in favouriteIds)
             {
-                IReadOnlyList<MasterDataRowRecord> rows;
-                try { rows = _records.GetRowsAsync(template.Id).GetAwaiter().GetResult(); }
-                catch { rows = Array.Empty<MasterDataRowRecord>(); }
-                FavouriteTemplates.Add(new FavouriteCardViewModel(template, isFavourite: true, records: rows));
+                var existingCard = FavouriteTemplates.FirstOrDefault(c => c.Template.Id == id);
+                if (existingCard is not null)
+                {
+                    existingCard.IsFavourite = true;
+                    continue;
+                }
+
+                var template = _allTemplates.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
+                if (template is not null)
+                {
+                    IReadOnlyList<MasterDataRowRecord> rows;
+                    try
+                    {
+                        rows = await _records.GetRowsAsync(template.Id).ConfigureAwait(true);
+                    }
+                    catch
+                    {
+                        rows = Array.Empty<MasterDataRowRecord>();
+                    }
+
+                    if (!FavouriteTemplates.Any(c => c.Template.Id == id))
+                    {
+                        FavouriteTemplates.Add(new FavouriteCardViewModel(template, isFavourite: true, records: rows));
+                    }
+                }
+            }
+
+            if (FavouriteTemplates.Count > 0)
+            {
+                ActiveIndex = Math.Clamp(ActiveIndex, 0, FavouriteTemplates.Count - 1);
+            }
+            else
+            {
+                ActiveIndex = 0;
             }
         }
-
-        // Clamp active index if collection changed
-        if (FavouriteTemplates.Count > 0)
+        catch (Exception ex)
         {
-            ActiveIndex = Math.Clamp(ActiveIndex, 0, FavouriteTemplates.Count - 1);
-        }
-        else
-        {
-            ActiveIndex = 0;
+            System.Diagnostics.Debug.WriteLine($"[FavouritesViewModel] OnFavouritesChanged failed: {ex.Message}");
         }
     }
 

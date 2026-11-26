@@ -474,7 +474,7 @@ public static class SetupApiClient
 
         try
         {
-            var o = JsonSerializer.Deserialize<SetupRefreshSessionResponse>(text, ReadJson);
+            var o = JsonSerializer.Deserialize<SetupRefreshSessionResponse>(text ?? string.Empty, ReadJson);
             if (o?.Ok == true && !string.IsNullOrWhiteSpace(o.AccessToken))
             {
                 return (true, null, o);

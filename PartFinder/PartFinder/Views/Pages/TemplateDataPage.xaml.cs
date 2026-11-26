@@ -311,7 +311,7 @@ public sealed partial class TemplateDataPage : Page
         var headerText = field.Label ?? field.Key ?? string.Empty;
         var maxContent = MeasureTextWidth(headerText, isHeader: true);
 
-        foreach (var cell in CellValuesForColumn(field.Key, rows))
+        foreach (var cell in CellValuesForColumn(field.Key ?? string.Empty, rows))
         {
             foreach (var line in cell.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
