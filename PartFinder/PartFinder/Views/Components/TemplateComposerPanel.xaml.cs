@@ -280,6 +280,7 @@ public sealed partial class TemplateComposerPanel : UserControl
             _selectedColumnKey = _columns[Math.Clamp(index - 1, 0, _columns.Count - 1)].Key;
         }
 
+        RenumberDefaultColumns();
         ApplyRender();
         await SaveAsync($"Deleted column \"{column.Label}\".").ConfigureAwait(true);
     }
@@ -992,15 +993,15 @@ public sealed partial class TemplateComposerPanel : UserControl
     {
         while (_columns.Count < MinEditingColumns)
         {
-            var number = _columns.Count + 1;
-            _columns.Add(new ColumnSlot { Key = NewKey(), Label = $"Column {number}" });
+            _columns.Add(new ColumnSlot { Key = NewKey(), Label = NextDefaultColumnLabel(_columns.Count + 1) });
         }
 
         if (_columns.Count > 0 && ColumnHasContent(_columns[^1], _columns.Count - 1))
         {
-            var number = _columns.Count + 1;
-            _columns.Add(new ColumnSlot { Key = NewKey(), Label = $"Column {number}" });
+            _columns.Add(new ColumnSlot { Key = NewKey(), Label = NextDefaultColumnLabel(_columns.Count + 1) });
         }
+
+        RenumberDefaultColumns();
 
         var targetRows = Math.Max(_rows.Count + TrailingRowBuffer, MinEditingRows);
         if (_rows.Count < targetRows)
@@ -1044,9 +1045,9 @@ public sealed partial class TemplateComposerPanel : UserControl
         }
 
         var clamped = Math.Clamp(index, 0, _columns.Count);
-        var number = _columns.Count + 1;
-        var col = new ColumnSlot { Key = NewKey(), Label = $"Column {number}" };
+        var col = new ColumnSlot { Key = NewKey(), Label = $"Column {clamped + 1}" };
         _columns.Insert(clamped, col);
+        RenumberDefaultColumns();
         _selectedColumnKey = col.Key;
         ApplyRender();
         StatusText.Text = $"Inserted {col.Label}. Type into it or select a master data column below to fill it.";
@@ -1080,9 +1081,9 @@ public sealed partial class TemplateComposerPanel : UserControl
             return;
         }
 
-        var number = _columns.Count + 1;
-        var col = new ColumnSlot { Key = NewKey(), Label = $"Column {number}" };
+        var col = new ColumnSlot { Key = NewKey(), Label = NextDefaultColumnLabel(_columns.Count + 1) };
         _columns.Add(col);
+        RenumberDefaultColumns();
         _selectedColumnKey = col.Key;
         ApplyRender();
         if (TemplateScroll.ScrollableWidth > 0)
@@ -1100,9 +1101,30 @@ public sealed partial class TemplateComposerPanel : UserControl
             return;
         }
 
-        var number = _columns.Count + 1;
-        _columns.Add(new ColumnSlot { Key = NewKey(), Label = $"Column {number}" });
+        _columns.Add(new ColumnSlot { Key = NewKey(), Label = NextDefaultColumnLabel(_columns.Count + 1) });
         ApplyRender();
+    }
+
+    private void RenumberDefaultColumns()
+    {
+        for (var i = 0; i < _columns.Count; i++)
+        {
+            if (TemplateFieldLabelHelper.IsDefaultColumnLabel(_columns[i].Label))
+            {
+                _columns[i].Label = $"Column {i + 1}";
+            }
+        }
+    }
+
+    private string NextDefaultColumnLabel(int preferredNumber)
+    {
+        var candidate = preferredNumber;
+        while (_columns.Any(c => string.Equals(c.Label.Trim(), $"Column {candidate}", StringComparison.OrdinalIgnoreCase)))
+        {
+            candidate++;
+        }
+
+        return $"Column {candidate}";
     }
 
     private void TrimGridToUsedExtents()
