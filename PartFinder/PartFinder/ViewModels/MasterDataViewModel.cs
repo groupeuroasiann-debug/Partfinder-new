@@ -997,7 +997,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
             ShowNoTemplateHint = false;
 
-            foreach (var f in template.Fields.OrderBy(x => x.DisplayOrder))
+            foreach (var f in TemplateFieldLabelHelper.NormalizeDefaultLabels(template.Fields))
             {
                 Columns.Add(f);
             }
@@ -1131,7 +1131,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
     private void ApplySheetCache(MasterDataSheetCacheEntry cached)
     {
         Columns.Clear();
-        foreach (var f in cached.Fields.OrderBy(x => x.DisplayOrder))
+        foreach (var f in TemplateFieldLabelHelper.NormalizeDefaultLabels(cached.Fields))
         {
             Columns.Add(f);
         }
@@ -2061,20 +2061,7 @@ public sealed partial class MasterDataViewModel : ViewModelBase
 
         var removed = fields[fieldIndex].Label;
         fields.RemoveAt(fieldIndex);
-        var remapped = fields
-            .Select((f, i) => new TemplateFieldDefinition
-            {
-                Key = f.Key,
-                Label = f.Label,
-                Type = f.Type,
-                IsRequired = f.IsRequired,
-                DisplayOrder = i,
-                ValidationPattern = f.ValidationPattern,
-                Options = f.Options,
-                LinkedTemplateId = f.LinkedTemplateId,
-                LinkedDisplayFieldKey = f.LinkedDisplayFieldKey,
-            })
-            .ToList();
+        var remapped = TemplateFieldLabelHelper.NormalizeDefaultLabels(fields);
 
         var patched = new PartTemplateDefinition
         {

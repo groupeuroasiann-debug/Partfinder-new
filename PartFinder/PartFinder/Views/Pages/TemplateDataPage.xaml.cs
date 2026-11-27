@@ -375,9 +375,7 @@ public sealed partial class TemplateDataPage : Page
         var totalContentWidth = columnWidths.Sum();
 
         var availableWidth = GetAvailableTableWidth();
-        var equalShare = availableWidth / Math.Max(1, colCount);
-        var needsWiderThanShare = columnWidths.Any(w => w > equalShare + 1);
-        var useHorizontalScroll = totalContentWidth > availableWidth + 1 || needsWiderThanShare;
+        var useHorizontalScroll = totalContentWidth > availableWidth + 1;
 
         DataScrollViewer.HorizontalScrollMode = useHorizontalScroll ? ScrollMode.Enabled : ScrollMode.Disabled;
         DataScrollViewer.HorizontalScrollBarVisibility = useHorizontalScroll
@@ -407,8 +405,12 @@ public sealed partial class TemplateDataPage : Page
         else
         {
             grid.MinWidth = availableWidth;
-            grid.Width = availableWidth;
+            grid.Width = double.NaN;
         }
+
+        var scaleFactor = !useHorizontalScroll && totalContentWidth > 0 && availableWidth > totalContentWidth
+            ? availableWidth / totalContentWidth
+            : 1d;
 
         for (var c = 0; c < colCount; c++)
         {
@@ -423,7 +425,7 @@ public sealed partial class TemplateDataPage : Page
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition
                 {
-                    Width = new GridLength(1, GridUnitType.Star),
+                    Width = new GridLength(Math.Max(1d, columnWidths[c]), GridUnitType.Star),
                 });
             }
         }
@@ -443,7 +445,8 @@ public sealed partial class TemplateDataPage : Page
 
         for (var c = 0; c < colCount; c++)
         {
-            var innerWidth = Math.Max(0, columnWidths[c] - GridCellHorizontalPadding * 2 - CellBorderExtraWidth);
+            var effectiveColWidth = useHorizontalScroll ? columnWidths[c] : columnWidths[c] * scaleFactor;
+            var innerWidth = Math.Max(0, effectiveColWidth - GridCellHorizontalPadding * 2 - CellBorderExtraWidth);
             var field = _viewModel.Columns[c];
             var header = new Border
             {

@@ -117,7 +117,7 @@ public sealed partial class TemplateDataViewModel : ViewModelBase
             }
 
             TemplateName = template.Name;
-            Columns = template.Fields.ToList();
+            Columns = TemplateFieldLabelHelper.NormalizeDefaultLabels(template.Fields);
             OnPropertyChanged(nameof(Columns));
 
             await LoadRowsPageAsync(templateId, pageIndex, PageSize, cancellationToken).ConfigureAwait(true);
