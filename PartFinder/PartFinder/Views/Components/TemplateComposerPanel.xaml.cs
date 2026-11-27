@@ -896,52 +896,77 @@ public sealed partial class TemplateComposerPanel : UserControl
                 Foreground = Brush("TextPrimaryBrush"),
             });
 
-            const double chipWidth = 148;
+            const double chipWidth = 168;
             var row = new Grid { Height = 40 };
             for (var i = 0; i < source.Fields.Count; i++)
             {
                 var field = source.Fields[i];
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(chipWidth) });
                 var used = IsSourceUsed(source.Id, field.Key);
+                var catalog = source;
+                var sourceField = field;
+
+                var chipContent = new Grid { ColumnSpacing = 6 };
+                chipContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                chipContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var labelText = new TextBlock
+                {
+                    Text = field.Label,
+                    FontSize = 12,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Foreground = Brush("TextPrimaryBrush"),
+                };
+                ToolTipService.SetToolTip(labelText, field.Label);
+                Grid.SetColumn(labelText, 0);
+                chipContent.Children.Add(labelText);
+
+                var importBtn = new Button
+                {
+                    Width = 24,
+                    Height = 24,
+                    MinWidth = 24,
+                    MinHeight = 24,
+                    Padding = new Thickness(0),
+                    CornerRadius = new CornerRadius(6),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    IsEnabled = !used,
+                    Background = Brush("CardBackgroundBrush"),
+                    BorderBrush = Brush("BorderDefaultBrush"),
+                    BorderThickness = new Thickness(1),
+                    Content = new FontIcon
+                    {
+                        Glyph = "\uE710",
+                        FontSize = 10,
+                        Foreground = Brush("AccentPrimaryBrush"),
+                    },
+                };
+                ToolTipService.SetToolTip(
+                    importBtn,
+                    used ? $"{field.Label} is already imported" : $"Import \"{field.Label}\" into the selected column");
+                importBtn.Click += (_, _) =>
+                {
+                    if (!used)
+                    {
+                        _ = ImportSourceColumnAsync(catalog, sourceField);
+                    }
+                };
+                Grid.SetColumn(importBtn, 1);
+                chipContent.Children.Add(importBtn);
+
                 var chip = new Border
                 {
                     Height = 40,
                     MinWidth = chipWidth,
                     Width = chipWidth,
-                    IsHitTestVisible = !used,
-                    Opacity = used ? 0.4 : 1,
+                    Opacity = used ? 0.45 : 1,
                     Background = Brush("GridHeaderBackgroundBrush"),
                     BorderBrush = Brush("BorderDefaultBrush"),
                     BorderThickness = new Thickness(1),
-                    Padding = new Thickness(10, 0, 10, 0),
-                    Child = new TextBlock
-                    {
-                        Text = field.Label,
-                        FontSize = 12,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        TextAlignment = TextAlignment.Center,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        Foreground = Brush("TextPrimaryBrush"),
-                    },
+                    Padding = new Thickness(10, 0, 8, 0),
+                    Child = chipContent,
                 };
-                ToolTipService.SetToolTip(
-                    chip,
-                    used ? $"{field.Label} is already used" : $"Import \"{field.Label}\" into the selected column");
-                var catalog = source;
-                var sourceField = field;
-                chip.AddHandler(
-                    UIElement.PointerPressedEvent,
-                    new PointerEventHandler((_, args) =>
-                    {
-                        if (!args.GetCurrentPoint(chip).Properties.IsLeftButtonPressed || used)
-                        {
-                            return;
-                        }
-
-                        args.Handled = true;
-                        _ = ImportSourceColumnAsync(catalog, sourceField);
-                    }),
-                    true);
                 Grid.SetColumn(chip, i);
                 row.Children.Add(chip);
             }
